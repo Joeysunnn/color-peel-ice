@@ -157,13 +157,27 @@ class SmokeConfigTests(unittest.TestCase):
                 "max_train_steps": 9,
                 "exposure": {token: 3 for token in TOKENS},
             },
+            "smoke_turquoise_2step.yaml": {
+                "max_train_steps": 2,
+                "exposure": {"<s1*>": 2, "<s2*>": 0, "<s3*>": 0, "<c1*>": 1, "<c2*>": 1, "<c3*>": 0},
+            },
+            "smoke_turquoise_9step.yaml": {
+                "max_train_steps": 9,
+                "exposure": {token: 3 for token in TOKENS},
+            },
         }
         for filename, wanted in expected.items():
             config = yaml.safe_load((CONFIG_ROOT / filename).read_text(encoding="utf-8"))
             self.assertEqual(config["args"]["max_train_steps"], wanted["max_train_steps"])
             self.assertEqual(config["args"]["adam_weight_decay"], 0.01)
             self.assertEqual(config["args"]["concepts_list"], "${COLORPEEL_CONCEPTS_LIST}")
-            if filename == "smoke_2step.yaml":
+            if "turquoise" in filename:
+                self.assertEqual(
+                    config["args"]["initializer_token"],
+                    "cube+sphere+cylinder+red+turquoise+gray",
+                )
+                self.assertEqual(config["protocol"]["scientific_change"], "cyan_initializer_only")
+            if "2step" in filename:
                 self.assertEqual(config["protocol"]["expected_exposure_counts"], wanted["exposure"])
             else:
                 self.assertEqual(config["protocol"]["expected_exposure_per_modifier_token"], 3)

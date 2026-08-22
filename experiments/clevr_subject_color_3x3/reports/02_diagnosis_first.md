@@ -1,6 +1,6 @@
 # 02 — Diagnosis-first follow-up
 
-- Status: **diagnostics running; baseline frozen and no follow-up training claimed**
+- Status: **diagnostics complete; `turquoise` selected; follow-up training pending**
 - Study: `clevr_subject_color_3x3`
 - Method: `colorpeel_ice`
 - Parent report: [`01_colorpeel_clevr_baseline.md`](01_colorpeel_clevr_baseline.md)
@@ -36,6 +36,21 @@ to calculate an accuracy or error rate.
   leakage, but the color-only prompt is outside the paired training template.
 - **observed**: red and gray transfer were visually strong; cyan transfer was
   poor, with only occasional satisfactory examples.
+- **observed, 2026-08-22 follow-up**: all learned subject tokens produced the
+  requested subject when paired with literal red, cyan, or gray. The gray
+  subject-only tendency is therefore attributed to the base-model default,
+  not failure of the learned subject token to combine with color.
+- **observed, 2026-08-22 follow-up**: in the trained-K/V cyan diagnostic, only
+  the learned `<c2*>` condition was consistently poor. Literal `cyan`, `aqua`,
+  `teal`, and `turquoise` were good under both trained K/V and vanilla SD 1.4;
+  trained K/V was qualitatively a little more stable against variegated color.
+  `turquoise` was the strongest trained-K/V candidate and was explicitly
+  selected as the new `<c2*>` initializer.
+
+The follow-up review inspected condition folders rather than completing the
+randomized 540-row blind-review ledger. It is therefore qualitative and
+unblinded. It closes the user-selection gate but is not reported as a blind
+win rate or numerical accuracy.
 
 These observations revise the interpretation of the automated contingency
 tables without deleting them. In particular, Qwen's sphere-only `other` labels
@@ -51,9 +66,9 @@ alone does not prove subject-color token entanglement.
 | 0. Freeze baseline | report 01 plus immutable run paths | training/evaluation commits, manifests, checkpoint path, generation path; no overwrite | **confirmed by existing records**; no new hashes claimed |
 | 1. Human adjudication | per-item review ledger outside Git | image ID, prompt, seed, visible shape, visible color, black/ambiguous flags, reviewer note | **pending**; only qualitative summary exists |
 | 2. Black-image diagnosis | `diagnostics_v1` | same checkpoint/prompt/seed; default SafetyChecker result and NSFW flag; separate explicitly acknowledged checker-disabled output; conditional FP32 finite checkpoint/pixel audit; distinct output directories | **completed**; checker-on 19/19 flagged and black, checker-off 19/19 finite and nonblack; FP32 not required |
-| 3. Cyan diagnosis and initializer selection | 540-image cyan packet and 540 randomized single-image blind-review rows; then one selected initializer | trained/vanilla, candidate, template-family evidence; completed human CSV; verified single-token candidates; explicit human approval of one candidate | **running**; no candidate decision |
-| 3b. Subject diagnosis | 75-image trained-K/V protocol | 3 shapes × seeds 42–46 × learned-only, natural-only, and learned+literal red/cyan/gray; per-image status and human review | **pending; not run** |
-| 4. Cyan initializer train | `cyan_initializer_ablation` | gates 1–3 closed, clean Git commit, dry-run provenance, fresh training run, unchanged non-initializer settings | **conditional / not run** |
+| 3. Cyan diagnosis and initializer selection | 540-image cyan packet and 540 randomized single-image blind-review rows; then one selected initializer | trained/vanilla, candidate, template-family evidence; verified single-token candidates; explicit human approval of one candidate | **completed with protocol deviation**; 540/540 generated, folder-level review selected `turquoise`; randomized blind ledger not completed |
+| 3b. Subject diagnosis | 75-image trained-K/V protocol | 3 shapes × seeds 42–46 × learned-only, natural-only, and learned+literal red/cyan/gray; per-image status and human review | **completed qualitatively**; 75/75 generated and all paired-color conditions accepted by the user |
+| 4. Cyan initializer train | `cyan_initializer_ablation` | clean Git commit, dual smoke provenance, fresh training run, unchanged non-initializer settings | **selected / pending run**; `<c2*>` initializer=`turquoise` |
 | 5. Matched evaluation | baseline protocol on the new checkpoint | fresh 900-row manifest, human review, secondary automated metrics, direct paired comparison | **conditional / not run** |
 | 6. Held-out multiview | `multiview_heldout_v1`; conditional `multiview_fold_{a|b|c}_seed{42|43|44}` | renderer provenance and held-out-view manifest before any training; separate render and train records | **pending; no render or training claimed** |
 | 7. Factor-aware loss | no approved config | explicit loss definition, ablation control, code review, new method-risk approval | **conditional; not implemented or run** |
@@ -71,14 +86,16 @@ and FP16 dtype, disabling only the checker recovered all 19 as finite, nonblack
 images. The conditional FP32 stage was not needed. This closes the black-image
 branch as SafetyChecker filtering rather than training instability.
 
-The checker-disabled 540-image cyan diagnostic and the subsequent 75-image
-subject diagnostic are running. Their images, blind review, candidate choice,
-and any follow-up training remain pending.
+The checker-disabled diagnostic completed with 540/540 cyan status rows and
+75/75 subject status rows marked `ok`; the randomized review and condition-key
+CSVs each contain 540 data rows. The user reviewed the organized condition
+folders, accepted every learned-subject plus literal-color group, and selected
+`turquoise` from the trained-K/V cyan candidates. Follow-up training remains
+pending and will use a fresh run directory.
 
 ## Approved single-variable training change
 
-If gate 3 selects a candidate, set `COLORPEEL_CYAN_INITIALIZER` to exactly one
-of `aqua`, `teal`, or `turquoise` and use
+Gate 3 selected `turquoise`, which is locked directly in
 `../configs/train_cyan_initializer.yaml`. The only intended training-semantic
 change relative to the baseline is the `<c2*>` initializer. The following stay
 fixed: nine CLEVR images, six modifier tokens, prompt template, SD 1.4,
@@ -116,11 +133,9 @@ SafetyChecker enabled. Disabling it is permitted only when both
 `--disable-safety-checker` and `--acknowledge-safety-risk` are supplied; such
 outputs remain isolated diagnostic evidence and never replace baseline images.
 
-The config intentionally contains `${COLORPEEL_CYAN_INITIALIZER}` rather than
-a chosen word. It must remain non-runnable until the diagnostic packet is
-reviewed and an explicit record selects one allowed candidate. Training all
-three candidates and choosing the best result afterward would be an undeclared
-sweep and is not approved.
+The config and protocol both lock the selection to `turquoise`, so runtime
+environment variables cannot silently substitute another candidate. Training
+other candidates as a sweep is not approved.
 
 ## SafetyChecker diagnosis boundary
 
@@ -142,10 +157,11 @@ and nonblack with only the checker disabled. No IDs remained for
 
 ## Interpretation boundary
 
-The current evidence supports a diagnosis of paired-template success plus
-single-axis context dependence. It does not yet establish that subject and
-color tokens are fully disentangled, nor that cyan-to-cube behavior is caused
-by the initializer. The initializer ablation may test that hypothesis only
-after the diagnostic gates close. Multiview data, a new loss, and natural
-multi-object evaluation are later conditional studies and cannot be used to
-explain the frozen baseline retroactively.
+The current evidence supports paired-template success, a base-model gray
+default for subject-only prompts, and an initializer-localized cyan failure.
+Because learned `<c2*>` failed while literal colors worked with both vanilla
+and trained K/V, and because the historical `cyan` initializer was silently
+truncated from two tokenizer pieces, the initializer is the leading causal
+explanation. The `turquoise` single-variable retrain is still required to test
+that explanation prospectively. Multiview data, a new loss, and natural
+multi-object evaluation remain later conditional studies.

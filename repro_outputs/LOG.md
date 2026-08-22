@@ -232,8 +232,9 @@ success.
   taking one piece. The baseline itself is not altered.
 - Conditional config:
   `experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`,
-  variant `cyan_initializer_ablation`. It accepts only a diagnostic-selected
-  runtime `COLORPEEL_CYAN_INITIALIZER` from `aqua`, `teal`, or `turquoise`.
+  variant `cyan_initializer_ablation`. At that pre-diagnostic snapshot it used
+  a runtime candidate placeholder; the post-review config now locks the single
+  selected candidate `turquoise` directly.
 - No candidate is selected. No initializer-ablation dry-run, smoke, full
   training, generation, or evaluation is claimed.
 
@@ -300,3 +301,24 @@ success.
   followed by the 75-image subject diagnostic and blinded-review packet. At
   this evidence snapshot the job was running; no candidate or training result
   was selected.
+
+## 2026-08-22 — completed diagnostics and initializer decision
+
+- The diagnostic process completed. The server contains 540 cyan PNGs and 540
+  `ok` status rows, 75 subject PNGs and 75 `ok` status rows, plus 540-row review
+  and condition-key CSVs.
+- Human folder-level review found that every learned subject token combined
+  correctly with literal red, cyan, and gray. Subject-only gray is therefore
+  treated as a base-model/default-completion effect rather than evidence that
+  the subject token cannot combine with color.
+- Under trained K/V, learned `<c2*>` was the only consistently poor cyan
+  condition. The four literal words worked under both trained K/V and vanilla
+  SD; trained K/V was qualitatively somewhat more stable against variegation.
+- The user selected `turquoise` as the best trained-K/V single-token
+  initializer. This review was qualitative and inspected named condition
+  folders rather than completing the randomized blind-review ledger; no win
+  rate is inferred.
+- The next run changes only `<c2*>` initialization from the historical
+  first-piece-of-`cyan` behavior to token ID 19899 (`turquoise`). New 2-step and
+  9-step smoke configs precede a fresh 1500-step run. CAA, AdamW, training mask,
+  prompts, data, seed, K/V scope, steps, and all other initializers stay fixed.

@@ -71,9 +71,10 @@ future blinded review must retain its 540-image protocol, completed randomized
 540-row single-image review CSV, and sealed condition key. Qwen/SAM results may
 corroborate or disagree, but do not silently override the human record.
 
-`cyan_initializer_ablation` is comparable as a one-variable scientific
-ablation only if exactly one of `aqua`, `teal`, or `turquoise` is selected
-before training and every other baseline setting remains fixed. The historical
+`cyan_initializer_ablation` is a one-variable scientific ablation with
+`turquoise` selected before training and every other baseline setting fixed.
+The selection came from qualitative folder-level review rather than a
+completed blind-review ledger, so candidate win rates are unavailable. The historical
 baseline configured `cyan`, which the cached tokenizer splits into two IDs;
 the follow-up requires a true single-token initializer. This is a meaningful
 initializer-semantics change and must not be described as an operational fix.

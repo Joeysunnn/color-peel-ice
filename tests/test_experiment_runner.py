@@ -168,14 +168,14 @@ class ExperimentRunnerTests(unittest.TestCase):
             {
                 **environment,
                 "COLORPEEL_CONCEPTS_LIST": "/data/concepts.json",
-                "COLORPEEL_CYAN_INITIALIZER": "aqua",
             },
         )
         initializer_index = cyan_command.index("--initializer_token") + 1
         self.assertEqual(
             cyan_command[initializer_index],
-            "cube+sphere+cylinder+red+aqua+gray",
+            "cube+sphere+cylinder+red+turquoise+gray",
         )
+        self.assertEqual(cyan_train["protocol"]["selected_candidate"], "turquoise")
         self.assertEqual(cyan_train["protocol"]["scientific_change"], "cyan_initializer_only")
 
     def test_mask_dir_is_managed_only_for_segmentation(self):

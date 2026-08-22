@@ -100,9 +100,8 @@ generator accepts checker disablement only with the paired flags
 `--disable-safety-checker --acknowledge-safety-risk`; checker-disabled outputs
 remain diagnostic-only.
 
-The conditional training config is
+The follow-up training config is
 `experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`.
-It requires a reviewed `COLORPEEL_CYAN_INITIALIZER` from `aqua`, `teal`, or
-`turquoise`. Only `<c2*>` initialization may change; running all candidates as
-an undeclared sweep is outside the approved protocol. No ablation run is
-currently claimed.
+It locks the reviewed choice `turquoise`. Only `<c2*>` initialization may
+change; running the other candidates as an undeclared sweep is outside the
+approved protocol. No ablation run is currently claimed.

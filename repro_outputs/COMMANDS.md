@@ -349,7 +349,7 @@ CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
 Checker-disabled outputs are safety-sensitive diagnostics only. They must not
 replace baseline images or be merged into baseline scores.
 
-## Paired cyan diagnosis and blinded review — pending
+## Paired cyan diagnosis and review — completed generation
 
 The diagnostic is fixed at ten nouns × seeds 42–44 × two prompt families. It
 contains 300 trained-K/V rows (learned `<c2*>` plus four literal candidates)
@@ -375,15 +375,17 @@ conda run -n colorpeel017 python \
   --random-seed 20260822
 ```
 
-Keep the condition key sealed until `review.csv` is complete. Human review is
-the primary semantic evidence; automated metrics are secondary.
+The server run completed 540/540 status rows. The generated randomized review
+packet is retained, but the initializer decision was made by qualitative
+inspection of the named condition folders rather than a completed blind CSV;
+no blind win rate is claimed.
 
 Both `generate_cyan_diagnostic.py` and the subject diagnostic below keep the
 default SafetyChecker enabled. A checker-disabled diagnostic requires the two
 flags `--disable-safety-checker --acknowledge-safety-risk` together; never pass
 only one flag, and never merge those outputs into the baseline.
 
-## Subject diagnostic — pending
+## Subject diagnostic — completed generation
 
 This fixed protocol creates 75 trained-K/V images: three shapes × seeds 42–46
 × five conditions (learned subject-only, natural subject-only, and learned
@@ -400,22 +402,21 @@ CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
 ```
 
 The real command writes `subject_diagnostic_manifest.jsonl`, 75 images, and
-`subject_diagnostic_status.jsonl`. To inspect the manifest without loading the
-model or generating images, append `--dry-run` and omit `--model-dir`. No real
-subject diagnostic run is recorded.
+`subject_diagnostic_status.jsonl`. The server run completed 75/75 status rows.
+To inspect the manifest without loading the model or generating images, append
+`--dry-run` and omit `--model-dir`.
 
-## Cyan initializer ablation — conditional, not run
+## Turquoise initializer ablation — selected, not run
 
 Tracked config:
 `experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`.
-After the diagnostic record and human decision select exactly one allowed
-candidate, run a fresh preflight. Do not run all candidates as a sweep.
+Human review selected exactly `turquoise`. Run the two dedicated smoke configs
+before the 1500-step config. Do not run the other candidates as a sweep.
 
 ```bash
 export COLORPEEL_CONCEPTS_LIST="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/train_assets/concepts.json"
-export COLORPEEL_CYAN_INITIALIZER=<reviewed-aqua-or-teal-or-turquoise>
 COMMIT=$(git rev-parse HEAD)
-RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__cyan_initializer_ablation__${COMMIT:0:7}__42"
+RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__cyan_initializer_ablation__${COMMIT:0:7}__42__preflight"
 CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
   scripts/launch/colorpeel_run.py \
   --config experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml \
@@ -423,9 +424,29 @@ CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
   --dry-run
 ```
 
-Replace the placeholder with the single reviewed candidate. A real 1500-step
-command is allowed only after the dry-run record and scientific diff are
-reviewed; use a new run ID and remove `--dry-run`. No such run is recorded.
+Run the two independent real smokes and validate their evidence:
+
+```bash
+for SPEC in "smoke_turquoise_2step:smoke2-turquoise-first-two" \
+            "smoke_turquoise_9step:smoke9-turquoise-full-grid"; do
+  CONFIG_NAME="${SPEC%%:*}"
+  VARIANT="${SPEC#*:}"
+  RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__${VARIANT}__${COMMIT:0:7}__42"
+  RUN_DIR="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/$RUN_ID"
+  CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
+    scripts/launch/colorpeel_run.py \
+    --config "experiments/clevr_subject_color_3x3/configs/${CONFIG_NAME}.yaml" \
+    --run-dir "$RUN_DIR"
+  conda run -n colorpeel017 python src/train/training_audit.py validate \
+    --config "experiments/clevr_subject_color_3x3/configs/${CONFIG_NAME}.yaml" \
+    --run-dir "$RUN_DIR"
+done
+```
+
+Only after both validators return `passed`, create a fresh run ID with variant
+`cyan_initializer_ablation` and execute the same launcher command without
+`--dry-run`. The tracked 1500-step config directly locks `turquoise`; no other
+training argument changes.
 
 ## Multiview held-out protocol — render and training pending
 

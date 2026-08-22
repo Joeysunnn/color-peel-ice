@@ -43,14 +43,14 @@ biases, so this evidence does not authorize the statement that entanglement is
 “solved.” It supports a successful ColorPeel-on-CLEVR training/generation
 reproduction plus an auditable, mixed disentanglement diagnosis.
 
-## Diagnosis-first follow-up — pending
+## Diagnosis-first follow-up — turquoise selected, retraining pending
 
 The baseline checkpoint is now the frozen comparison anchor. Its source run is
 `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`
 at training commit `c8c874d00318ae7c1df2265c8627787d316a1ce3`; the completed
 evaluation adapters are anchored at `b059bd5e92cf1994581d8600111d3ed5830dc7d5`.
-No follow-up diagnostic, render, training, or evaluation result is claimed by
-this documentation update.
+The ordered diagnostics are complete; no follow-up training or matched
+evaluation result is claimed yet.
 
 Human review is primary for image semantics and currently remains qualitative:
 the grid was mostly correct with roughly one or two black images; subject-only
@@ -66,10 +66,14 @@ The approved conditional training variant is
 `experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`.
 The cached SD 1.4 tokenizer directly encoded `cyan` as two IDs `[1470, 550]`,
 but `aqua`, `teal`, and `turquoise` as the single IDs `[18613]`, `[22821]`, and
-`[19899]`. No replacement has been chosen. The pending cyan diagnostic contains
-540 images (300 trained-K/V and 240 vanilla-SD) followed by 540 randomized
-single-image blind-review rows. Human review must select one candidate before
-training; the only intended training change is the `<c2*>` initializer.
+`[19899]`. The diagnostic completed 540/540 cyan images and 75/75 subject
+images. Folder-level qualitative review found that learned subject tokens work
+with literal colors, only learned `<c2*>` was poor among trained-K/V cyan
+conditions, and the literal candidates worked similarly under trained K/V and
+vanilla SD. The user selected `turquoise` as the strongest trained-K/V
+initializer. The review was not completed through the randomized blind ledger,
+so no blind win rate is claimed. The only intended training change is the
+`<c2*>` initializer.
 
 The ordered `diagnostics_v1` safety investigation, held-out multiview rendering
 and training, any factor-aware loss, and natural multi-object evaluation are

@@ -1,9 +1,9 @@
 schema_version: 1
-status: selected_pending_run
+status: pending
 stage: train
 run:
   study: clevr_subject_color_3x3
-  variant: cyan_initializer_ablation
+  variant: smoke2-turquoise-first-two
   seed: 42
 environment:
   CUDA_VISIBLE_DEVICES: "3"
@@ -17,7 +17,7 @@ args:
   scale_lr: true
   lr_scheduler: constant
   lr_warmup_steps: 0
-  max_train_steps: 1500
+  max_train_steps: 2
   checkpointing_steps: 1000
   seed: 42
   mixed_precision: "no"
@@ -33,15 +33,34 @@ args:
   modifier_token: "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>"
   initializer_token: "cube+sphere+cylinder+red+turquoise+gray"
 protocol:
-  parent_variant: baseline
+  parent_variant: cyan_initializer_ablation
   scientific_change: cyan_initializer_only
   selected_candidate: turquoise
   selection_source: human_qualitative_review_2026-08-22
-  candidate_must_be_selected_by_diagnostics: true
-  allowed_candidates: [aqua, teal, turquoise]
+  purpose: real_two_step_training_smoke
+  data_scope: first_two_locked_samples_from_full_staging
+  selection_by_order: shuffle_false_then_stop_after_two_steps
+  sample_ids: [003_cube_red_metal, 013_cube_cyan_metal]
+  expected_exposure_counts:
+    "<s1*>": 2
+    "<s2*>": 0
+    "<s3*>": 0
+    "<c1*>": 1
+    "<c2*>": 1
+    "<c3*>": 0
+  expected_modifier_token_pairs:
+    - ["<s1*>", "<c1*>"]
+    - ["<s1*>", "<c2*>"]
   gt_masks_in_training: false
   caa_changed: false
   optimizer_changed: false
   training_mask_changed: false
   prompt_template_changed: false
   non_modifier_embedding_update_policy: literal_official_adamw_decay_allowed
+observations:
+  modifier_exposure_counts: required
+  seen_modifier_nonzero_gradient_steps: required_at_least_one
+  seen_modifier_embedding_delta_norms: required_nonzero
+  unseen_modifier_gradient_or_delta: no_requirement
+  ordinary_vocabulary_embedding_drift: record_only_not_failure
+  restore_non_modifier_embeddings: false

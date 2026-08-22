@@ -112,8 +112,8 @@ token entanglement.
 
 The only approved conditional training change is the `<c2*>` initializer in
 [`configs/train_cyan_initializer.yaml`](configs/train_cyan_initializer.yaml).
-`COLORPEEL_CYAN_INITIALIZER` must be selected by a recorded diagnostic from
-`aqua`, `teal`, or `turquoise`; it is intentionally not fixed in advance. CAA,
+The recorded qualitative diagnostic selected `turquoise`, and the follow-up
+config locks it directly as the `<c2*>` initializer. CAA,
 AdamW, the training mask, prompt, dataset, seed, steps, and all other
 initializers remain unchanged.
 
