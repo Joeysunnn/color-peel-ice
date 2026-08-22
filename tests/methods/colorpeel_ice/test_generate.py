@@ -2,6 +2,8 @@ import importlib.util
 from collections import Counter
 from pathlib import Path
 
+from PIL import Image
+
 
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "scripts" / "methods" / "colorpeel_ice" / "generate.py"
@@ -50,3 +52,23 @@ def test_dry_run_writes_manifest_without_model(tmp_path):
     manifest_path = tmp_path / "generation_manifest.jsonl"
     assert manifest_path.is_file()
     assert len(manifest_path.read_text(encoding="utf-8").splitlines()) == 900
+
+
+def test_skip_existing_only_skips_decodable_images(tmp_path):
+    items = clevr_inference.build_manifest()[:4]
+    valid_path = tmp_path / items[0]["image_path"]
+    corrupt_path = tmp_path / items[1]["image_path"]
+    wrong_size_path = tmp_path / items[2]["image_path"]
+    valid_path.parent.mkdir(parents=True)
+    Image.new("RGB", (512, 512), (255, 0, 0)).save(valid_path)
+    corrupt_path.write_bytes(b"not a png")
+    Image.new("RGB", (2, 2), (255, 0, 0)).save(wrong_size_path)
+
+    pending = clevr_inference.pending_items(items, tmp_path, skip_existing=True)
+
+    assert [item["id"] for item in pending] == [
+        items[1]["id"],
+        items[2]["id"],
+        items[3]["id"],
+    ]
+    assert clevr_inference.pending_items(items, tmp_path, skip_existing=False) == items

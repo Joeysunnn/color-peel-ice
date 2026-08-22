@@ -12,6 +12,7 @@ import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
 from token_gradient_utils import modifier_rows_to_zero
+from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -1004,6 +1005,22 @@ def main(args):
     # Afterwards we recalculate our number of training epochs
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
+    # Observation-only audit state. This snapshots the full embedding table but
+    # does not change the official full-parameter AdamW optimizer above.
+    training_metrics_path = None
+    embedding_update_audit = None
+    if accelerator.is_main_process:
+        training_metrics_path = Path(args.output_dir) / "training_metrics.jsonl"
+        training_metrics_path.write_text("", encoding="utf-8")
+        if args.modifier_token is not None:
+            initial_embedding_weight = (
+                accelerator.unwrap_model(text_encoder).get_input_embeddings().weight
+            )
+            embedding_update_audit = EmbeddingUpdateAudit(
+                dict(zip(args.modifier_token, modifier_token_id)),
+                initial_embedding_weight,
+            )
+
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
@@ -1031,7 +1048,11 @@ def main(args):
             text_encoder.train()
 
         for step, batch in enumerate(train_dataloader):
+            present_modifier_tokens_value = []
             with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
+                if embedding_update_audit is not None:
+                    embedding_update_audit.observe_input_ids(batch["input_ids"])
+
                 # Convert images to latent space
                 latents = vae.encode(batch["pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
                 latents = latents * vae.config.scaling_factor
@@ -1112,7 +1133,10 @@ def main(args):
                 else:
                     { }
 
+                reconstruction_loss_value = loss.detach().float().item()
+                caa_loss_value = cos.detach().float().item()
                 loss += cos * args.cos_weight
+                total_loss_value = loss.detach().float().item()
                 indices = []
                 accelerator.backward(loss)
 
@@ -1133,6 +1157,10 @@ def main(args):
                     grads_text_encoder.data[index_grads_to_zero, :] = grads_text_encoder.data[
                         index_grads_to_zero, :
                     ].fill_(0)
+                    if embedding_update_audit is not None and accelerator.sync_gradients:
+                        present_modifier_tokens_value = (
+                            embedding_update_audit.complete_optimization_step(grads_text_encoder)
+                        )
 
                 if accelerator.sync_gradients:
                     params_to_clip = (
@@ -1160,6 +1188,19 @@ def main(args):
             # logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "AttnLoss": attn_loss.item()}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
+            if accelerator.sync_gradients and accelerator.is_main_process:
+                append_jsonl(
+                    training_metrics_path,
+                    build_training_metric(
+                        step=global_step,
+                        reconstruction_loss=reconstruction_loss_value,
+                        caa_loss=caa_loss_value,
+                        caa_weight=args.cos_weight,
+                        total_loss=total_loss_value,
+                        learning_rate=logs["lr"],
+                        present_modifier_tokens=present_modifier_tokens_value,
+                    ),
+                )
 
             if global_step >= args.max_train_steps:
                 break
@@ -1210,6 +1251,17 @@ def main(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         unet = unet.to(torch.float32)
+        if embedding_update_audit is not None:
+            final_embedding_weight = (
+                accelerator.unwrap_model(text_encoder).get_input_embeddings().weight
+            )
+            embedding_audit_payload = embedding_update_audit.finalize(final_embedding_weight)
+            embedding_audit_payload["optimizer"] = {
+                "class": optimizer_class.__name__,
+                "embedding_parameter_scope": "full_input_embedding_parameter",
+                "weight_decay": args.adam_weight_decay,
+            }
+            write_json(Path(args.output_dir) / "embedding_update_audit.json", embedding_audit_payload)
         unet.save_attn_procs(args.output_dir)
         save_new_embed(text_encoder, modifier_token_id, accelerator, args, args.output_dir)
 

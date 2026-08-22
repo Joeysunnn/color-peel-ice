@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "stage": "score_clevr",
+  "run": {"study": "clevr_subject_color_3x3", "variant": "score_clevr", "seed": 42},
+  "data_manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+  "args": {
+    "manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+    "predictions": "${COLORPEEL_QWEN_PREDICTIONS}"
+  },
+  "protocol": {
+    "grid_shape_color_joint_accuracy": true,
+    "subject_token_by_predicted_color": true,
+    "color_token_by_predicted_shape": true
+  }
+}

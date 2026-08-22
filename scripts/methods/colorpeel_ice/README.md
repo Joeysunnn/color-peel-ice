@@ -32,17 +32,34 @@ bash scripts/methods/colorpeel_ice/train.sh
 
 The launcher uses the official SD 1.4, 512 resolution, batch size 1, 1500
 steps, learning rate `1e-5`, CAA weight 0.2, and six shared modifier tokens.
-The unresolved AdamW weight-decay effect on non-modifier embedding rows must be
-reviewed before a full run; see the study report and `repro_outputs/PATCHES.md`.
+The optimizer policy is `literal_official_adamw_decay_allowed`: ordinary
+vocabulary embedding drift is measured and reported, but it is not restored
+and is not a failure by itself. Run the independent two-step and nine-step
+training smoke configs before the full run; launcher `--dry-run` is preflight,
+not a smoke. Training writes `training_metrics.jsonl` and
+`embedding_update_audit.json` for the smoke validator.
 
-## Generation and scoring
+## Generation, external-model stages, and scoring
 
 ```bash
 python scripts/methods/colorpeel_ice/generate.py --help
+python scripts/methods/colorpeel_ice/segment_grounded_sam.py --help
+python scripts/methods/colorpeel_ice/predict_qwen.py --help
 python scripts/methods/colorpeel_ice/score_clevr_predictions.py --help
 python scripts/methods/colorpeel_ice/evaluate_color_metrics.py --help
 ```
 
-These entry points implement the locked 900-image generation manifest and
-artifact-based scoring adapters. They do not claim that Grounded-SAM or
-Qwen3-VL has been run.
+These are independent tracked stages:
+
+- training and generation run with `colorpeel017`;
+- Grounded-SAM and color scoring run with the existing
+  `/home/r12user5/miniforge3/envs/ice/bin/python`;
+- Qwen3-VL prediction and CLEVR scoring run with the existing
+  `/home/r12user5/miniforge3/envs/ice-vlm/bin/python`.
+
+The launcher uses the Python interpreter that invokes it and never switches
+environments. Do not modify the two existing ICE environments. Grounded-SAM
+and Qwen3-VL use `local_files_only`; cache absence produces explicit per-item
+failure JSONL and a nonzero stage exit rather than downloading or substituting
+a model. Entry-point availability does not claim that generation,
+Grounded-SAM, Qwen3-VL, or either scorer has run.

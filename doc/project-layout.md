@@ -76,10 +76,9 @@ python scripts/launch/colorpeel_run.py \
   --dry-run
 ```
 
-Review the dry-run provenance, delete `--dry-run` only after the unresolved
-optimizer decision is recorded, and never reuse a run directory.
+Review the dry-run provenance, then use a new run ID for real execution; a dry-run directory is consumed and never reused. The tracked optimizer policy is `literal_official_adamw_decay_allowed`.
 
-Before model execution, validate configuration, manifest completeness, roots, clean Git state, and the AdamW embedding-freeze decision. The run directory should preserve:
+Before model execution, validate configuration, manifest completeness, roots, clean Git state, and observation-output readiness. The run directory should preserve:
 
 ```text
 config.yaml
@@ -92,5 +91,9 @@ inference/
 evaluation/
 figures/
 ```
+
+Grounded-SAM and Qwen3-VL are independent evaluation stages, not hidden helpers inside generation or scoring. Each external stage must add its own command, environment/model provenance, input manifest, output manifest, and failure ledger below `evaluation/` before downstream scoring.
+
+Invoke training/generation launchers with `colorpeel017`, Grounded-SAM and color scoring with the existing `/home/r12user5/miniforge3/envs/ice/bin/python`, and Qwen3-VL/CLEVR scoring with the existing `/home/r12user5/miniforge3/envs/ice-vlm/bin/python`. The launcher uses the Python interpreter that starts it; it does not switch environments. Do not modify the two existing ICE environments. External models are `local_files_only`, so cache misses must be recorded as stage failures rather than triggering downloads.
 
 No run has been launched under this contract. Its current status is `pending`.

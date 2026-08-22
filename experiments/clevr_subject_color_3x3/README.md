@@ -50,18 +50,28 @@ The tracked baseline is [`configs/baseline.yaml`](configs/baseline.yaml). It loc
 
 Mixed precision `no` is an explicit run lock because the official repository delegates this choice to Accelerate. The other values follow the inspected official launcher/parser unless the config says otherwise.
 
-## Unresolved training conflict
+## Locked AdamW behavior
 
 Status: **pending**.
 
-The official code passes the full text-embedding parameter to AdamW with weight decay 0.01. Zeroing non-modifier gradients does not by itself prove that AdamW leaves those embedding values unchanged. Before any smoke or full run:
+The official code passes the full text-embedding parameter to AdamW with weight decay 0.01. Consequently, ordinary vocabulary rows may drift through literal decoupled AdamW decay even when their gradients are zero. This study deliberately preserves that official behavior:
 
-1. choose and review a narrow value-preserving update strategy;
-2. add a value-level before/after optimizer-step test with weight decay enabled;
-3. verify all six modifier rows can change while every non-modifier row remains unchanged;
-4. record the resulting comparability effect in the baseline report.
+- policy: `literal_official_adamw_decay_allowed`;
+- do not restore or freeze ordinary vocabulary values after `optimizer.step()`;
+- record ordinary-vocabulary drift as an observation;
+- do not fail a smoke or full run solely because this drift is nonzero;
+- keep the behavior visible as a comparability caveat.
 
-No gradient-only test may close this conflict.
+This decision removes the former training blocker. It does not change the requirement that every exposed modifier token demonstrate an actual learning signal in the nine-step smoke.
+
+## Two real training smokes
+
+Launcher `--dry-run` is preflight only and does not count as either smoke.
+
+1. [`smoke_2step.yaml`](configs/smoke_2step.yaml) uses only the first two locked samples: `003_cube_red_metal` and `013_cube_cyan_metal`. Expected exposures are `<s1*>:2`, `<c1*>:1`, `<c2*>:1`, and zero for `<s2*>`, `<s3*>`, `<c3*>`. Unseen tokens have no gradient or delta requirement.
+2. [`smoke_9step.yaml`](configs/smoke_9step.yaml) uses every grid cell exactly once. Every modifier token must have exposure count 3, at least one nonzero gradient observation, and a nonzero final embedding delta.
+
+Both are independent real training runs with distinct immutable run directories. Each must record finite loss observations, exit status, token observations, ordinary-vocabulary drift, saved artifacts, and reload outcome. Neither smoke is a paper-result reproduction or a substitute for the 1500-step run.
 
 ## Evaluation outputs
 
@@ -72,6 +82,10 @@ The planned protocol uses seeds 42–61 and records:
 - shape, color, and joint accuracy from frozen deterministic predictions;
 - `subject token × predicted color` and `color token × predicted shape` contingency tables;
 - explicit segmentation and prediction failure rows.
+
+Grounded-SAM and Qwen3-VL are independent tracked post-generation stages, configured by `segment.yaml` and `predict_qwen.yaml`. Each owns its own immutable run directory, command, environment/model provenance, per-item output, and failure rows. `score_color.yaml` may consume Grounded-SAM masks only after segmentation completes; `score_clevr.yaml` may consume Qwen prediction JSONL only after prediction completes.
+
+Training/generation use `colorpeel017`; Grounded-SAM and color scoring use the existing `/home/r12user5/miniforge3/envs/ice/bin/python`; Qwen3-VL and CLEVR scoring use `/home/r12user5/miniforge3/envs/ice-vlm/bin/python`. These two existing ICE environments are read-only dependencies for this workflow and must not be modified. Grounded-SAM/Qwen models use `local_files_only`; cache absence is an explicit failed stage with complete per-item failure JSONL and nonzero exit.
 
 No custom numerical threshold defines “entanglement solved.” All results are currently **pending**.
 

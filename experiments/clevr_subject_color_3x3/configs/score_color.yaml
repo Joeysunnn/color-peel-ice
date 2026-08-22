@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "stage": "score_color",
+  "run": {"study": "clevr_subject_color_3x3", "variant": "score_color", "seed": 42},
+  "data_manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+  "args": {
+    "manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+    "image-dir": "${COLORPEEL_GENERATION_DIR}",
+    "mask-dir": "${COLORPEEL_MASK_DIR}",
+    "target-colors-json": "experiments/clevr_subject_color_3x3/manifests/clevr_3x3_manifest.json",
+    "categories": ["transfer"]
+  },
+  "protocol": {
+    "fractions": [0.10, 0.50, 1.00],
+    "segmentation_failures_are_excluded_and_reported": true
+  }
+}

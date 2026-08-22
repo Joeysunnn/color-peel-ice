@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
@@ -77,6 +78,111 @@ class ExperimentRunnerTests(unittest.TestCase):
             with patch.dict(os.environ, {"COLORPEEL_RUN_ROOT": str(root / "runs")}, clear=True):
                 with self.assertRaisesRegex(ValueError, "below COLORPEEL_RUN_ROOT"):
                     colorpeel_run.resolve_run_dir(root / "outside" / "run")
+
+    def test_segmentation_stage_manages_masks_and_failure_status(self):
+        run_dir = Path("/runs/example")
+        outputs = colorpeel_run.managed_output_args("segment", run_dir)
+        config = {
+            "stage": "segment",
+            "run": {"study": "study", "variant": "eval", "seed": 42},
+            "args": {"manifest": "/data/generation.jsonl", "image-dir": "/data/images"},
+        }
+
+        command = colorpeel_run.build_command(config, run_dir, {})
+
+        self.assertEqual(outputs["mask-dir"], str(run_dir / "evaluation" / "masks"))
+        self.assertEqual(
+            outputs["output"], str(run_dir / "evaluation" / "segmentation_status.jsonl")
+        )
+        self.assertIn("segment_grounded_sam.py", command[1])
+        self.assertIn("--mask-dir", command)
+
+    def test_qwen_stage_manages_prediction_jsonl(self):
+        run_dir = Path("/runs/example")
+        outputs = colorpeel_run.managed_output_args("predict_qwen", run_dir)
+        config = {
+            "stage": "predict_qwen",
+            "run": {"study": "study", "variant": "eval", "seed": 42},
+            "args": {"manifest": "/data/generation.jsonl", "image-dir": "/data/images"},
+        }
+
+        command = colorpeel_run.build_command(config, run_dir, {})
+
+        self.assertEqual(
+            outputs["output"], str(run_dir / "evaluation" / "qwen_predictions.jsonl")
+        )
+        self.assertIn("predict_qwen.py", command[1])
+        self.assertNotIn("--mask-dir", command)
+
+    def test_evaluation_configs_build_with_explicit_upstream_paths(self):
+        configs_dir = (
+            REPOSITORY_ROOT
+            / "experiments"
+            / "clevr_subject_color_3x3"
+            / "configs"
+        )
+        environment = {
+            "COLORPEEL_CHECKPOINT_DIR": "/previous/train/checkpoints",
+            "COLORPEEL_GENERATION_DIR": "/previous/generate/inference",
+            "COLORPEEL_MASK_DIR": "/previous/segment/evaluation/masks",
+            "COLORPEEL_QWEN_PREDICTIONS": "/previous/qwen/evaluation/qwen_predictions.jsonl",
+        }
+        expected_stages = {
+            "generate.yaml": "generate",
+            "segment.yaml": "segment",
+            "predict_qwen.yaml": "predict_qwen",
+            "score_color.yaml": "score_color",
+            "score_clevr.yaml": "score_clevr",
+        }
+
+        for filename, expected_stage in expected_stages.items():
+            config = colorpeel_run.read_config(configs_dir / filename)
+            command = colorpeel_run.build_command(
+                config, Path("/runs/current"), environment
+            )
+            self.assertEqual(config["stage"], expected_stage)
+            self.assertEqual(command[0], sys.executable)
+            self.assertFalse(any("${COLORPEEL_" in token for token in command))
+
+        generate = colorpeel_run.read_config(configs_dir / "generate.yaml")
+        generate_command = colorpeel_run.build_command(
+            generate, Path("/runs/current"), environment
+        )
+        self.assertIn("--skip-existing", generate_command)
+        self.assertIn("CompVis/stable-diffusion-v1-4", generate_command)
+
+        segment = colorpeel_run.read_config(configs_dir / "segment.yaml")
+        self.assertEqual(segment["protocol"]["box_threshold"], 0.25)
+        self.assertEqual(segment["protocol"]["text_threshold"], 0.25)
+        self.assertTrue(segment["protocol"]["local_files_only"])
+
+        qwen = colorpeel_run.read_config(configs_dir / "predict_qwen.yaml")
+        self.assertEqual(qwen["protocol"]["torch_dtype"], "float16")
+        self.assertFalse(qwen["protocol"]["do_sample"])
+        self.assertEqual(qwen["protocol"]["max_new_tokens"], 128)
+
+    def test_mask_dir_is_managed_only_for_segmentation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            base = {
+                "run": {"study": "study", "variant": "eval", "seed": 42},
+                "args": {"mask-dir": "/external/masks"},
+            }
+            segment_path = root / "segment.yaml"
+            segment_path.write_text(
+                json.dumps({**base, "stage": "segment"}), encoding="utf-8"
+            )
+            color_path = root / "score_color.yaml"
+            color_path.write_text(
+                json.dumps({**base, "stage": "score_color"}), encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(ValueError, "launcher-managed"):
+                colorpeel_run.read_config(segment_path)
+            self.assertEqual(
+                colorpeel_run.read_config(color_path)["args"]["mask-dir"],
+                "/external/masks",
+            )
 
 
 if __name__ == "__main__":

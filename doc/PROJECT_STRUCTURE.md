@@ -16,6 +16,13 @@ experiments/
     README.md
     configs/
       baseline.yaml
+      smoke_2step.yaml
+      smoke_9step.yaml
+      generate.yaml
+      segment.yaml
+      predict_qwen.yaml
+      score_color.yaml
+      score_clevr.yaml
     manifests/
       README.md
       clevr_3x3_manifest.json       maintained by the data-adapter workflow

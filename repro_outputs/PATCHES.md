@@ -33,8 +33,9 @@ tracked script has not yet rerun against the real server root.
 
 The official loop omitted the last modifier ID when building its gradient
 mask. The helper now preserves all six modifier rows and zeros all other
-gradient rows. Local boundary and launcher tests passed. This does not resolve
-AdamW decay of non-modifier values.
+gradient rows. Local boundary and launcher tests passed. Literal official
+AdamW decay of ordinary vocabulary values is intentionally allowed and must be
+observed.
 
 ### Generation and evaluation adapters
 
@@ -47,6 +48,21 @@ Loads all six tokens and Custom Diffusion weights, passes steps/CFG/generator
 seeds, builds the 900-row manifest, emits CLEVR accuracy/contingency tables,
 and computes color metrics from external masks. Local tests passed; real model
 loading, generation, Grounded-SAM, Qwen3-VL, and metrics remain not run.
+
+### Current pre-run handoff additions
+
+- `experiments/clevr_subject_color_3x3/configs/smoke_2step.yaml`
+- `experiments/clevr_subject_color_3x3/configs/smoke_9step.yaml`
+- `scripts/methods/colorpeel_ice/segment_grounded_sam.py`
+- `scripts/methods/colorpeel_ice/predict_qwen.py`
+- tracked generation, segmentation, Qwen prediction, and scorer configs
+- training observation fields and audit/report template updates
+
+These pre-run handoff additions define the two real smoke contracts, literal
+official AdamW drift policy, and independent evaluation stages. They are not
+part of the currently server-verified commit `e6c57d1`; the server has not yet
+been fast-forwarded to them. The isolated pytest suite passed 44 tests; this
+does not turn any server stage into a completed run.
 
 ### Workflow and evidence structure
 
@@ -63,15 +79,17 @@ added by `apply_patch`; no executable line changed.
 ## Verification
 
 ```text
-pytest: 19 passed
-unittest: 10 passed
-CLI/config/Bash checks: passed
-server GitHub clone: clean at 41d752a
+server GitHub checkout: clean at e6c57d1
+earlier implementation snapshot: local checks completed
+current pre-run handoff changes: isolated pytest 44 passed
 training/generation/evaluation: not_run
 ```
 
-## Unresolved high-risk patch
+## Explicit no-patch boundary
 
-Do not silently add non-modifier embedding restoration. It would preserve the
-stated modifier-only intent but differ from literal public AdamW behavior and
-requires explicit user approval plus a value-level optimizer test.
+Do not add non-modifier embedding restoration. The tracked policy is
+`literal_official_adamw_decay_allowed`: record ordinary-vocabulary drift, do
+not restore it, and do not classify nonzero drift as failure. The two real
+training smokes and the independent Grounded-SAM/Qwen3-VL stages remain
+`not_run`; their output requirements are evidence contracts, not success
+claims.

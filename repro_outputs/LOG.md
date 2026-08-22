@@ -7,8 +7,8 @@
 - Locked the CLEVR metal grid, six tokens, prompts, official parameters, and
   evaluation seeds in the approved plan.
 - Direct server inspection established the reported 48-sample inventory.
-- Found the official final-modifier gradient off-by-one defect and the separate
-  unresolved AdamW weight-decay behavior.
+- Found the official final-modifier gradient off-by-one defect and separately
+  identified literal AdamW weight-decay drift on ordinary vocabulary rows.
 
 ## 2026-08-22 — server rollback
 
@@ -30,8 +30,8 @@
   applying changes.
 - Added method/study separation, tracked configs/manifests/reports, literature
   notes, external run-root contract, and a provenance-recording launcher.
-- Local verification: pytest `19 passed`; unittest `10 passed`; all method CLI
-  help commands, baseline config parsing, and Bash syntax checks succeeded.
+- Local verification succeeded for the earlier implementation snapshot, before
+  the current smoke-observation and independent-stage changes.
 - Created implementation commit `41d752a9d8e8b3a5ab711db90990ab28e4f58000`
   and pushed the reproduction branch to the fork.
 
@@ -39,13 +39,33 @@
 
 - Cloned the fork branch directly into
   `/home/r12user5/Documents/Jiawei/colorpeel/`.
-- Verified branch `repro/2026-08-21-colorpeel-clevr`, clean status, remote URL,
-  baseline config presence, and HEAD `41d752a9d8e8b3a5ab711db90990ab28e4f58000`.
+- The checkout was later fast-forwarded through GitHub and is currently
+  verified clean on branch `repro/2026-08-21-colorpeel-clevr` at HEAD
+  `e6c57d1ba9074db50f07a32cb56bebaffcc44876`.
+- The newer pre-run handoff changes covered by the 44-test suite have not yet
+  been fast-forwarded to the server.
 - No environment, model, data staging, training, or evaluation command was run.
 
-## Open decision
+## 2026-08-22 — optimizer decision and next evidence boundary
 
 Literal official AdamW updates zero-gradient embedding rows through decoupled
-weight decay. The current patch fixes only the sixth-token boundary, as
-approved. Training remains blocked until the user selects literal behavior or
-an explicit non-modifier restoration patch.
+weight decay. The locked policy is now
+`literal_official_adamw_decay_allowed`: keep this behavior, record ordinary
+vocabulary drift, do not restore those values, and do not fail a run solely for
+nonzero drift.
+
+No real smoke has run. Preflight dry-runs do not count as smokes. The next two
+training records are independent: a two-step first-two-sample smoke where
+unseen tokens have no gradient requirement, and a nine-step full-grid smoke
+where every modifier token must have exposure 3, at least one nonzero-gradient
+step, and nonzero final delta.
+
+Grounded-SAM and Qwen3-VL remain independent post-generation stages. Neither
+may be inferred from generation or from downstream scorer availability.
+The current changes have not yet received a complete local test rerun; no old
+test count is reused as evidence for them.
+
+Subsequent pre-run handoff verification completed with `44 passed` in the
+isolated pytest suite. This is local code/config evidence only; no current
+server run was performed and the server has not yet fast-forwarded to this
+handoff.

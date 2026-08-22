@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "stage": "predict_qwen",
+  "run": {"study": "clevr_subject_color_3x3", "variant": "predict_qwen", "seed": 42},
+  "environment": {"CUDA_VISIBLE_DEVICES": "3"},
+  "data_manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+  "args": {
+    "manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+    "image-dir": "${COLORPEEL_GENERATION_DIR}",
+    "device": "cuda:0"
+  },
+  "protocol": {
+    "model": "Qwen/Qwen3-VL-8B-Instruct",
+    "torch_dtype": "float16",
+    "local_files_only": true,
+    "do_sample": false,
+    "max_new_tokens": 128,
+    "expected_items": 300
+  }
+}

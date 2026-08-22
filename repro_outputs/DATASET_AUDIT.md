@@ -51,4 +51,4 @@ Each row must have the official form `a photo of <subject-token> shape in <color
 
 ## Reproduction command
 
-See `COMMANDS.md` section 4. First run `--dry-run`; do not stage data if its output conflicts with the inventory above.
+See the data audit and staging section of `COMMANDS.md`. First run `--dry-run`; do not stage data if its output conflicts with the inventory above.

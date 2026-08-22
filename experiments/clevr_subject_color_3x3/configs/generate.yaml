@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "stage": "generate",
+  "run": {"study": "clevr_subject_color_3x3", "variant": "generate", "seed": 42},
+  "environment": {"CUDA_VISIBLE_DEVICES": "3"},
+  "data_manifest": "experiments/clevr_subject_color_3x3/manifests/clevr_3x3_manifest.json",
+  "args": {
+    "model-dir": "${COLORPEEL_CHECKPOINT_DIR}",
+    "pretrained-model-name-or-path": "CompVis/stable-diffusion-v1-4",
+    "device": "cuda:0",
+    "dtype": "float16",
+    "skip-existing": true
+  },
+  "protocol": {
+    "num_inference_steps": 100,
+    "guidance_scale": 6.0,
+    "seed_start": 42,
+    "seed_end_inclusive": 61,
+    "expected_images": 900
+  }
+}

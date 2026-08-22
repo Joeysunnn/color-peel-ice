@@ -3,7 +3,7 @@ status: pending
 stage: train
 run:
   study: clevr_subject_color_3x3
-  variant: baseline
+  variant: smoke9-full-grid
   seed: 42
 environment:
   CUDA_VISIBLE_DEVICES: "3"
@@ -17,7 +17,7 @@ args:
   scale_lr: true
   lr_scheduler: constant
   lr_warmup_steps: 0
-  max_train_steps: 1500
+  max_train_steps: 9
   checkpointing_steps: 1000
   seed: 42
   mixed_precision: "no"
@@ -33,28 +33,23 @@ args:
   modifier_token: "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>"
   initializer_token: "cube+sphere+cylinder+red+cyan+gray"
 protocol:
-  github_fork_url: https://github.com/Joeysunnn/color-peel-ice.git
-  upstream_url: https://github.com/moatifbutt/color-peel
-  baseline_commit: 021f5c74cee6c231a03b8b49bb96750cadfc4e06
-  diffusers_ref: v0.17.0
-  material: metal
-  colors: [red, cyan, gray]
-  subjects: [cube, sphere, cylinder]
-  gt_masks_in_training: false
-  xformers: false
-  prior_preservation: false
-  resume: false
+  purpose: real_nine_step_full_grid_training_smoke
+  data_scope: all_nine_locked_samples_once
+  expected_exposure_per_modifier_token: 3
+  expected_modifier_token_pairs:
+    - ["<s1*>", "<c1*>"]
+    - ["<s1*>", "<c2*>"]
+    - ["<s1*>", "<c3*>"]
+    - ["<s2*>", "<c1*>"]
+    - ["<s2*>", "<c2*>"]
+    - ["<s2*>", "<c3*>"]
+    - ["<s3*>", "<c1*>"]
+    - ["<s3*>", "<c2*>"]
+    - ["<s3*>", "<c3*>"]
   non_modifier_embedding_update_policy: literal_official_adamw_decay_allowed
 observations:
-  modifier_exposure_counts: record
-  modifier_nonzero_gradient_steps: record
-  modifier_embedding_delta_norms: record
+  modifier_exposure_counts: required_exactly_three_each
+  modifier_nonzero_gradient_steps: required_at_least_one_each
+  modifier_embedding_delta_norms: required_nonzero_each
   ordinary_vocabulary_embedding_drift: record_only_not_failure
   restore_non_modifier_embeddings: false
-evaluation:
-  status: pending
-  seed_start: 42
-  seed_end_inclusive: 61
-  num_inference_steps: 100
-  guidance_scale: 6.0
-  claim_threshold: null

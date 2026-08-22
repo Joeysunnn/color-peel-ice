@@ -26,6 +26,8 @@ STAGES = {
     "prepare": "src/methods/colorpeel_ice/prepare_clevr_3x3.py",
     "train": "src/train/train_colorpeel.py",
     "generate": "scripts/methods/colorpeel_ice/generate.py",
+    "segment": "scripts/methods/colorpeel_ice/segment_grounded_sam.py",
+    "predict_qwen": "scripts/methods/colorpeel_ice/predict_qwen.py",
     "score_clevr": "scripts/methods/colorpeel_ice/score_clevr_predictions.py",
     "score_color": "scripts/methods/colorpeel_ice/evaluate_color_metrics.py",
 }
@@ -70,7 +72,10 @@ def read_config(path: Path) -> dict[str, Any]:
     for key in ("study", "variant", "seed"):
         if key not in config["run"]:
             raise ValueError(f"missing run.{key}")
-    managed = MANAGED_ARGUMENTS & set(config["args"])
+    stage_managed_arguments = set(MANAGED_ARGUMENTS)
+    if config["stage"] == "segment":
+        stage_managed_arguments.add("mask-dir")
+    managed = stage_managed_arguments & set(config["args"])
     if managed:
         raise ValueError("output arguments are launcher-managed: " + ", ".join(sorted(managed)))
     return config
@@ -155,6 +160,13 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output_dir": str(run_dir / "checkpoints")}
     if stage == "generate":
         return {"output-dir": str(run_dir / "inference")}
+    if stage == "segment":
+        return {
+            "mask-dir": str(run_dir / "evaluation" / "masks"),
+            "output": str(run_dir / "evaluation" / "segmentation_status.jsonl"),
+        }
+    if stage == "predict_qwen":
+        return {"output": str(run_dir / "evaluation" / "qwen_predictions.jsonl")}
     if stage == "score_clevr":
         return {
             "output": str(run_dir / "evaluation" / "clevr_metrics.json"),

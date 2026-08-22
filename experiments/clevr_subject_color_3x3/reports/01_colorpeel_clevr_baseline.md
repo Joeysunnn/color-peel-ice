@@ -29,15 +29,33 @@ This hypothesis is not a claim that entanglement is solved.
 | Variant | Changed settings | Intended control | Status |
 |---|---|---|---|
 | `baseline` | none | official-parameter ColorPeel-on-CLEVR anchor | pending |
+| `smoke2-first-two` | first two samples, 2 steps | startup plus seen-token observation | pending |
+| `smoke9-full-grid` | all nine samples once, 9 steps | complete six-token exposure observation | pending |
 
 No post-hoc variant may be added without documenting its rationale and control here before launch.
 
-## Pre-run blockers
+## Locked optimizer decision
 
-1. The locked manifest must pass the 48-sample/nine-selection audit.
-2. SD 1.4 availability and the pinned environment must be verified.
-3. AdamW weight decay may change non-modifier embedding values even after their gradients are zeroed.
-4. A value-level optimizer-step test and human review must resolve item 3 before smoke training.
+Use literal official AdamW behavior. Ordinary vocabulary embedding drift is allowed, measured, and reported; it is not restored and is not a failure criterion. This is a comparability observation, not an unresolved blocker.
+
+## Pre-run evidence boundary
+
+Before creating a real smoke/full run, require:
+
+1. clean Git commit and tracked config provenance;
+2. 48-sample/nine-selection data audit and staged concepts hash;
+3. pinned environment and exact SD 1.4 provenance;
+4. launcher preflight in a separate consumed dry-run directory;
+5. observation instrumentation capable of recording exposure counts, per-token nonzero-gradient steps, modifier deltas, and ordinary-vocabulary drift;
+6. explicit stage records for later Grounded-SAM and Qwen3-VL execution.
+
+Missing pre-run evidence keeps the run `pending`; a launcher dry-run is not a training smoke.
+
+## Post-run evidence boundary
+
+A process return code alone does not complete a smoke or full run. Append exact immutable paths for the run manifest, command, environment, stdout, token observations, checkpoints/embeddings, and reload evidence. Missing artifacts remain `pending`; they must not be reconstructed from memory.
+
+For the two-step smoke, only exposed tokens require learning-signal evidence. For the nine-step smoke, each of the six tokens requires exposure count 3, at least one nonzero-gradient step, and nonzero final delta. Ordinary vocabulary drift is always descriptive, never pass/fail.
 
 ## Required evidence
 
@@ -46,17 +64,21 @@ No post-hoc variant may be added without documenting its rationale and control h
 | Clean Git provenance | run `manifest.json` | pending |
 | Exact environment | `environment.txt` | pending |
 | Data inventory and hashes | data audit plus locked manifest | pending |
-| Six modifier updates and frozen non-modifier values | optimizer-step test and smoke log | pending |
-| Finite diffusion/CAA losses | smoke/full log | pending |
+| Two-step seen-token observations | `checkpoints/training_metrics.jsonl`, `checkpoints/embedding_update_audit.json`, validator output | pending |
+| Nine-step six-token observations | `checkpoints/training_metrics.jsonl`, `checkpoints/embedding_update_audit.json`, validator output | pending |
+| Ordinary-vocabulary AdamW drift | both smoke observation outputs; record only | pending |
+| Finite diffusion/CAA losses | both smoke logs and full log | pending |
 | Reloadable checkpoint | checkpoint inventory and reload log | pending |
 | 900 generation rows | generation manifest | pending |
 | Shape/color/joint accuracy | deterministic scorer output | pending |
 | Official color metrics and segmentation failures | metric CSV and failure ledger | pending |
 | Two axis contingency tables | scorer output | pending |
+| Grounded-SAM masks/failures | independent Grounded-SAM stage manifest | pending |
+| Qwen predictions/failures | independent Qwen3-VL stage manifest | pending |
 
 ## Findings
 
-- **pending**: no smoke test or full training run is recorded.
+- **pending**: neither real training smoke nor the full training run is recorded.
 - **pending**: no generated-image or metric evidence is recorded.
 - **pending**: no conclusion about entanglement reduction is authorized.
 

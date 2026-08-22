@@ -17,7 +17,7 @@ This table distinguishes values directly present in the official public code/lau
 | Seed | parser default 42 | 42 |
 | CAA/cosine weight | launcher: 0.2 | 0.2 |
 | Trainable UNet parameters | Custom Diffusion cross-attention K/V projections | unchanged |
-| Text encoder | intended: modifier embedding rows only; actual full embedding parameter is passed to AdamW, so weight decay may also change zero-gradient non-modifier rows | six shared token rows; non-modifier value preservation must be fixed and tested |
+| Text encoder | gradient mask targets modifier rows, while full-parameter AdamW decay may also drift zero-gradient ordinary rows | six shared token rows; literal ordinary-row drift is recorded, not restored, and not a failure criterion |
 | Optimizer | AdamW β₁ 0.9, β₂ 0.999, weight decay 0.01, ε `1e-8` | unchanged |
 | Gradient accumulation | parser default 1 | 1 |
 | Maximum gradient norm | parser default 1.0 | 1.0 |
@@ -59,4 +59,6 @@ Only Diffusers 0.17.0 and `transformers>=4.25.1` are backed by the inspected pub
 
 ## Important code-versus-plan note
 
-The official code passes the full text-embedding parameter to AdamW with weight decay 0.01. Its gradient mask alone does not establish that non-modifier embedding values stay frozen. The planned smoke acceptance criterion therefore remains unresolved until a value-preserving update strategy and value-level test are present.
+The official code passes the full text-embedding parameter to AdamW with weight decay 0.01. The locked reproduction policy is `literal_official_adamw_decay_allowed`: ordinary vocabulary embedding drift is measured and disclosed, no post-step restoration is added, and nonzero ordinary-row drift alone does not fail a smoke or full run.
+
+Two real training smokes precede the full run. The two-step smoke uses the first two locked samples and imposes no gradient/delta requirement on unseen tokens. The independent nine-step smoke uses all nine cells once; every modifier token must have exposure count 3, at least one nonzero-gradient observation, and nonzero final delta. Launcher dry-runs are preflight only.

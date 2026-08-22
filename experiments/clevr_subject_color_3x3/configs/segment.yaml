@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "stage": "segment",
+  "run": {"study": "clevr_subject_color_3x3", "variant": "segment_grounded_sam", "seed": 42},
+  "environment": {"CUDA_VISIBLE_DEVICES": "3"},
+  "data_manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+  "args": {
+    "manifest": "${COLORPEEL_GENERATION_DIR}/generation_manifest.jsonl",
+    "image-dir": "${COLORPEEL_GENERATION_DIR}",
+    "device": "cuda:0",
+    "dtype": "float32"
+  },
+  "protocol": {
+    "grounding_model": "IDEA-Research/grounding-dino-tiny",
+    "sam_model": "facebook/sam-vit-base",
+    "local_files_only": true,
+    "box_threshold": 0.25,
+    "text_threshold": 0.25,
+    "min_mask_ratio": 0.005,
+    "max_mask_ratio": 0.90,
+    "expected_items": 600
+  }
+}

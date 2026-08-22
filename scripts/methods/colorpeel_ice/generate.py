@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from PIL import Image
+
 
 SUBJECTS = (
     ("s1", "<s1*>", "cube"),
@@ -42,6 +44,7 @@ DEFAULT_SEEDS = tuple(range(42, 62))
 DEFAULT_STEPS = 100
 DEFAULT_GUIDANCE_SCALE = 6.0
 CUSTOM_DIFFUSION_WEIGHTS = "pytorch_custom_diffusion_weights.bin"
+EXPECTED_IMAGE_SIZE = (512, 512)
 
 
 def _entry(
@@ -160,7 +163,37 @@ def validate_model_dir(model_dir: Path) -> None:
         raise FileNotFoundError("Missing trained weights:\n" + "\n".join(missing))
 
 
+def is_decodable_image(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        with Image.open(path) as image:
+            if image.size != EXPECTED_IMAGE_SIZE or image.mode != "RGB":
+                return False
+            image.verify()
+        with Image.open(path) as image:
+            image.load()
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def pending_items(
+    items: Iterable[dict[str, Any]], output_dir: Path, skip_existing: bool
+) -> list[dict[str, Any]]:
+    if not skip_existing:
+        return list(items)
+    return [
+        item
+        for item in items
+        if not is_decodable_image(output_dir / item["image_path"])
+    ]
+
+
 def generate(items: Iterable[dict[str, Any]], args: argparse.Namespace) -> None:
+    items = pending_items(items, args.output_dir, args.skip_existing)
+    if not items:
+        return
     # Lazy imports are intentional: --dry-run must work without the ML stack.
     import torch
     from diffusers import DiffusionPipeline
@@ -211,6 +244,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--device", default="cuda:3")
     parser.add_argument("--dtype", choices=("float16", "float32"), default="float16")
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip only a decodable, native-RGB 512x512 output image.",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
