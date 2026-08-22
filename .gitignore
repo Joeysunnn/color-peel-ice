@@ -1,5 +1,6 @@
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 # Generated experiment assets remain on the execution server.
 train_assets/

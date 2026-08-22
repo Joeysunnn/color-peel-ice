@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-22T10:55:00+08:00",
+  "user_language": "zh-CN",
+  "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
+  "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
+  "target_commit": "41d752a9d8e8b3a5ab711db90990ab28e4f58000",
+  "baseline_commit": "021f5c74cee6c231a03b8b49bb96750cadfc4e06",
+  "readme_first": true,
+  "selected_goal": "ColorPeel on a 3x3 CLEVR subject-color grid with six shared tokens",
+  "goal_priority": "implementation_and_github_first_deployment",
+  "status": "partial",
+  "documented_command_status": "not_run",
+  "documented_command": "python scripts/launch/colorpeel_run.py --config experiments/clevr_subject_color_3x3/configs/baseline.yaml --run-dir <run-dir> --dry-run",
+  "documented_command_kind": "training_dry_run",
+  "patches_applied": true,
+  "patch_branch": "repro/2026-08-21-colorpeel-clevr",
+  "readme_fidelity": "adapted_protocol",
+  "highest_patch_risk": "modifier-token gradient-mask boundary correction",
+  "evidence_level": "mixed",
+  "local_test_status": "success",
+  "local_pytest": "19 passed",
+  "local_unittest": "10 passed",
+  "github_push_status": "success",
+  "server_checkout_status": "success",
+  "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
+  "server_verified_commit": "41d752a9d8e8b3a5ab711db90990ab28e4f58000",
+  "server_environment_status": "removed_not_run",
+  "training_status": "not_run",
+  "generation_status": "not_run",
+  "evaluation_status": "not_run",
+  "assumptions": [
+    "material is fixed to metal and is not learned",
+    "GT masks are excluded from training",
+    "evaluation seeds are 42 through 61",
+    "large run artifacts stay outside Git"
+  ],
+  "unverified_inferences": [
+    "the pinned environment will import successfully after recreation",
+    "SD 1.4 authorization and download will succeed",
+    "external Grounded-SAM and Qwen3-VL evaluation dependencies are available"
+  ],
+  "protocol_deviations": [
+    "CLEVR 3x3 replaces official sample data",
+    "token split changes from 2+4 to 3+3",
+    "last-token gradient defect is corrected",
+    "sampling and CLEVR evaluation adapters are added"
+  ],
+  "human_decisions_required": [
+    "choose literal AdamW behavior or approve non-modifier value restoration",
+    "review a value-level optimizer test before smoke training",
+    "stop rather than substitute if SD 1.4 is unavailable"
+  ],
+  "next_safe_action": "resolve AdamW embedding semantics, then recreate the environment and run data plus launcher dry-runs",
+  "artifact_provenance": [
+    "README.md",
+    "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
+    "experiments/clevr_subject_color_3x3/manifests/clevr_3x3_manifest.json",
+    "repro_outputs/LOG.md"
+  ],
+  "verified_commit_count": 1,
+  "outputs": {
+    "summary": "repro_outputs/SUMMARY.md",
+    "commands": "repro_outputs/COMMANDS.md",
+    "log": "repro_outputs/LOG.md",
+    "scientific_changelog": "repro_outputs/SCIENTIFIC_CHANGELOG.md",
+    "comparability_report": "repro_outputs/COMPARABILITY_REPORT.md",
+    "status": "repro_outputs/status.json",
+    "patches": "repro_outputs/PATCHES.md",
+    "official_parameters": "repro_outputs/OFFICIAL_PARAMETERS.md",
+    "dataset_audit": "repro_outputs/DATASET_AUDIT.md"
+  },
+  "notes": [
+    "Server environment and temporary adapter files from the superseded workflow were removed.",
+    "No paper-result or disentanglement-success claim is made."
+  ]
+}
