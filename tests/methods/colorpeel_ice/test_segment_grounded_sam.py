@@ -1,4 +1,5 @@
 import importlib.util
+import inspect
 from pathlib import Path
 
 import numpy as np
@@ -40,6 +41,13 @@ def test_locked_models_thresholds_and_600_transfer_items():
     assert {segmentation.query_for_item(item) for item in items} == set(
         segmentation.SEGMENTATION_QUERIES
     )
+
+
+def test_grounding_dino_uses_transformers_448_box_threshold_keyword():
+    source = inspect.getsource(segmentation.GroundedSamSegmenter.__call__)
+
+    assert "box_threshold=BOX_THRESHOLD" in source
+    assert "\n            threshold=BOX_THRESHOLD" not in source
 
 
 def test_segmentation_saves_valid_mask_and_records_failures(tmp_path):

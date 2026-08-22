@@ -130,7 +130,7 @@ class GroundedSamSegmenter:
         detection = self.grounding_processor.post_process_grounded_object_detection(
             outputs,
             input_ids=inputs.input_ids,
-            threshold=BOX_THRESHOLD,
+            box_threshold=BOX_THRESHOLD,
             text_threshold=TEXT_THRESHOLD,
             target_sizes=[image.size[::-1]],
         )[0]
