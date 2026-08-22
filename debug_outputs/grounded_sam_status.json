@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "status": "resolved_verified_by_full_rerun",
+  "failure_stage": "grounding_dino_postprocessing",
+  "failed_items": 600,
+  "cause": "transformers_4_48_1_box_threshold_keyword",
+  "fix_scope": "single_api_keyword",
+  "scientific_semantics_changed": false,
+  "failed_run_commit": "c8c874d00318ae7c1df2265c8627787d316a1ce3",
+  "fixed_commit": "b059bd5e92cf1994581d8600111d3ed5830dc7d5",
+  "rerun": {
+    "items": 600,
+    "accepted_masks": 588,
+    "no_detection": 6,
+    "mask_ratio_out_of_range": 6
+  }
+}

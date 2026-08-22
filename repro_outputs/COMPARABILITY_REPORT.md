@@ -28,7 +28,21 @@ The anchor is the official ColorPeel repository at `021f5c74cee6c231a03b8b49bb96
 
 This experiment can test whether the ColorPeel mechanism transfers to the specified CLEVR grid and can expose subject/color leakage. It cannot establish exact paper-score reproduction because the data, token allocation, prompts, and parts of evaluation differ. Official color metrics and CLEVR diagnostics must be reported separately.
 
-No result is currently available. `not_run` means no claim can be made about training stability, visual quality, color accuracy, shape accuracy, joint accuracy, or entanglement reduction.
+Training stability and update coverage are now supported for this adaptation:
+the two real smokes and full 1500-step run completed with finite loss records,
+the six modifier tokens received their expected gradients, final weights
+reloaded, and literal official AdamW drift was observed. Generated-image
+quality, color metrics, shape/color/joint accuracy, and entanglement reduction
+remain outside this training-only evidence until the independent downstream
+stage manifests close.
+
+Those manifests have now closed. The 900 images are valid; Grounded-SAM
+accepted 588/600 transfer masks and explicitly rejected 12; Qwen returned
+300/300 valid predictions. Grid shape/color/joint accuracy was
+94.44%/93.89%/93.89%. The single-axis contingency tables show strong biases,
+so the experiment supplies mixed disentanglement evidence rather than a
+binary success claim. These CLEVR/Qwen diagnostics are adaptations and are not
+directly comparable to ColorPeel paper scores.
 
 ## Required evidence for later claims
 

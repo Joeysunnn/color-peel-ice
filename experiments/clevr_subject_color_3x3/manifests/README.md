@@ -1,6 +1,6 @@
 # Manifest policy
 
-Status: **pending**.
+Status: **confirmed by the 2026-08-22 real data audit and run manifests**.
 
 The locked machine-readable file is `clevr_3x3_manifest.json`. It is maintained by the data-adapter workflow and intentionally is not duplicated or hand-authored here by the documentation workflow.
 

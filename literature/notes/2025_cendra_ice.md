@@ -29,4 +29,6 @@ This note records problem context only. It is not an instruction to transplant I
 
 ## Evidence boundary
 
-ICE is external context. No ICE baseline is planned, and all repository findings remain **pending**.
+ICE is external context. No ICE baseline was run. The completed repository
+experiment reports ColorPeel-on-CLEVR evidence only and does not treat ICE
+metrics or training code as part of this method.

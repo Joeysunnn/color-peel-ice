@@ -96,4 +96,7 @@ Grounded-SAM and Qwen3-VL are independent evaluation stages, not hidden helpers 
 
 Invoke training/generation launchers with `colorpeel017`, Grounded-SAM and color scoring with the existing `/home/r12user5/miniforge3/envs/ice/bin/python`, and Qwen3-VL/CLEVR scoring with the existing `/home/r12user5/miniforge3/envs/ice-vlm/bin/python`. The launcher uses the Python interpreter that starts it; it does not switch environments. Do not modify the two existing ICE environments. External models are `local_files_only`, so cache misses must be recorded as stage failures rather than triggering downloads.
 
-No run has been launched under this contract. Its current status is `pending`.
+The tracked contract has been exercised through both smokes, full training,
+generation, segmentation, Qwen prediction, and scoring. Exact immutable run
+paths and mixed findings are recorded in the study report and
+`repro_outputs/LOG.md`.

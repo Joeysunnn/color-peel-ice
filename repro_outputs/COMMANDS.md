@@ -12,10 +12,9 @@ D:\anaconda3\python.exe -B -m unittest discover -s tests -v
 git diff --check
 ```
 
-Observed after the current smoke-observation and independent-stage changes:
-isolated pytest suite `44 passed`. This is code/config verification only; no
-server model, training, generation, segmentation, prediction, or metric run is
-implied.
+Final isolated per-file verification: `46 passed`, plus compile, JSON, and
+diff checks. Runtime evidence is recorded separately in immutable server run
+directories; a test result alone is never used as model-run evidence.
 
 ## GitHub push — completed
 
@@ -25,7 +24,7 @@ git push --set-upstream origin repro/2026-08-21-colorpeel-clevr
 
 `origin` is the user fork; `upstream` is the official repository.
 
-## Server checkout from GitHub — completed for implementation commit
+## Server checkout from GitHub — completed and fast-forwarded
 
 ```bash
 git clone --branch repro/2026-08-21-colorpeel-clevr --single-branch \
@@ -35,9 +34,11 @@ git -C /home/r12user5/Documents/Jiawei/colorpeel status --short
 git -C /home/r12user5/Documents/Jiawei/colorpeel rev-parse HEAD
 ```
 
-Verified clean at `41d752a9d8e8b3a5ab711db90990ab28e4f58000`.
+The initial clone was later updated exclusively with `git pull --ff-only`.
+Training launched from a clean checkout at
+`c8c874d00318ae7c1df2265c8627787d316a1ce3`.
 
-## Environment — not run after rollback
+## Environment — completed and frozen
 
 ```bash
 cd /home/r12user5/Documents/Jiawei/colorpeel
@@ -45,11 +46,12 @@ CONDA_BIN=/home/r12user5/miniforge3/bin/conda \
   bash scripts/setup/setup_colorpeel017.sh
 ```
 
-The previous temporary environment was intentionally removed. Recreate it before
-the tracked data/preflight steps; literal official AdamW behavior is now the
-locked policy and is no longer a setup blocker.
+Observed environment: Python 3.10.21, PyTorch 1.13.1+cu117, torchvision
+0.14.1+cu117, official Diffusers v0.17.0, Transformers 4.30.2, Accelerate
+0.20.3, and huggingface-hub 0.15.1. `pip check` passed. The full freeze is at
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/environment/colorpeel017-pip-freeze.txt`.
 
-## Data audit and staging — not run with the tracked checkout
+## Data audit and staging — completed
 
 ```bash
 export COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs
@@ -90,7 +92,7 @@ Repeat with `smoke_9step.yaml` and a run ID whose variant is
 `smoke9-full-grid`. Every dry-run directory is consumed; use a new run ID for
 real execution. A successful preflight is not either of the two real smokes.
 
-## Real training smoke 1 — two steps, first two samples, not run
+## Real training smoke 1 — passed
 
 ```bash
 export COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs
@@ -110,7 +112,10 @@ Expected exposure counts are `<s1*>:2`, `<c1*>:1`, `<c2*>:1`, and zero for
 observation and nonzero final delta. Unseen tokens are not failures. Record
 ordinary-vocabulary AdamW drift but do not restore it or use it as pass/fail.
 
-## Real training smoke 2 — nine steps, full grid, not run
+Evidence run:
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130559__clevr_subject_color_3x3__smoke2-first-two__c8c874d__42`.
+
+## Real training smoke 2 — passed
 
 ```bash
 export COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs
@@ -128,12 +133,13 @@ conda run -n colorpeel017 python src/train/training_audit.py validate \
 Each modifier token must have exposure count exactly 3, at least one nonzero
 gradient observation, and nonzero final embedding delta. Both smoke runs must
 also record finite losses, exit code, saved artifacts, reload outcome, and
-ordinary-vocabulary drift. These observations are currently `not_run`.
+ordinary-vocabulary drift. These observations passed in:
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130706__clevr_subject_color_3x3__smoke9-full-grid__c8c874d__42`.
 The validator reads `checkpoints/training_metrics.jsonl` and
 `checkpoints/embedding_update_audit.json`; a missing or invalid observation
 artifact prevents a smoke pass.
 
-## Full 1500-step training — only after both smoke records are complete
+## Full 1500-step training — completed after both smoke passes
 
 ```bash
 export COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs
@@ -144,7 +150,11 @@ conda run -n colorpeel017 python scripts/launch/colorpeel_run.py \
   --run-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/$RUN_ID"
 ```
 
-## Generation — tracked independent run, not started
+Evidence run:
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`.
+Its manifest succeeded with return code 0 and 1500 finite metric rows.
+
+## Generation — completed
 
 ```bash
 TRAIN_RUN="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/<completed-baseline-run-id>"
@@ -159,7 +169,12 @@ conda run -n colorpeel017 python scripts/launch/colorpeel_run.py \
 Replace the placeholder with the reviewed completed baseline run. Generation
 does not run Grounded-SAM or Qwen3-VL.
 
-## Independent Grounded-SAM stage — implemented/configured, not run
+Completed run:
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-132122__clevr_subject_color_3x3__generate__c8c874d__42`.
+Its manifest succeeded with return code 0; all 900 images passed full decode,
+RGB, and size validation.
+
+## Independent Grounded-SAM stage — completed after one compatibility rerun
 
 Grounded-SAM consumes only the transfer rows from the generation manifest and
 writes explicit per-item status plus masks mirroring each generated
@@ -187,7 +202,16 @@ RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__score_color__${COMMIT:0
   --run-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/$RUN_ID"
 ```
 
-## Independent Qwen3-VL stage — implemented/configured, not run
+The first real run at `c8c874d` preserved 600 explicit failures caused by the
+pinned Transformers 4.48.1 keyword difference. After the one-keyword `b059bd5`
+patch was pushed and server-fast-forwarded, the completed runs were:
+
+- segmentation:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-150928__clevr_subject_color_3x3__segment_grounded_sam__b059bd5__42`
+- color scoring:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-151349__clevr_subject_color_3x3__score_color__b059bd5__42`
+
+## Independent Qwen3-VL stage — completed
 
 Qwen3-VL consumes the 300 non-transfer rows with deterministic decoding and
 `max_new_tokens=128`, writing one success/failure JSON row per image:
@@ -213,6 +237,13 @@ RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__score_clevr__${COMMIT:0
   --run-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/$RUN_ID"
 ```
 
+Completed runs:
+
+- Qwen predictions:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-151546__clevr_subject_color_3x3__predict_qwen__b059bd5__42`
+- CLEVR scoring:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-152105__clevr_subject_color_3x3__score_clevr__b059bd5__42`
+
 ## Evidence boundary
 
 Before a real run: require clean Git provenance, tracked config/manifest, data
@@ -220,8 +251,8 @@ audit, environment/model provenance, launcher preflight, and observation-output
 readiness. After a run: require immutable run manifest, command, environment,
 stdout, exit code, observation artifacts, checkpoints and reload evidence.
 Missing outputs remain `pending`; do not infer them from a process start or a
-dry-run. Grounded-SAM and Qwen3-VL remain separate `not_run` stages until their
-own run manifests, model provenance, per-item outputs, and failure rows exist.
+dry-run. In this execution both external stages have their own run manifests,
+model provenance, per-item outputs, and explicit failure rows.
 Generation and training use `colorpeel017`; Grounded-SAM and color scoring use
 the existing `ice` environment; Qwen3-VL and CLEVR scoring use the existing
 `ice-vlm` environment. The launcher always uses its current Python interpreter

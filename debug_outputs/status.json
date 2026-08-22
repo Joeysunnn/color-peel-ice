@@ -1,10 +1,16 @@
 {
   "schema_version": 1,
-  "status": "patch_implemented_pending_rerun",
+  "status": "resolved_verified_by_real_smokes",
   "failure_stage": "accelerator_initialization",
   "optimization_steps_completed": 0,
   "cause": "accelerate_0.20.3_logging_dir_api_mismatch",
   "fix_scope": "logging_configuration_only",
   "scientific_semantics_changed": false,
-  "failed_run_commit": "6adca6dab9ad177c58a99b6ab26662cc92e8c140"
+  "failed_run_commit": "6adca6dab9ad177c58a99b6ab26662cc92e8c140",
+  "fixed_commit": "c8c874d00318ae7c1df2265c8627787d316a1ce3",
+  "verification": {
+    "smoke_2step": "passed",
+    "smoke_9step": "passed",
+    "full_training_1500_steps": "passed"
+  }
 }

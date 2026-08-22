@@ -12,3 +12,11 @@
 - Scientific impact: none expected. Loss, optimizer, trainable parameters,
   data order, gradients, and update order are unchanged.
 
+## Resolution evidence
+
+Commit `c8c874d00318ae7c1df2265c8627787d316a1ce3` was deployed by
+`git pull --ff-only`. A fresh two-step smoke, a fresh nine-step coverage smoke,
+and the full 1500-step run all completed successfully. The two smokes and full
+run produced finite loss records, saved the Custom Diffusion weights and six
+token files, and reloaded all six textual-inversion embeddings. This closes the
+startup failure without changing training mathematics.

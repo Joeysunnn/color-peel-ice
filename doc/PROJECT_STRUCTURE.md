@@ -64,4 +64,6 @@ Every experimental statement uses exactly one label:
 - **observed**: human inspection or verbal observation without complete machine-readable evidence;
 - **pending**: not run, incomplete, blocked, or missing the required artifact.
 
-All current `clevr_subject_color_3x3` findings are `pending`. Paper results are external evidence and never confirm this repository's experiment.
+The `clevr_subject_color_3x3` run is completed with explicit evaluation
+failures; its report uses `confirmed` and `observed` labels. Paper results remain
+external evidence and never confirm this repository's experiment.

@@ -3,18 +3,27 @@
 ## Source and evidence state
 
 - Server root: `/home/r12user5/Documents/Jiawei/papers/ICE/datasets/clevr_basic_neutral_stage1_gt`
-- Current evidence: prior direct server audit summarized in the approved implementation plan.
-- Current local rerun: `not_run`
+- Current evidence: tracked adapter executed against the real server root on
+  2026-08-22 at commit `c8c874d00318ae7c1df2265c8627787d316a1ce3`.
+- Immutable audit artifact:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/train_assets/dataset_audit.json`.
+- Audit status: `passed`.
 - Training use of GT masks: prohibited; audit/evaluation only.
 
-## Reported inventory
+## Verified inventory
 
 - 48 samples total: `3 shapes × 8 colors × 2 materials`.
 - Per sample: 512×512 RGB JPEG, 512×512 binary GT mask, background, scene JSON, and original image copy.
-- Reported mask values: exactly `{0, 255}`.
-- Reported foreground pixels by shape: cube `13,900`, sphere `14,973`, cylinder `22,868`.
+- Verified mask values: exactly `{0, 255}`.
+- Verified foreground pixels by shape: cube `13,900`, sphere `14,973`, cylinder `22,868`.
+- Verified selected rows: 9; every selected scene label agrees with the locked
+  shape/color/metal manifest.
+- Verified training staging: exactly nine loader-visible `img.jpg` symbolic
+  links. Masks, scenes, backgrounds, and original copies were not linked into
+  the sample directories.
 
-These counts must be independently reproduced by `prepare_clevr_3x3.py --dry-run` before staging/training and attached to `LOG.md`.
+The source tree was read-only throughout. SHA-256 values for all 48 source
+images, masks, and scene JSON files are stored in the audit artifact.
 
 ## Fixed 3×3 metal training grid
 
@@ -51,4 +60,5 @@ Each row must have the official form `a photo of <subject-token> shape in <color
 
 ## Reproduction command
 
-See the data audit and staging section of `COMMANDS.md`. First run `--dry-run`; do not stage data if its output conflicts with the inventory above.
+See the data audit and staging section of `COMMANDS.md`. The dry-run and real
+staging commands both passed before either smoke was launched.

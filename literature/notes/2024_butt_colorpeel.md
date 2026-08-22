@@ -31,4 +31,6 @@ This section is a high-level evidence record, not a replacement implementation s
 
 ## Evidence boundary
 
-The paper's results do not confirm this CLEVR experiment. Current repository findings remain **pending**.
+The paper's results do not confirm this CLEVR experiment. The repository run is
+now complete, but its CLEVR/Qwen findings remain adaptation evidence rather
+than a reproduction of the paper's reported scores.

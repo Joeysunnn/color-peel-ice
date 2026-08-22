@@ -2,7 +2,7 @@
 
 - Study slug: `clevr_subject_color_3x3`
 - Method slug: `colorpeel_ice`
-- Status: **pending**
+- Status: **completed with explicit evaluation failures**
 - Baseline: ColorPeel commit `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
 - Dataset root: `/home/r12user5/Documents/Jiawei/papers/ICE/datasets/clevr_basic_neutral_stage1_gt`
 - Run root: `$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/<run_id>/`
@@ -34,7 +34,11 @@ Material is fixed to `metal` and has no learned token. Every prompt uses `a phot
 | sphere | `019_sphere_red_metal` | `029_sphere_cyan_metal` | `017_sphere_gray_metal` |
 | cylinder | `035_cylinder_red_metal` | `045_cylinder_cyan_metal` | `033_cylinder_gray_metal` |
 
-The source inventory is expected to contain 48 samples (`3 shapes × 8 colors × 2 materials`). Images and GT masks are expected to be 512×512, with masks binary. These facts remain **pending** in this study until a run-specific data audit is named in a report. GT masks are audit/evaluation assets only and must not enter the training loss.
+The source inventory was verified as 48 samples (`3 shapes × 8 colors × 2
+materials`). Images and GT masks are 512×512 and masks are binary. The
+run-specific audit path is named in the study report and
+`repro_outputs/DATASET_AUDIT.md`. GT masks remained audit/evaluation assets and
+did not enter the training loss.
 
 ## Baseline protocol
 
@@ -52,7 +56,7 @@ Mixed precision `no` is an explicit run lock because the official repository del
 
 ## Locked AdamW behavior
 
-Status: **pending**.
+Status: **confirmed** by the real 48-sample audit and nine-image staging.
 
 The official code passes the full text-embedding parameter to AdamW with weight decay 0.01. Consequently, ordinary vocabulary rows may drift through literal decoupled AdamW decay even when their gradients are zero. This study deliberately preserves that official behavior:
 
@@ -87,7 +91,9 @@ Grounded-SAM and Qwen3-VL are independent tracked post-generation stages, config
 
 Training/generation use `colorpeel017`; Grounded-SAM and color scoring use the existing `/home/r12user5/miniforge3/envs/ice/bin/python`; Qwen3-VL and CLEVR scoring use `/home/r12user5/miniforge3/envs/ice-vlm/bin/python`. These two existing ICE environments are read-only dependencies for this workflow and must not be modified. Grounded-SAM/Qwen models use `local_files_only`; cache absence is an explicit failed stage with complete per-item failure JSONL and nonzero exit.
 
-No custom numerical threshold defines “entanglement solved.” All results are currently **pending**.
+No custom numerical threshold defines “entanglement solved.” The completed run
+shows 93.89% grid joint accuracy alongside strong single-axis contingency bias;
+the report records both without converting them into a new success threshold.
 
 ## Records
 

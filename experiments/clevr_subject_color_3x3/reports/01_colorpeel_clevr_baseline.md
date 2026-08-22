@@ -1,12 +1,12 @@
 # 01 — ColorPeel CLEVR 3×3 baseline
 
-- Status: **pending**
+- Status: **completed with explicit evaluation failures**
 - Study: `clevr_subject_color_3x3`
 - Method: `colorpeel_ice`
 - Config: `../configs/baseline.yaml`
 - Manifest: `../manifests/clevr_3x3_manifest.json`
-- Run path: pending
-- Commit: pending; must descend from baseline `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
+- Run path: `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`
+- Commit: `c8c874d00318ae7c1df2265c8627787d316a1ce3`, descending from baseline `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
 
 ## Hypothesis
 
@@ -28,9 +28,9 @@ This hypothesis is not a claim that entanglement is solved.
 
 | Variant | Changed settings | Intended control | Status |
 |---|---|---|---|
-| `baseline` | none | official-parameter ColorPeel-on-CLEVR anchor | pending |
-| `smoke2-first-two` | first two samples, 2 steps | startup plus seen-token observation | pending |
-| `smoke9-full-grid` | all nine samples once, 9 steps | complete six-token exposure observation | pending |
+| `baseline` | none | official-parameter ColorPeel-on-CLEVR anchor | confirmed: 1500/1500 |
+| `smoke2-first-two` | first two samples, 2 steps | startup plus seen-token observation | confirmed |
+| `smoke9-full-grid` | all nine samples once, 9 steps | complete six-token exposure observation | confirmed |
 
 No post-hoc variant may be added without documenting its rationale and control here before launch.
 
@@ -61,26 +61,44 @@ For the two-step smoke, only exposed tokens require learning-signal evidence. Fo
 
 | Evidence | Required source | Status |
 |---|---|---|
-| Clean Git provenance | run `manifest.json` | pending |
-| Exact environment | `environment.txt` | pending |
-| Data inventory and hashes | data audit plus locked manifest | pending |
-| Two-step seen-token observations | `checkpoints/training_metrics.jsonl`, `checkpoints/embedding_update_audit.json`, validator output | pending |
-| Nine-step six-token observations | `checkpoints/training_metrics.jsonl`, `checkpoints/embedding_update_audit.json`, validator output | pending |
-| Ordinary-vocabulary AdamW drift | both smoke observation outputs; record only | pending |
-| Finite diffusion/CAA losses | both smoke logs and full log | pending |
-| Reloadable checkpoint | checkpoint inventory and reload log | pending |
-| 900 generation rows | generation manifest | pending |
-| Shape/color/joint accuracy | deterministic scorer output | pending |
-| Official color metrics and segmentation failures | metric CSV and failure ledger | pending |
-| Two axis contingency tables | scorer output | pending |
-| Grounded-SAM masks/failures | independent Grounded-SAM stage manifest | pending |
-| Qwen predictions/failures | independent Qwen3-VL stage manifest | pending |
+| Clean Git provenance | run `manifest.json` | confirmed at `c8c874d` |
+| Exact environment | `environment.txt` | confirmed and frozen |
+| Data inventory and hashes | data audit plus locked manifest | confirmed: 48/48, selected 9 |
+| Two-step seen-token observations | `checkpoints/training_metrics.jsonl`, `checkpoints/embedding_update_audit.json`, validator output | confirmed |
+| Nine-step six-token observations | `checkpoints/training_metrics.jsonl`, `checkpoints/embedding_update_audit.json`, validator output | confirmed |
+| Ordinary-vocabulary AdamW drift | both smoke observation outputs; record only | observed, not enforced |
+| Finite diffusion/CAA losses | both smoke logs and full log | confirmed: 2 + 9 + 1500 rows |
+| Reloadable checkpoint | checkpoint inventory and reload log | confirmed |
+| 900 generation rows | generation manifest | confirmed: 900 valid images |
+| Shape/color/joint accuracy | deterministic scorer output | observed: 94.44% / 93.89% / 93.89% |
+| Official color metrics and segmentation failures | metric CSV and failure ledger | observed: 588 scored, 12 excluded/reported |
+| Two axis contingency tables | scorer output | confirmed and reported below |
+| Grounded-SAM masks/failures | independent Grounded-SAM stage manifest | 588 ok, 12 explicit failures |
+| Qwen predictions/failures | independent Qwen3-VL stage manifest | 300 ok, 0 failures |
 
 ## Findings
 
-- **pending**: neither real training smoke nor the full training run is recorded.
-- **pending**: no generated-image or metric evidence is recorded.
-- **pending**: no conclusion about entanglement reduction is authorized.
+- **confirmed**: both real training smokes and the full 1500-step run passed.
+- **observed**: every modifier token received its exact expected exposure and
+  nonzero-gradient count, and all six final embedding deltas were nonzero.
+- **observed**: ordinary vocabulary rows drifted under literal official AdamW;
+  this was recorded and not treated as a failure.
+- **confirmed**: 900/900 generated images passed decode/RGB/size validation.
+- **observed**: grid shape/color/joint accuracy was
+  94.44%/93.89%/93.89% over 180 samples.
+- **observed**: Grounded-SAM accepted 588/600 transfer masks; the 12 failures
+  are split evenly between no detection and ratio rejection. The color scorer
+  contains 588 valid rows plus 12 `mask_missing` rows.
+- **observed**: overall 10%/50%/100% ΔE means were
+  22.0011/31.3093/42.5375; corresponding ΔECh means were
+  16.3569/22.6487/30.8198.
+- **observed**: subject-only predictions were cube→gray 20/20,
+  cylinder→gray 20/20, sphere→cyan 2/20 and other 18/20. Color-only rows
+  (cube/sphere/cylinder/other/missing) were red 1/2/2/15/0, cyan
+  10/2/1/7/0, and gray 3/4/2/11/0.
+- **interpretation**: strong grid accuracy coexists with substantial
+  single-axis output bias. No custom scalar leakage score or “entanglement
+  solved” claim is introduced.
 
 When evidence arrives, append findings with exact artifact paths. Do not rewrite a pending or superseded observation without preserving its history.
 

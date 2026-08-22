@@ -1,16 +1,16 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-22T12:45:47+08:00",
+  "generated_at": "2026-08-22T15:25:00+08:00",
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
-  "target_commit": "e6c57d1ba9074db50f07a32cb56bebaffcc44876",
+  "target_commit": "b059bd5e92cf1994581d8600111d3ed5830dc7d5",
   "baseline_commit": "021f5c74cee6c231a03b8b49bb96750cadfc4e06",
   "readme_first": true,
   "selected_goal": "ColorPeel on a 3x3 CLEVR subject-color grid with six shared tokens",
   "goal_priority": "implementation_and_github_first_deployment",
-  "status": "partial",
-  "documented_command_status": "not_run",
+  "status": "completed_with_reported_evaluation_failures",
+  "documented_command_status": "completed",
   "documented_command": "python scripts/launch/colorpeel_run.py --config experiments/clevr_subject_color_3x3/configs/baseline.yaml --run-dir <run-dir> --dry-run",
   "documented_command_kind": "training_dry_run",
   "patches_applied": true,
@@ -19,23 +19,29 @@
   "highest_patch_risk": "modifier-token gradient-mask boundary correction",
   "evidence_level": "mixed",
   "local_test_status": "success",
-  "local_pytest": "44 passed",
+  "local_pytest": "46 passed in isolated per-file runs",
   "github_push_status": "success",
-  "server_checkout_status": "success_clean_at_e6c57d1",
+  "server_checkout_status": "success_clean_at_b059bd5",
   "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
-  "server_verified_commit": "e6c57d1ba9074db50f07a32cb56bebaffcc44876",
-  "current_worktree_status": "pre_run_changes_locally_verified",
-  "server_pre_run_changes_status": "not_fast_forwarded",
-  "current_changes_test_status": "success_44_isolated_pytest",
-  "server_environment_status": "removed_not_run",
-  "training_status": "not_run",
-  "generation_status": "not_run",
-  "evaluation_status": "not_run",
-  "preflight_status": "not_run",
-  "smoke_2step_status": "not_run",
-  "smoke_9step_status": "not_run",
-  "grounded_sam_status": "not_run",
-  "qwen3_vl_status": "not_run",
+  "server_verified_commit": "b059bd5e92cf1994581d8600111d3ed5830dc7d5",
+  "current_worktree_status": "evidence_report_update_in_progress",
+  "server_pre_run_changes_status": "fast_forwarded_via_github",
+  "current_changes_test_status": "success_46_isolated_final_tests_compile_json_and_diff_checks",
+  "server_environment_status": "created_verified_and_frozen",
+  "training_status": "succeeded_1500_of_1500_finite",
+  "generation_status": "succeeded_900_of_900_valid",
+  "evaluation_status": "completed_mixed_evidence",
+  "preflight_status": "passed",
+  "smoke_2step_status": "passed",
+  "smoke_9step_status": "passed",
+  "grounded_sam_status": "completed_588_ok_12_explicit_failures",
+  "color_metrics_status": "completed_588_ok_12_mask_missing",
+  "qwen3_vl_status": "completed_300_ok_0_failures",
+  "clevr_grid_metrics": {
+    "shape_accuracy": 0.9444444444444444,
+    "color_accuracy": 0.9388888888888889,
+    "joint_accuracy": 0.9388888888888889
+  },
   "optimizer_embedding_policy": "literal_official_adamw_decay_allowed",
   "assumptions": [
     "material is fixed to metal and is not learned",
@@ -43,28 +49,22 @@
     "evaluation seeds are 42 through 61",
     "large run artifacts stay outside Git"
   ],
-  "unverified_inferences": [
-    "the pinned environment will import successfully after recreation",
-    "SD 1.4 authorization and download will succeed",
-    "external Grounded-SAM and Qwen3-VL evaluation dependencies are available"
-  ],
+  "unverified_inferences": [],
   "protocol_deviations": [
     "CLEVR 3x3 replaces official sample data",
     "token split changes from 2+4 to 3+3",
     "last-token gradient defect is corrected",
     "sampling and CLEVR evaluation adapters are added"
   ],
-  "human_decisions_required": [
-    "stop rather than substitute if SD 1.4 is unavailable"
-  ],
-  "next_safe_action": "recreate the environment, run data and launcher preflights, then run independent two-step and nine-step training smokes with observation outputs",
+  "human_decisions_required": [],
+  "next_safe_action": "review generated samples and the reported contingency tables; do not claim entanglement solved without a predeclared criterion",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
     "experiments/clevr_subject_color_3x3/manifests/clevr_3x3_manifest.json",
     "repro_outputs/LOG.md"
   ],
-  "verified_commit_count": 2,
+  "verified_commit_count": 5,
   "outputs": {
     "summary": "repro_outputs/SUMMARY.md",
     "commands": "repro_outputs/COMMANDS.md",
@@ -77,10 +77,12 @@
     "dataset_audit": "repro_outputs/DATASET_AUDIT.md"
   },
   "notes": [
-    "Server environment and temporary adapter files from the superseded workflow were removed.",
+    "The server code was updated only through GitHub and git pull --ff-only.",
     "No paper-result or disentanglement-success claim is made.",
     "Ordinary-vocabulary AdamW drift is recorded but is not restored or treated as failure.",
-    "Grounded-SAM and Qwen3-VL are independent not-run stages.",
-    "Current pre-run handoff changes passed 44 local tests but are not yet on the server."
+    "The two real smokes and full 1500-step training succeeded.",
+    "Grounded-SAM and Qwen3-VL were executed as independent stages.",
+    "The first Grounded-SAM run is retained as a 600-row API-compatibility failure record; b059bd5 fixed only the pinned Transformers keyword.",
+    "Single-axis contingency tables show strong output bias, so no entanglement-solved claim is made."
   ]
 }
