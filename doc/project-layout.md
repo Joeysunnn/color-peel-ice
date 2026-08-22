@@ -100,3 +100,11 @@ The tracked contract has been exercised through both smokes, full training,
 generation, segmentation, Qwen prediction, and scoring. Exact immutable run
 paths and mixed findings are recorded in the study report and
 `repro_outputs/LOG.md`.
+
+The completed report-01 checkpoint and generation directories are frozen
+sources for diagnosis-first work. Diagnostic commands must point to them
+read-only and write to new run directories. Stable Diffusion SafetyChecker
+disablement requires an explicit risk acknowledgement and cannot become the
+default generation setting. Conditional cyan-initializer training and any
+multiview fold use fresh run IDs and commits; no server result exists until the
+same immutable-run evidence contract closes.

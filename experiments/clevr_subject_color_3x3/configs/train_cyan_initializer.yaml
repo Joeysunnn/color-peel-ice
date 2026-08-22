@@ -1,0 +1,45 @@
+schema_version: 1
+status: pending_diagnostic_selection
+stage: train
+run:
+  study: clevr_subject_color_3x3
+  variant: cyan_initializer_ablation
+  seed: 42
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+data_manifest: experiments/clevr_subject_color_3x3/manifests/clevr_3x3_manifest.json
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_CONCEPTS_LIST}
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 1500
+  checkpointing_steps: 1000
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.2
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.01
+  adam_epsilon: 1.0e-8
+  hflip: true
+  modifier_token: "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>"
+  initializer_token: "cube+sphere+cylinder+red+${COLORPEEL_CYAN_INITIALIZER}+gray"
+protocol:
+  parent_variant: baseline
+  scientific_change: cyan_initializer_only
+  candidate_must_be_selected_by_diagnostics: true
+  allowed_candidates: [aqua, teal, turquoise]
+  gt_masks_in_training: false
+  caa_changed: false
+  optimizer_changed: false
+  training_mask_changed: false
+  prompt_template_changed: false
+  non_modifier_embedding_update_policy: literal_official_adamw_decay_allowed

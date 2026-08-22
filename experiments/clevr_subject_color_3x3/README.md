@@ -2,7 +2,8 @@
 
 - Study slug: `clevr_subject_color_3x3`
 - Method slug: `colorpeel_ice`
-- Status: **completed with explicit evaluation failures**
+- Baseline status: **completed with explicit evaluation failures**
+- Follow-up status: **diagnosis-first plan pending; no new training claimed**
 - Baseline: ColorPeel commit `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
 - Dataset root: `/home/r12user5/Documents/Jiawei/papers/ICE/datasets/clevr_basic_neutral_stage1_gt`
 - Run root: `$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/<run_id>/`
@@ -95,9 +96,38 @@ No custom numerical threshold defines “entanglement solved.” The completed r
 shows 93.89% grid joint accuracy alongside strong single-axis contingency bias;
 the report records both without converting them into a new success threshold.
 
+## Diagnosis-first follow-up
+
+The completed baseline checkpoint and all baseline artifacts are frozen as the
+comparison anchor. Follow-up diagnostics and ablations use new immutable run
+directories and may not overwrite, resume, or silently regenerate baseline
+outputs. See [`reports/02_diagnosis_first.md`](reports/02_diagnosis_first.md).
+
+Human visual review is primary for generated-image semantics; Qwen3-VL,
+Grounded-SAM, and color metrics remain secondary diagnostics. The current
+human review is qualitative and lacks a per-seed ledger, so it is `observed`
+rather than `confirmed`. It identifies cyan instability and occasional
+cube-like color-only cyan outputs as hypotheses to diagnose, not proof of
+token entanglement.
+
+The only approved conditional training change is the `<c2*>` initializer in
+[`configs/train_cyan_initializer.yaml`](configs/train_cyan_initializer.yaml).
+`COLORPEEL_CYAN_INITIALIZER` must be selected by a recorded diagnostic from
+`aqua`, `teal`, or `turquoise`; it is intentionally not fixed in advance. CAA,
+AdamW, the training mask, prompt, dataset, seed, steps, and all other
+initializers remain unchanged.
+
+`diagnostics_v1` is a targeted black-image/SafetyChecker diagnosis. A
+checker-disabled rerun requires explicit safety acknowledgement, writes to a
+separate directory, and never replaces baseline outputs. Multiview rendering
+or training (`multiview_heldout_v1`), a factor-aware loss, and natural
+multi-object evaluation remain pending or conditional and have no completed
+artifacts.
+
 ## Records
 
 - Manifest policy: [`manifests/README.md`](manifests/README.md)
 - Report index: [`reports/README.md`](reports/README.md)
 - Baseline report: [`reports/01_colorpeel_clevr_baseline.md`](reports/01_colorpeel_clevr_baseline.md)
+- Diagnosis-first report: [`reports/02_diagnosis_first.md`](reports/02_diagnosis_first.md)
 - Literature: [ColorPeel](../../literature/notes/2024_butt_colorpeel.md), [ICE](../../literature/notes/2025_cendra_ice.md)

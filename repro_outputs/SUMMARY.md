@@ -2,10 +2,10 @@
 
 - GitHub fork: `https://github.com/Joeysunnn/color-peel-ice.git`
 - Official upstream baseline: `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
-- Working branch: `repro/2026-08-21-colorpeel-clevr`
+- Working branch: `repro/2026-08-22-colorpeel-diagnostics`
 - Server-verified evaluation commit: `b059bd5e92cf1994581d8600111d3ed5830dc7d5`
-- Overall status: `completed_with_reported_evaluation_failures`
-- Code/test status: `success` (46 isolated final tests; compile and JSON checks
+- Baseline status: `completed_with_reported_evaluation_failures`
+- Baseline code/test status: `success` (46 isolated final tests; compile and JSON checks
   passed; `git diff --check` clean apart from line-ending notices)
 - Training status: `success` (2-step, 9-step, and 1500-step)
 - Generation/evaluation status: `success` (900/900 generated and valid;
@@ -42,3 +42,43 @@ The single-axis contingency tables still show strong axis-dependent output
 biases, so this evidence does not authorize the statement that entanglement is
 “solved.” It supports a successful ColorPeel-on-CLEVR training/generation
 reproduction plus an auditable, mixed disentanglement diagnosis.
+
+## Diagnosis-first follow-up — pending
+
+The baseline checkpoint is now the frozen comparison anchor. Its source run is
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`
+at training commit `c8c874d00318ae7c1df2265c8627787d316a1ce3`; the completed
+evaluation adapters are anchored at `b059bd5e92cf1994581d8600111d3ed5830dc7d5`.
+No follow-up diagnostic, render, training, or evaluation result is claimed by
+this documentation update.
+
+Human review is primary for image semantics and currently remains qualitative:
+the grid was mostly correct with roughly one or two black images; subject-only
+outputs were predominantly gray; color-only red and gray were visually
+faithful; cyan was less stable and sometimes cube-like; and cyan transfer was
+substantially weaker than red/gray. Because there is no per-seed review ledger,
+these are `observed` findings, not computed rates. Qwen and color metrics remain
+secondary evidence; notably, Qwen's sphere-only `other` labels disagree with
+the human description of mostly gray spheres.
+
+The approved conditional training variant is
+`cyan_initializer_ablation`, configured by
+`experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`.
+The cached SD 1.4 tokenizer directly encoded `cyan` as two IDs `[1470, 550]`,
+but `aqua`, `teal`, and `turquoise` as the single IDs `[18613]`, `[22821]`, and
+`[19899]`. No replacement has been chosen. The pending cyan diagnostic contains
+540 images (300 trained-K/V and 240 vanilla-SD) followed by 540 randomized
+single-image blind-review rows. Human review must select one candidate before
+training; the only intended training change is the `<c2*>` initializer.
+
+The ordered `diagnostics_v1` safety investigation, held-out multiview rendering
+and training, any factor-aware loss, and natural multi-object evaluation are
+all pending or conditional. SafetyChecker-disabled outputs are diagnostic-only,
+require explicit acknowledgement, and may not replace baseline outputs.
+
+The diagnosis-first implementation passed 73 local tests plus compile, JSON,
+YAML, and dry-run manifest checks. The local all-in-one pytest process requires
+`KMP_DUPLICATE_LIB_OK=TRUE` because this Windows Anaconda installation loads
+incompatible OpenMP runtimes through PyTorch and NumPy; isolated suites pass
+without it. This is a local test-runner condition and is not exported to server
+training or inference.

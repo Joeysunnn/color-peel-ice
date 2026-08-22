@@ -161,6 +161,23 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertFalse(qwen["protocol"]["do_sample"])
         self.assertEqual(qwen["protocol"]["max_new_tokens"], 128)
 
+        cyan_train = colorpeel_run.read_config(configs_dir / "train_cyan_initializer.yaml")
+        cyan_command = colorpeel_run.build_command(
+            cyan_train,
+            Path("/runs/current"),
+            {
+                **environment,
+                "COLORPEEL_CONCEPTS_LIST": "/data/concepts.json",
+                "COLORPEEL_CYAN_INITIALIZER": "aqua",
+            },
+        )
+        initializer_index = cyan_command.index("--initializer_token") + 1
+        self.assertEqual(
+            cyan_command[initializer_index],
+            "cube+sphere+cylinder+red+aqua+gray",
+        )
+        self.assertEqual(cyan_train["protocol"]["scientific_change"], "cyan_initializer_only")
+
     def test_mask_dir_is_managed_only_for_segmentation(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

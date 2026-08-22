@@ -1,6 +1,9 @@
 # Official ColorPeel parameters and CLEVR reproduction locks
 
-This table distinguishes values directly present in the official public code/launcher from adaptations chosen in the approved CLEVR plan. No run has yet verified the effective server configuration.
+This table distinguishes values directly present in the official public
+code/launcher from adaptations chosen in the approved CLEVR plan. The frozen
+baseline run verified the listed CLEVR settings; diagnosis-first follow-up
+variants remain pending unless stated otherwise.
 
 | Item | Official public code / launcher | CLEVR 3×3 reproduction |
 |---|---|---|
@@ -45,6 +48,15 @@ This table distinguishes values directly present in the official public code/lau
 | `<c1*>` | red | `red` |
 | `<c2*>` | cyan | `cyan` |
 | `<c3*>` | gray | `gray` |
+
+The frozen baseline configured `<c2*>` with `cyan`. A direct read-only check of
+the cached SD 1.4 tokenizer found `cyan -> [1470, 550]`; the historical official
+path did not enforce that an initializer encoded to exactly one token. The
+baseline remains unchanged. Conditional follow-up training rejects multi-piece
+initializers and allows a human-selected one-token replacement only for
+`<c2*>`: `aqua [18613]`, `teal [22821]`, or `turquoise [19899]`. This is a
+scientific initializer ablation, not an official parameter or compatibility
+fix, and no candidate/run result is currently claimed.
 
 ## Environment compatibility locks
 

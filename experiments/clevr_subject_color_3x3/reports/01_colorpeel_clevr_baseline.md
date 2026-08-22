@@ -100,6 +100,34 @@ For the two-step smoke, only exposed tokens require learning-signal evidence. Fo
   single-axis output bias. No custom scalar leakage score or “entanglement
   solved” claim is introduced.
 
+## Post-run human review and frozen anchor
+
+The completed checkpoint and all report-01 artifacts are frozen as the
+comparison anchor for follow-up work. The immutable training run is
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`
+at commit `c8c874d00318ae7c1df2265c8627787d316a1ce3`. Later diagnostics and
+ablations must use new run directories and may not overwrite or resume this
+run.
+
+A subsequent human visual review is primary for semantic interpretation but
+currently lacks a per-seed ledger, so the following remains **observed**:
+
+- grid outputs were mostly correct, with approximately one or two apparently
+  black images;
+- subject-only cube/cylinder were gray, while sphere was mostly gray with a
+  small cyan minority;
+- color-only red was mostly red without consistent CLEVR-shape leakage, gray
+  matched gray, and cyan was less stable with some cube-like characteristics;
+- red/gray transfer looked strong, while cyan transfer was poor.
+
+This review exposes an evaluator disagreement: Qwen labeled 18 sphere-only
+colors as `other`, whereas the human review describes most as gray. It also
+narrows the strongest leakage hypothesis to cyan-to-cube behavior, but does
+not prove it. Single-axis prompts omit a token role that was always present in
+training, and the color-only prompt does not name an object. The follow-up
+diagnostic and its non-claims are tracked in
+[`02_diagnosis_first.md`](02_diagnosis_first.md).
+
 When evidence arrives, append findings with exact artifact paths. Do not rewrite a pending or superseded observation without preserving its history.
 
 ## Literature links

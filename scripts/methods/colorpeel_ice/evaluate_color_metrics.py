@@ -62,6 +62,63 @@ def load_target_colors(path: Path) -> dict[str, tuple[int, int, int]]:
     return result
 
 
+def derive_source_colors(
+    dataset_root: Path, experiment_manifest_path: Path
+) -> tuple[dict[str, tuple[float, float, float]], dict[str, Any]]:
+    """Derive one robust RGB reference per color from source-image GT masks."""
+
+    manifest = json.loads(experiment_manifest_path.read_text(encoding="utf-8"))
+    samples = manifest.get("samples")
+    if not isinstance(samples, list) or not samples:
+        raise ValueError(f"{experiment_manifest_path}: expected non-empty samples list")
+    pixels_by_color: dict[str, list[np.ndarray]] = {}
+    sample_ids_by_color: dict[str, list[str]] = {}
+    for sample in samples:
+        if not isinstance(sample, dict):
+            raise ValueError("source sample must be a JSON object")
+        sample_id = sample.get("id")
+        shape = sample.get("shape")
+        color = sample.get("color")
+        if not all(isinstance(value, str) and value for value in (sample_id, shape, color)):
+            raise ValueError(f"invalid source sample metadata: {sample!r}")
+        image_path = dataset_root / sample_id / "img.jpg"
+        mask_path = dataset_root / sample_id / f"mask_{shape}_0.png"
+        if not image_path.is_file() or not mask_path.is_file():
+            raise FileNotFoundError(
+                f"source image/mask missing for {sample_id}: {image_path}, {mask_path}"
+            )
+        with Image.open(image_path) as image_handle:
+            image = np.asarray(image_handle.convert("RGB"), dtype=np.uint8)
+        with Image.open(mask_path) as mask_handle:
+            mask = np.asarray(mask_handle.convert("L")) > 0
+        if image.shape[:2] != mask.shape:
+            raise ValueError(f"source mask size mismatch for {sample_id}")
+        if not mask.any():
+            raise ValueError(f"source mask empty for {sample_id}")
+        pixels_by_color.setdefault(color, []).append(image[mask])
+        sample_ids_by_color.setdefault(color, []).append(sample_id)
+
+    references = {
+        color: tuple(float(value) for value in np.median(np.concatenate(parts), axis=0))
+        for color, parts in pixels_by_color.items()
+    }
+    audit = {
+        "method": "per_channel_median_of_all_gt_mask_pixels",
+        "dataset_root": str(dataset_root.resolve()),
+        "experiment_manifest": str(experiment_manifest_path.resolve()),
+        "colors": [
+            {
+                "name": color,
+                "source_rgb": list(references[color]),
+                "sample_ids": sample_ids_by_color[color],
+                "pixel_count": int(sum(part.shape[0] for part in pixels_by_color[color])),
+            }
+            for color in sorted(references)
+        ],
+    }
+    return references, audit
+
+
 def srgb_to_lab(rgb: np.ndarray) -> np.ndarray:
     """Convert nonlinear 0..1 sRGB to CIE Lab using the D65 white point."""
 
@@ -180,10 +237,21 @@ def _base_row(item: dict[str, Any], image_path: Path, mask_path: Path) -> dict[s
         "target_r": None,
         "target_g": None,
         "target_b": None,
+        "nominal_target_r": None,
+        "nominal_target_g": None,
+        "nominal_target_b": None,
+        "source_target_r": None,
+        "source_target_g": None,
+        "source_target_b": None,
+        "source_reference_status": "not_requested",
+        "source_hue_valid_pixels": None,
+        "source_hue_status": None,
     }
     for metric in METRICS:
         for fraction in FRACTIONS:
             row[f"{metric}_{int(fraction * 100)}pct"] = None
+            row[f"nominal_{metric}_{int(fraction * 100)}pct"] = None
+            row[f"source_{metric}_{int(fraction * 100)}pct"] = None
     return row
 
 
@@ -192,6 +260,7 @@ def evaluate_item(
     image_root: Path,
     mask_root: Path,
     target_colors: dict[str, tuple[int, int, int]],
+    source_colors: dict[str, tuple[float, float, float]] | None = None,
 ) -> dict[str, Any]:
     relative_image_path = Path(str(item.get("image_path", "")))
     image_path = image_root / relative_image_path
@@ -202,6 +271,15 @@ def evaluate_item(
         row.update(status="failure", failure_reason="target_color_missing")
         return row
     row["target_r"], row["target_g"], row["target_b"] = target_rgb
+    row["nominal_target_r"], row["nominal_target_g"], row["nominal_target_b"] = target_rgb
+    source_rgb = None
+    if source_colors is not None:
+        source_rgb = source_colors.get(str(item.get("color_label")))
+        if source_rgb is None:
+            row.update(status="failure", failure_reason="source_reference_missing")
+            return row
+        row["source_reference_status"] = "available"
+        row["source_target_r"], row["source_target_g"], row["source_target_b"] = source_rgb
     if not image_path.is_file():
         row.update(status="failure", failure_reason="image_missing")
         return row
@@ -236,9 +314,25 @@ def evaluate_item(
         row["hue_status"] = "ok"
     for metric, values in errors.items():
         for fraction in FRACTIONS:
-            row[f"{metric}_{int(fraction * 100)}pct"] = closest_fraction_mean(
-                values, fraction
-            )
+            value = closest_fraction_mean(values, fraction)
+            row[f"{metric}_{int(fraction * 100)}pct"] = value
+            row[f"nominal_{metric}_{int(fraction * 100)}pct"] = value
+    if source_rgb is not None:
+        source_errors = pixel_errors(image[mask], source_rgb)
+        row["source_hue_valid_pixels"] = int(
+            np.isfinite(source_errors["hue_angular_deg"]).sum()
+        )
+        if len(set(source_rgb)) == 1:
+            row["source_hue_status"] = "undefined_achromatic_target"
+        elif row["source_hue_valid_pixels"] == 0:
+            row["source_hue_status"] = "undefined_no_chromatic_mask_pixels"
+        else:
+            row["source_hue_status"] = "ok"
+        for metric, values in source_errors.items():
+            for fraction in FRACTIONS:
+                row[f"source_{metric}_{int(fraction * 100)}pct"] = closest_fraction_mean(
+                    values, fraction
+                )
     row["status"] = "ok"
     return row
 
@@ -249,9 +343,10 @@ def evaluate_manifest(
     mask_root: Path,
     target_colors: dict[str, tuple[int, int, int]],
     categories: set[str],
+    source_colors: dict[str, tuple[float, float, float]] | None = None,
 ) -> list[dict[str, Any]]:
     return [
-        evaluate_item(item, image_root, mask_root, target_colors)
+        evaluate_item(item, image_root, mask_root, target_colors, source_colors)
         for item in manifest_rows
         if item.get("category") in categories
     ]
@@ -281,17 +376,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--categories", nargs="+", default=list(DEFAULT_CATEGORIES))
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--source-dataset-root",
+        type=Path,
+        help="Optional CLEVR dataset root used to derive masked source-color medians.",
+    )
+    parser.add_argument(
+        "--source-reference-output",
+        type=Path,
+        help="Write the source-reference derivation audit JSON.",
+    )
+    args = parser.parse_args(argv)
+    if args.source_reference_output is not None and args.source_dataset_root is None:
+        parser.error("--source-reference-output requires --source-dataset-root")
+    return args
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    source_colors = None
+    if args.source_dataset_root is not None:
+        source_colors, source_audit = derive_source_colors(
+            args.source_dataset_root, args.target_colors_json
+        )
+        if args.source_reference_output is not None:
+            args.source_reference_output.parent.mkdir(parents=True, exist_ok=True)
+            args.source_reference_output.write_text(
+                json.dumps(source_audit, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     rows = evaluate_manifest(
         read_jsonl(args.manifest),
         args.image_dir,
         args.mask_dir,
         load_target_colors(args.target_colors_json),
         set(args.categories),
+        source_colors,
     )
     write_csv(rows, args.output)
 

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "clevr_multiview_protocol.schema.json",
+  "title": "ColorPeel CLEVR 3x3 multiview protocol",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "protocol_id",
+    "base_manifest",
+    "views_per_cell",
+    "view_splits",
+    "render_seed",
+    "folds",
+    "realization_contract"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "version": {"const": 1},
+    "protocol_id": {"const": "clevr_subject_color_3x3_multiview_v1"},
+    "base_manifest": {"type": "string"},
+    "views_per_cell": {"const": 20},
+    "view_splits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["train", "audit"],
+      "properties": {
+        "train": {"$ref": "#/$defs/range"},
+        "audit": {"$ref": "#/$defs/range"}
+      }
+    },
+    "render_seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "cell_stride", "formula"],
+      "properties": {
+        "base": {"const": 420000},
+        "cell_stride": {"const": 100},
+        "formula": {"const": "base + cell_index * cell_stride + view_index"}
+      }
+    },
+    "folds": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "held_out"],
+        "properties": {
+          "id": {"enum": ["A", "B", "C"]},
+          "held_out": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {"enum": ["cube", "sphere", "cylinder"]},
+                {"enum": ["red", "cyan", "gray"]}
+              ],
+              "items": false
+            }
+          }
+        }
+      }
+    },
+    "realization_contract": {"type": "object"}
+  },
+  "$defs": {
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "stop"],
+      "properties": {
+        "start": {"type": "integer", "minimum": 0},
+        "stop": {"type": "integer", "minimum": 1, "maximum": 20}
+      }
+    }
+  }
+}

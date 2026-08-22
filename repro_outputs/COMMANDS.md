@@ -3,7 +3,7 @@
 Statuses below describe this handoff; a command shown here is not evidence that
 the corresponding model run succeeded.
 
-## Local verification — completed after current changes
+## Baseline handoff verification — completed
 
 ```powershell
 cd 'D:\UserFiles\Desktop\sr\color peel'
@@ -260,3 +260,200 @@ and does not switch environments. Do not modify either existing ICE
 environment. Both external model stages use `local_files_only`; a missing cache
 must produce complete failure JSONL and a nonzero exit, never a model download
 or silent substitution.
+
+## Diagnosis-first provenance — reference only
+
+The commands below are the approved follow-up workflow. Their presence is not
+evidence that they ran. Start from the frozen source artifacts:
+
+```bash
+export COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs
+export COLORPEEL_BASELINE_RUN="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42"
+export COLORPEEL_CHECKPOINT_DIR="$COLORPEEL_BASELINE_RUN/checkpoints"
+export COLORPEEL_GENERATION_DIR="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/20260822-132122__clevr_subject_color_3x3__generate__c8c874d__42/inference"
+git rev-parse HEAD
+git status --short
+```
+
+Expected source provenance is training commit
+`c8c874d00318ae7c1df2265c8627787d316a1ce3`. Do not resume the source run,
+write into either source directory, or replace any source image.
+
+## Tokenizer diagnosis — completed read-only check
+
+```bash
+conda run -n colorpeel017 python -c 'from transformers import AutoTokenizer; t=AutoTokenizer.from_pretrained("CompVis/stable-diffusion-v1-4", subfolder="tokenizer", local_files_only=True); words=("cube","sphere","cylinder","red","cyan","gray","aqua","teal","turquoise"); print({w:t.encode(w, add_special_tokens=False) for w in words})'
+```
+
+Observed server output: `cube [11353]`, `sphere [6987]`, `cylinder [22092]`,
+`red [736]`, `cyan [1470, 550]`, `gray [7048]`, `aqua [18613]`,
+`teal [22821]`, and `turquoise [19899]`.
+
+## Black-image SafetyChecker diagnosis — pending
+
+Run the ordered stages only on the original black IDs. Each stage writes to a
+new directory. If a stage has no still-black IDs, stop; do not force later
+stages.
+
+```bash
+DIAG_ROOT="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/diagnostics_v1"
+CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
+  scripts/methods/colorpeel_ice/rerun_black_images.py \
+  --manifest "$COLORPEEL_GENERATION_DIR/generation_manifest.jsonl" \
+  --image-dir "$COLORPEEL_GENERATION_DIR" \
+  --output-dir "$DIAG_ROOT/safety_flag" \
+  --status-path "$DIAG_ROOT/safety_flag/rerun_status.jsonl" \
+  --model-dir "$COLORPEEL_CHECKPOINT_DIR" \
+  --device cuda:0 \
+  --diagnostic-stage safety_flag \
+  --dtype float16
+```
+
+Review `nsfw_content_detected` and the pixel audit before explicitly
+acknowledging the checker-disabled stage:
+
+```bash
+CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
+  scripts/methods/colorpeel_ice/rerun_black_images.py \
+  --manifest "$COLORPEEL_GENERATION_DIR/generation_manifest.jsonl" \
+  --image-dir "$COLORPEEL_GENERATION_DIR" \
+  --output-dir "$DIAG_ROOT/disable_safety" \
+  --status-path "$DIAG_ROOT/disable_safety/rerun_status.jsonl" \
+  --prior-status "$DIAG_ROOT/safety_flag/rerun_status.jsonl" \
+  --model-dir "$COLORPEEL_CHECKPOINT_DIR" \
+  --device cuda:0 \
+  --diagnostic-stage disable_safety \
+  --dtype float16 \
+  --disable-safety-checker \
+  --acknowledge-safety-risk
+```
+
+Only IDs still black proceed to the finite FP32 diagnostic:
+
+```bash
+CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
+  scripts/methods/colorpeel_ice/rerun_black_images.py \
+  --manifest "$COLORPEEL_GENERATION_DIR/generation_manifest.jsonl" \
+  --image-dir "$COLORPEEL_GENERATION_DIR" \
+  --output-dir "$DIAG_ROOT/fp32_finite" \
+  --status-path "$DIAG_ROOT/fp32_finite/rerun_status.jsonl" \
+  --prior-status "$DIAG_ROOT/disable_safety/rerun_status.jsonl" \
+  --model-dir "$COLORPEEL_CHECKPOINT_DIR" \
+  --device cuda:0 \
+  --diagnostic-stage fp32_finite \
+  --dtype float32 \
+  --disable-safety-checker \
+  --acknowledge-safety-risk
+```
+
+Checker-disabled outputs are safety-sensitive diagnostics only. They must not
+replace baseline images or be merged into baseline scores.
+
+## Paired cyan diagnosis and blinded review — pending
+
+The diagnostic is fixed at ten nouns × seeds 42–44 × two prompt families. It
+contains 300 trained-K/V rows (learned `<c2*>` plus four literal candidates)
+and 240 vanilla-SD literal rows, for 540 images and 540 randomized single-image
+blind-review rows:
+
+```bash
+CYAN_DIAG="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/diagnostics_v1/cyan_controls"
+CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
+  scripts/methods/colorpeel_ice/generate_cyan_diagnostic.py \
+  --output-dir "$CYAN_DIAG" \
+  --model-dir "$COLORPEEL_CHECKPOINT_DIR" \
+  --device cuda:0 \
+  --dtype float16
+
+conda run -n colorpeel017 python \
+  scripts/methods/colorpeel_ice/build_human_review.py \
+  --manifest "$CYAN_DIAG/cyan_diagnostic_manifest.jsonl" \
+  --image-dir "$CYAN_DIAG" \
+  --blinded-image-dir "$CYAN_DIAG/human_review/images" \
+  --review-csv "$CYAN_DIAG/human_review/review.csv" \
+  --key-csv "$CYAN_DIAG/human_review/condition_key.csv" \
+  --random-seed 20260822
+```
+
+Keep the condition key sealed until `review.csv` is complete. Human review is
+the primary semantic evidence; automated metrics are secondary.
+
+Both `generate_cyan_diagnostic.py` and the subject diagnostic below keep the
+default SafetyChecker enabled. A checker-disabled diagnostic requires the two
+flags `--disable-safety-checker --acknowledge-safety-risk` together; never pass
+only one flag, and never merge those outputs into the baseline.
+
+## Subject diagnostic — pending
+
+This fixed protocol creates 75 trained-K/V images: three shapes × seeds 42–46
+× five conditions (learned subject-only, natural subject-only, and learned
+subject paired with literal red, cyan, or gray):
+
+```bash
+SUBJECT_DIAG="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/diagnostics_v1/subject_controls"
+CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
+  scripts/methods/colorpeel_ice/generate_subject_diagnostic.py \
+  --output-dir "$SUBJECT_DIAG" \
+  --model-dir "$COLORPEEL_CHECKPOINT_DIR" \
+  --device cuda:0 \
+  --dtype float16
+```
+
+The real command writes `subject_diagnostic_manifest.jsonl`, 75 images, and
+`subject_diagnostic_status.jsonl`. To inspect the manifest without loading the
+model or generating images, append `--dry-run` and omit `--model-dir`. No real
+subject diagnostic run is recorded.
+
+## Cyan initializer ablation — conditional, not run
+
+Tracked config:
+`experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`.
+After the diagnostic record and human decision select exactly one allowed
+candidate, run a fresh preflight. Do not run all candidates as a sweep.
+
+```bash
+export COLORPEEL_CONCEPTS_LIST="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/train_assets/concepts.json"
+export COLORPEEL_CYAN_INITIALIZER=<reviewed-aqua-or-teal-or-turquoise>
+COMMIT=$(git rev-parse HEAD)
+RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__cyan_initializer_ablation__${COMMIT:0:7}__42"
+CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
+  scripts/launch/colorpeel_run.py \
+  --config experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml \
+  --run-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/$RUN_ID" \
+  --dry-run
+```
+
+Replace the placeholder with the single reviewed candidate. A real 1500-step
+command is allowed only after the dry-run record and scientific diff are
+reviewed; use a new run ID and remove `--dry-run`. No such run is recorded.
+
+## Multiview held-out protocol — render and training pending
+
+Planning without a real renderer intentionally records a blocked protocol
+rather than fabricating images:
+
+```bash
+python src/methods/colorpeel_ice/prepare_clevr_multiview.py plan \
+  --output-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/multiview_heldout_v1/protocol"
+```
+
+With a reviewed real renderer, add
+`--renderer <real_multiview_renderer.py>`. Only after that renderer produces
+180 real views plus its realization manifest may validation run:
+
+```bash
+python src/methods/colorpeel_ice/prepare_clevr_multiview.py realize \
+  --render-root <render_root> \
+  --render-manifest <renderer_realization.jsonl> \
+  --output-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/multiview_heldout_v1/prepared"
+```
+
+`realize` conditionally derives nine configs: folds A/B/C × seeds 42/43/44,
+named `train_config_seed42.json`, `train_config_seed43.json`, and
+`train_config_seed44.json` below each fold. Their variants are
+`multiview_fold_{a|b|c}_seed{42|43|44}`. No renderer output, realized manifest,
+derived config, or multiview training is currently claimed.
+
+There is no approved command/config for a factor-aware loss or natural
+multi-object evaluation. Both remain conditional; do not improvise an entry
+point or report an output.

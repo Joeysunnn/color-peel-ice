@@ -57,3 +57,36 @@ directly comparable to ColorPeel paper scores.
 - Independent Grounded-SAM command/environment/model provenance, mask manifest, and segmentation-failure ledger.
 - Independent Qwen3-VL command/environment/model provenance, prediction rows, and failure ledger.
 - Official color metrics, CLEVR accuracies, and both leakage contingency tables after their prerequisite external stages complete.
+
+## Diagnosis-first comparison rules
+
+The report-01 checkpoint and generation are frozen. New diagnostics must cite
+their source image IDs, prompts, seeds, checkpoint directory, training commit,
+and their own distinct output directory. A checker-disabled or FP32 rerun is a
+diagnostic condition, not a replacement baseline sample.
+
+Human review is the primary semantic comparator for the follow-up. The current
+review is qualitative and therefore cannot provide a numerical win rate. A
+future blinded review must retain its 540-image protocol, completed randomized
+540-row single-image review CSV, and sealed condition key. Qwen/SAM results may
+corroborate or disagree, but do not silently override the human record.
+
+`cyan_initializer_ablation` is comparable as a one-variable scientific
+ablation only if exactly one of `aqua`, `teal`, or `turquoise` is selected
+before training and every other baseline setting remains fixed. The historical
+baseline configured `cyan`, which the cached tokenizer splits into two IDs;
+the follow-up requires a true single-token initializer. This is a meaningful
+initializer-semantics change and must not be described as an operational fix.
+
+`diagnostics_v1` changes generation conditions in ordered, isolated steps:
+FP16 with the default SafetyChecker, FP16 with an explicitly disabled checker,
+then checker-disabled FP32 plus finite learned-weight/pixel audits. These
+conditions can diagnose black outputs but are not headline generation results.
+
+`multiview_heldout_v1` changes both data volume and split structure. Its three
+folds hold out different subject-color matchings, so any later result belongs
+to a new multiview study and cannot be merged with the single-view baseline.
+No real renderer output or fold training is currently available. A
+factor-aware loss would change the objective and requires a separate method
+comparison; natural multi-object evaluation changes the domain. Both remain
+conditional and have no result claim.

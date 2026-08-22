@@ -29,4 +29,4 @@ Use only `confirmed`, `observed`, or `pending` evidence labels. Preserve superse
 
 | Study | Method | Question | Status |
 |---|---|---|---|
-| [`clevr_subject_color_3x3`](clevr_subject_color_3x3/README.md) | `colorpeel_ice` | Can the official ColorPeel mechanism be reproduced on the locked CLEVR 3×3 subject/color grid without ICE method additions? | completed; mixed disentanglement evidence |
+| [`clevr_subject_color_3x3`](clevr_subject_color_3x3/README.md) | `colorpeel_ice` | Can the official ColorPeel mechanism be reproduced on the locked CLEVR 3×3 subject/color grid without ICE method additions? | baseline completed with mixed evidence; diagnosis-first follow-up pending |

@@ -27,3 +27,24 @@ entanglement is solved.
 Explicit exclusions: no ICE Stage Two, ICE loss, ICE token method, ICE baseline,
 material token, alternative checkpoint, GT-mask training loss, or self-created
 success threshold.
+
+## Diagnosis-first follow-up changes
+
+| Change | Status | Scientific/comparability effect |
+|---|---|---|
+| Freeze report-01 checkpoint and outputs | confirmed as workflow decision; existing run provenance retained | Creates a non-overwritable comparison anchor; no model-semantic change |
+| Make human review primary for image semantics | approved; current review is qualitative only | Automated evaluators become secondary; no rate may be inferred without a per-item ledger |
+| Diagnose cyan across trained/vanilla models, two prompt families, and learned/literal candidates | implemented as a pending 540-image protocol (300 trained + 240 vanilla); not run | Separates base-model, K/V, token, initializer-candidate, and prompt-template hypotheses without retraining |
+| Validate initializers as exactly one tokenizer token | implemented; server tokenizer IDs verified | Corrects silent use of a piece from a multi-piece word; changes initializer semantics for future runs |
+| Change only `<c2*>` initializer via `COLORPEEL_CYAN_INITIALIZER` | conditional; candidate not selected and training not run | Scientific ablation against the frozen baseline; CAA, AdamW, mask, prompt, data, seed, steps, and other initializers stay fixed |
+| Three-stage black-image/SafetyChecker diagnosis | implemented as pending entry point; not run | Diagnostic generation semantics change only in explicitly acknowledged stages; outputs cannot replace baseline images |
+| Disable SafetyChecker | conditional diagnostic only | Safety-relevant and generation-semantic change; requires explicit acknowledgement and isolated outputs |
+| Multiview held-out protocol and fold preparation | protocol implemented; real rendering and training pending | Changes the data/view distribution and evaluation split; not comparable to the single-view baseline as a setting-only rerun |
+| Factor-aware loss | conditional; no approved config or run | Would change the optimization objective and require a separate method-level ablation |
+| Natural multi-object evaluation | conditional; no approved config or run | Extends the task domain; cannot retroactively validate the CLEVR baseline |
+
+Verified tokenizer evidence from the server `colorpeel017` SD 1.4 cache:
+`cube [11353]`, `sphere [6987]`, `cylinder [22092]`, `red [736]`,
+`cyan [1470, 550]`, `gray [7048]`, `aqua [18613]`, `teal [22821]`, and
+`turquoise [19899]`. The check used `AutoTokenizer` with
+`local_files_only=True`.

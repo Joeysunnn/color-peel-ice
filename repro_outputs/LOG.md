@@ -198,3 +198,78 @@ success.
 - Reproduction/debug JSON files parsed successfully.
 - `git diff --check` reported no whitespace errors; only Windows LF/CRLF
   conversion notices were emitted.
+
+## 2026-08-22 — human review and diagnosis-first decision
+
+- The report-01 checkpoint was designated the frozen comparison anchor. The
+  source training run remains
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`
+  at `c8c874d00318ae7c1df2265c8627787d316a1ce3`. No baseline artifact was
+  overwritten or resumed by this documentation work.
+- Human semantic review is the primary follow-up evidence. The available review
+  has no per-seed ledger and is therefore `observed`: grid mostly correct with
+  roughly one or two black images; subject-only cube/cylinder gray and sphere
+  mostly gray with a small cyan minority; color-only red mostly red with no
+  consistent CLEVR-shape leakage, gray faithful, cyan less stable and sometimes
+  cube-like; red/gray transfer strong and cyan transfer poor.
+- Qwen remains secondary. Its sphere-only color result (`other` 18/20) conflicts
+  with the human observation of mostly gray spheres. No evaluator error rate is
+  computed because the human review is not yet itemized.
+- Interpretation decision: current evidence supports paired-template success
+  plus single-axis context dependence. Cyan-to-cube is a diagnosis target, not
+  confirmed token entanglement. Black outputs, segmentation failures, and color
+  error are not independently treated as subject-color leakage.
+
+## 2026-08-22 — initializer evidence and conditional ablation
+
+- Direct server check used the cached SD 1.4 tokenizer through
+  `AutoTokenizer(..., local_files_only=True)` in `colorpeel017`.
+- Verified IDs: `cube [11353]`, `sphere [6987]`, `cylinder [22092]`,
+  `red [736]`, `cyan [1470, 550]`, `gray [7048]`, `aqua [18613]`,
+  `teal [22821]`, and `turquoise [19899]`.
+- Consequence: the frozen baseline's configured `cyan` is multi-piece. Future
+  initializer validation rejects multi-piece candidates rather than silently
+  taking one piece. The baseline itself is not altered.
+- Conditional config:
+  `experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`,
+  variant `cyan_initializer_ablation`. It accepts only a diagnostic-selected
+  runtime `COLORPEEL_CYAN_INITIALIZER` from `aqua`, `teal`, or `turquoise`.
+- No candidate is selected. No initializer-ablation dry-run, smoke, full
+  training, generation, or evaluation is claimed.
+
+## 2026-08-22 — pending diagnostic and later-stage boundaries
+
+- `diagnostics_v1` is specified as three ordered black-image stages: FP16 with
+  the default SafetyChecker and recorded NSFW flag; FP16 with the checker
+  disabled only after explicit acknowledgement; then checker-disabled FP32
+  with finite learned-weight and generated-pixel audits. Each stage uses a new
+  output directory and only continues IDs that remain black.
+- The cyan diagnostic specifies 540 images across ten nouns, seeds 42–44, two
+  prompt families, 300 trained-K/V rows, and 240 vanilla-SD rows. Trained rows
+  include learned `<c2*>` and literal `cyan`/`aqua`/`teal`/`turquoise`; vanilla
+  rows include the four literal words. A separate utility randomizes all 540
+  images into single-image blind-review rows and writes a condition key.
+- Entry points and protocols existing in the worktree are pre-run evidence only.
+  No diagnostic image, completed review CSV, or follow-up metric is recorded.
+- `clevr_multiview_protocol.json` defines the conditional held-out protocol;
+  real rendering and all nine `multiview_fold_{a|b|c}_seed{42|43|44}` runs
+  remain pending. The
+  protocol planner must record a missing renderer as blocked rather than
+  fabricating views.
+- A factor-aware loss and natural multi-object evaluation remain conditional.
+  No approved config, implementation result, run path, or output is claimed.
+
+## 2026-08-22 — diagnosis-first local verification
+
+- Dry-run manifests contained exactly 540 cyan diagnostic images, 75 subject
+  diagnostic images, and 180 multiview render requests. The multiview planner
+  correctly returned `blocked` without a compatible renderer and created no
+  images.
+- Full collection initially aborted inside NumPy after pytest collected the
+  PyTorch training-audit module. The color suite alone and a direct
+  PyTorch-plus-color calculation both passed; this isolated the failure to the
+  local Windows Anaconda OpenMP runtime combination, not the color equations.
+- With `KMP_DUPLICATE_LIB_OK=TRUE` scoped only to the local pytest process, all
+  73 tests passed in 18.38 seconds. Compileall, 8 JSON files, 9 YAML files, and
+  `git diff --check` also passed. The environment flag is not part of any
+  server run command.

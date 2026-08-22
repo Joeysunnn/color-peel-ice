@@ -63,3 +63,46 @@ and Qwen3-VL use `local_files_only`; cache absence produces explicit per-item
 failure JSONL and a nonzero stage exit rather than downloading or substituting
 a model. Entry-point availability does not claim that generation,
 Grounded-SAM, Qwen3-VL, or either scorer has run.
+
+## Diagnosis-first follow-up
+
+The report-01 checkpoint is a read-only comparison anchor. Follow-up scripts
+always write to new external run directories:
+
+```bash
+python scripts/methods/colorpeel_ice/rerun_black_images.py --help
+python scripts/methods/colorpeel_ice/generate_cyan_diagnostic.py --help
+python scripts/methods/colorpeel_ice/generate_subject_diagnostic.py --help
+python scripts/methods/colorpeel_ice/build_human_review.py --help
+```
+
+`rerun_black_images.py` enforces the ordered stages `safety_flag`,
+`disable_safety`, and `fp32_finite`. The first remains FP16 with the default
+SafetyChecker. Later stages continue only IDs still black in the prior status;
+checker-disabled stages require `--acknowledge-safety-risk`. Their outputs are
+diagnostic and may not replace baseline images.
+
+`generate_cyan_diagnostic.py` defines 540 controls: ten nouns, seeds 42–44,
+two prompt families, 300 trained-K/V rows, and 240 vanilla-SD rows. The trained
+rows include learned `<c2*>` and four literal candidates; vanilla rows include
+the four literal candidates. `build_human_review.py` creates 540 randomized
+single-image blind-review rows plus a separate key. A completed human review is
+primary semantic evidence; script availability alone is not a result.
+
+`generate_subject_diagnostic.py` defines 75 trained-K/V images: three shapes,
+seeds 42–46, and five conditions per shape/seed—learned subject-only, natural
+subject-only, and learned subject with literal red, cyan, or gray. It writes a
+manifest in dry-run mode and per-image status during a real run. No subject
+diagnostic run is currently claimed.
+
+The cyan and subject generators default to the SafetyChecker enabled. Either
+generator accepts checker disablement only with the paired flags
+`--disable-safety-checker --acknowledge-safety-risk`; checker-disabled outputs
+remain diagnostic-only.
+
+The conditional training config is
+`experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`.
+It requires a reviewed `COLORPEEL_CYAN_INITIALIZER` from `aqua`, `teal`, or
+`turquoise`. Only `<c2*>` initialization may change; running all candidates as
+an undeclared sweep is outside the approved protocol. No ablation run is
+currently claimed.

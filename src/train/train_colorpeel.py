@@ -11,6 +11,7 @@ import random
 import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
+from initializer_token_utils import single_token_initializer_id
 from token_gradient_utils import modifier_rows_to_zero
 from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
 import numpy as np
@@ -790,11 +791,7 @@ def main(args):
             # Convert the initializer_token, placeholder_token to ids
             # token_ids = tokenizer.encode([initializer_token], add_special_tokens=False)
             
-            token_ids = [int(tokenizer(initializer_token, truncation=True, max_length=tokenizer.model_max_length, return_tensors="pt",).input_ids[:,1])]
-
-            # Check if initializer_token is a single token or a sequence of tokens
-            if len(token_ids) > 1:
-                raise ValueError("The initializer token must be a single token.")
+            token_ids = [single_token_initializer_id(tokenizer, initializer_token)]
             
             initializer_token_id.append(token_ids)
             mod_token_id = tokenizer.convert_tokens_to_ids(modifier_token)

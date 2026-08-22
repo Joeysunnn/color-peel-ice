@@ -2,7 +2,8 @@
 
 ## Verified implementation history
 
-- Branch: `repro/2026-08-21-colorpeel-clevr`
+- Historical baseline branch: `repro/2026-08-21-colorpeel-clevr`
+- Current diagnosis-first branch: `repro/2026-08-22-colorpeel-diagnostics`
 - Baseline: `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
 - Commit: `41d752a9d8e8b3a5ab711db90990ab28e4f58000`
 - Message: `repro: add ColorPeel CLEVR 3x3 workflow`
@@ -120,3 +121,41 @@ Do not add non-modifier embedding restoration. The tracked policy is
 not restore it, and do not classify nonzero drift as failure. Both training
 smokes passed under this policy. The independent Grounded-SAM/Qwen3-VL stages
 remain separate evidence contracts and are not implied by training success.
+
+## Diagnosis-first pre-run patch set
+
+Status: included in the current pre-run handoff; no diagnosis, render,
+follow-up training, or new evaluation result is claimed here. This section does
+not assign a commit hash or claim server deployment.
+
+- `experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml`
+  declares the conditional `cyan_initializer_ablation`. It changes only the
+  `<c2*>` initializer through `COLORPEEL_CYAN_INITIALIZER`; the candidate is
+  deliberately unset pending human-reviewed diagnostics.
+- `src/train/initializer_token_utils.py` and its training call site reject
+  multi-piece initializer words. This is scientifically meaningful for future
+  runs because cached SD 1.4 tokenization splits `cyan` into `[1470, 550]`.
+  The frozen baseline is not rewritten.
+- `scripts/methods/colorpeel_ice/generate_cyan_diagnostic.py` and
+  `build_human_review.py` define paired cyan controls and a blinded review
+  packet. They create no result until 540 images and a completed 540-row review CSV
+  exist.
+- `scripts/methods/colorpeel_ice/generate_subject_diagnostic.py` defines the
+  75-image trained-K/V subject control. It is diagnostic-only and does not
+  make single-axis generation a training objective.
+- `scripts/methods/colorpeel_ice/rerun_black_images.py` defines three ordered
+  safety/precision diagnostics. Checker disablement is diagnostic-only,
+  explicitly acknowledged, isolated from baseline outputs, and never made the
+  default.
+- `experiments/clevr_subject_color_3x3/manifests/clevr_multiview_protocol.json`,
+  its schema, and `src/methods/colorpeel_ice/prepare_clevr_multiview.py` define
+  a renderer-owned held-out protocol. No real renderer output or training is
+  part of this patch evidence.
+- Audit and experiment documents record baseline freeze, human-evidence
+  priority, stage gates, exact commands, comparability limits, and pending
+  status.
+
+Highest follow-up scientific risk: changing initializer semantics for a new
+training run. Highest safety-relevant diagnostic risk: disabling the Stable
+Diffusion SafetyChecker. A factor-aware loss and natural multi-object
+evaluation have no approved implementation/config and remain conditional.

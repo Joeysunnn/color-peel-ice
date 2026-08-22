@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import numpy as np
@@ -97,3 +98,54 @@ def test_target_rgb_values_come_from_locked_clevr_manifest():
         "cyan": (41, 208, 208),
         "gray": (87, 87, 87),
     }
+
+
+def test_source_aware_metrics_are_separate_from_unchanged_nominal_metrics(tmp_path):
+    dataset_root = tmp_path / "dataset"
+    samples = []
+    source_rgb = [60, 190, 200]
+    for shape in ("cube", "sphere", "cylinder"):
+        sample_id = f"sample_{shape}_cyan"
+        sample_dir = dataset_root / sample_id
+        sample_dir.mkdir(parents=True)
+        Image.fromarray(np.full((2, 2, 3), source_rgb, dtype=np.uint8)).save(
+            sample_dir / "img.jpg", quality=100, subsampling=0
+        )
+        Image.fromarray(np.full((2, 2), 255, dtype=np.uint8)).save(
+            sample_dir / f"mask_{shape}_0.png"
+        )
+        samples.append({"id": sample_id, "shape": shape, "color": "cyan"})
+    experiment_manifest = tmp_path / "experiment.json"
+    experiment_manifest.write_text(
+        json.dumps({"samples": samples}), encoding="utf-8"
+    )
+    source_colors, audit = color_metrics.derive_source_colors(
+        dataset_root, experiment_manifest
+    )
+    assert set(source_colors) == {"cyan"}
+    decoded_source_rgb = tuple(int(value) for value in source_colors["cyan"])
+    assert audit["colors"][0]["pixel_count"] == 12
+
+    image_root = tmp_path / "generated"
+    mask_root = tmp_path / "masks"
+    cyan_item = item("cyan-source-aware")
+    cyan_item["color_label"] = "cyan"
+    relative = Path(cyan_item["image_path"])
+    (image_root / relative).parent.mkdir(parents=True)
+    (mask_root / relative).parent.mkdir(parents=True)
+    Image.fromarray(np.full((2, 2, 3), decoded_source_rgb, dtype=np.uint8)).save(
+        image_root / relative
+    )
+    Image.fromarray(np.full((2, 2), 255, dtype=np.uint8)).save(mask_root / relative)
+    result = color_metrics.evaluate_item(
+        cyan_item,
+        image_root,
+        mask_root,
+        {"cyan": (41, 208, 208)},
+        source_colors,
+    )
+    assert result["status"] == "ok"
+    assert result["source_reference_status"] == "available"
+    assert result["delta_e_100pct"] == result["nominal_delta_e_100pct"]
+    assert result["nominal_delta_e_100pct"] > 0
+    assert abs(result["source_delta_e_100pct"]) < 1e-12

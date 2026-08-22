@@ -1,0 +1,67 @@
+{
+  "$schema": "clevr_multiview_protocol.schema.json",
+  "version": 1,
+  "protocol_id": "clevr_subject_color_3x3_multiview_v1",
+  "base_manifest": "clevr_3x3_manifest.json",
+  "views_per_cell": 20,
+  "view_splits": {
+    "train": {
+      "start": 0,
+      "stop": 16
+    },
+    "audit": {
+      "start": 16,
+      "stop": 20
+    }
+  },
+  "render_seed": {
+    "base": 420000,
+    "cell_stride": 100,
+    "formula": "base + cell_index * cell_stride + view_index"
+  },
+  "folds": [
+    {
+      "id": "A",
+      "held_out": [
+        ["cube", "red"],
+        ["sphere", "cyan"],
+        ["cylinder", "gray"]
+      ]
+    },
+    {
+      "id": "B",
+      "held_out": [
+        ["cube", "cyan"],
+        ["sphere", "gray"],
+        ["cylinder", "red"]
+      ]
+    },
+    {
+      "id": "C",
+      "held_out": [
+        ["cube", "gray"],
+        ["sphere", "red"],
+        ["cylinder", "cyan"]
+      ]
+    }
+  ],
+  "realization_contract": {
+    "resolution": [512, 512],
+    "image_mode": "RGB",
+    "mask_mode": "L",
+    "mask_values": [0, 255],
+    "renderer_owned_fields": [
+      "camera",
+      "light",
+      "background",
+      "scene_json",
+      "image",
+      "mask"
+    ],
+    "empirical_rgb": {
+      "space": "srgb_u8",
+      "statistic": "masked_mean",
+      "source": "realized_view_gt_mask"
+    }
+  }
+}

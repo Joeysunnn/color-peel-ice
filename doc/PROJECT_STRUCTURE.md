@@ -23,12 +23,16 @@ experiments/
       predict_qwen.yaml
       score_color.yaml
       score_clevr.yaml
+      train_cyan_initializer.yaml
     manifests/
       README.md
       clevr_3x3_manifest.json       maintained by the data-adapter workflow
+      clevr_multiview_protocol.json
+      clevr_multiview_protocol.schema.json
     reports/
       README.md
       01_colorpeel_clevr_baseline.md
+      02_diagnosis_first.md
 literature/
   README.md
   _template.md
@@ -67,3 +71,9 @@ Every experimental statement uses exactly one label:
 The `clevr_subject_color_3x3` run is completed with explicit evaluation
 failures; its report uses `confirmed` and `observed` labels. Paper results remain
 external evidence and never confirm this repository's experiment.
+
+The completed report-01 baseline is frozen. Diagnosis scripts, blinded human
+review, the conditional cyan-initializer config, and the multiview request
+protocol are pre-run definitions. They do not change the status of the frozen
+baseline and do not establish that any follow-up render, training, loss, or
+natural multi-object evaluation occurred.
