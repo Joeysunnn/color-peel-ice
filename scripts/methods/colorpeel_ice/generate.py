@@ -206,6 +206,10 @@ def generate(items: Iterable[dict[str, Any]], args: argparse.Namespace) -> None:
         low_cpu_mem_usage=False,
         torch_dtype=dtype,
     ).to(args.device)
+    if args.disable_safety_checker:
+        pipe.safety_checker = None
+        if hasattr(pipe, "requires_safety_checker"):
+            pipe.requires_safety_checker = False
     pipe.unet.load_attn_procs(
         str(model_dir), weight_name=CUSTOM_DIFFUSION_WEIGHTS
     )
@@ -244,6 +248,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--device", default="cuda:3")
     parser.add_argument("--dtype", choices=("float16", "float32"), default="float16")
+    parser.add_argument("--disable-safety-checker", action="store_true")
+    parser.add_argument("--acknowledge-safety-risk", action="store_true")
     parser.add_argument(
         "--skip-existing",
         action="store_true",
@@ -255,6 +261,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Write the complete manifest without importing or loading ML models.",
     )
     args = parser.parse_args(argv)
+    if args.disable_safety_checker and not args.acknowledge_safety_risk:
+        parser.error("disabling the safety checker requires --acknowledge-safety-risk")
+    if not args.disable_safety_checker and args.acknowledge_safety_risk:
+        parser.error("--acknowledge-safety-risk requires --disable-safety-checker")
     if not args.dry_run and args.model_dir is None:
         parser.error("--model-dir is required unless --dry-run is used")
     if args.manifest_path is None:
@@ -264,7 +274,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    items = build_manifest()
+    items = [
+        {
+            **item,
+            "safety_checker_disabled": bool(args.disable_safety_checker),
+            "safety_risk_acknowledged": bool(args.acknowledge_safety_risk),
+        }
+        for item in build_manifest()
+    ]
     write_manifest(items, args.manifest_path)
     if not args.dry_run:
         generate(items, args)

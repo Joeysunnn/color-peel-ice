@@ -322,3 +322,33 @@ success.
   first-piece-of-`cyan` behavior to token ID 19899 (`turquoise`). New 2-step and
   9-step smoke configs precede a fresh 1500-step run. CAA, AdamW, training mask,
   prompts, data, seed, K/V scope, steps, and all other initializers stay fixed.
+- The first server dry-run invocation appended an unsupported `__preflight`
+  run-ID segment. The launcher rejected it before creating a manifest or
+  starting training. The command record was corrected to the required
+  `TIMESTAMP__study__variant__commit7__seed` form.
+
+## 2026-08-22 — turquoise smoke and full training evidence
+
+- GitHub/server training commit: `0959d1ed5ce99553dfa107987efd84b6313a972c`.
+- The corrected dry-run succeeded and recorded initializer list
+  `cube+sphere+cylinder+red+turquoise+gray`.
+- The turquoise 2-step run
+  `20260822-233300__clevr_subject_color_3x3__smoke2-turquoise-first-two__0959d1e__42`
+  passed its validator. It recorded two finite metric rows, the exact two
+  expected token pairs, nonzero updates for all seen tokens, and seven nonempty
+  final weight artifacts.
+- The turquoise 9-step run
+  `20260822-233340__clevr_subject_color_3x3__smoke9-turquoise-full-grid__0959d1e__42`
+  passed its validator. All nine pairs appeared once; all six tokens had three
+  exposures and real updates.
+- Full run
+  `20260822-233433__clevr_subject_color_3x3__cyan_initializer_ablation__0959d1e__42`
+  succeeded with return code 0, 1500/1500 finite metric rows, and a complete
+  `checkpoint-1000`.
+- Final exposure/nonzero-gradient counts were subject `501/501`, `501/501`,
+  `498/498` and color `500/500` for each token. `<c2*>` delta was `0.0231073`.
+  All seven final weight files were nonempty and the training script completed
+  its final reload path. Ordinary-vocabulary drift covered 49,408 rows with
+  mean/max L2 `6.76598e-05`/`2.21111e-04`, recorded without enforcement.
+- Training success does not establish transfer improvement. The next evidence
+  is a fresh matched 900-image run and human review.

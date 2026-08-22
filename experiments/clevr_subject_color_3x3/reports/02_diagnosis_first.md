@@ -1,6 +1,6 @@
 # 02 — Diagnosis-first follow-up
 
-- Status: **diagnostics complete; `turquoise` selected; follow-up training pending**
+- Status: **diagnostics and `turquoise` retraining complete; matched evaluation pending**
 - Study: `clevr_subject_color_3x3`
 - Method: `colorpeel_ice`
 - Parent report: [`01_colorpeel_clevr_baseline.md`](01_colorpeel_clevr_baseline.md)
@@ -68,8 +68,8 @@ alone does not prove subject-color token entanglement.
 | 2. Black-image diagnosis | `diagnostics_v1` | same checkpoint/prompt/seed; default SafetyChecker result and NSFW flag; separate explicitly acknowledged checker-disabled output; conditional FP32 finite checkpoint/pixel audit; distinct output directories | **completed**; checker-on 19/19 flagged and black, checker-off 19/19 finite and nonblack; FP32 not required |
 | 3. Cyan diagnosis and initializer selection | 540-image cyan packet and 540 randomized single-image blind-review rows; then one selected initializer | trained/vanilla, candidate, template-family evidence; verified single-token candidates; explicit human approval of one candidate | **completed with protocol deviation**; 540/540 generated, folder-level review selected `turquoise`; randomized blind ledger not completed |
 | 3b. Subject diagnosis | 75-image trained-K/V protocol | 3 shapes × seeds 42–46 × learned-only, natural-only, and learned+literal red/cyan/gray; per-image status and human review | **completed qualitatively**; 75/75 generated and all paired-color conditions accepted by the user |
-| 4. Cyan initializer train | `cyan_initializer_ablation` | clean Git commit, dual smoke provenance, fresh training run, unchanged non-initializer settings | **selected / pending run**; `<c2*>` initializer=`turquoise` |
-| 5. Matched evaluation | baseline protocol on the new checkpoint | fresh 900-row manifest, human review, secondary automated metrics, direct paired comparison | **conditional / not run** |
+| 4. Cyan initializer train | `cyan_initializer_ablation` | clean Git commit, dual smoke provenance, fresh training run, unchanged non-initializer settings | **completed** at commit `0959d1e`; both smokes passed and 1500/1500 loss rows were finite |
+| 5. Matched evaluation | baseline protocol on the new checkpoint | fresh 900-row manifest, human review, secondary automated metrics, direct paired comparison | **pending**; formal follow-up disables the confirmed false-positive SafetyChecker with explicit recorded acknowledgement |
 | 6. Held-out multiview | `multiview_heldout_v1`; conditional `multiview_fold_{a|b|c}_seed{42|43|44}` | renderer provenance and held-out-view manifest before any training; separate render and train records | **pending; no render or training claimed** |
 | 7. Factor-aware loss | no approved config | explicit loss definition, ablation control, code review, new method-risk approval | **conditional; not implemented or run** |
 | 8. Natural multi-object test | no approved config | frozen prompt/image protocol and human rubric after synthetic diagnosis | **conditional; not implemented or run** |
@@ -136,6 +136,23 @@ outputs remain isolated diagnostic evidence and never replace baseline images.
 The config and protocol both lock the selection to `turquoise`, so runtime
 environment variables cannot silently substitute another candidate. Training
 other candidates as a sweep is not approved.
+
+## Turquoise training result
+
+The selected single-variable run completed at:
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-233433__clevr_subject_color_3x3__cyan_initializer_ablation__0959d1e__42`.
+Its launcher manifest reports `succeeded`, return code 0, and initializer list
+`cube+sphere+cylinder+red+turquoise+gray`. The dedicated 2-step and 9-step
+smokes both passed before full training. Full training wrote 1500 finite metric
+rows and `checkpoint-1000`; every modifier-token exposure had a nonzero
+gradient. `<c2*>` had 500 exposures, 500 nonzero-gradient steps, and an
+initial-to-final L2 delta of `0.0231073`. Ordinary-vocabulary AdamW drift was
+recorded for 49,408 rows and remained non-enforced, as required.
+
+The run saved and reloaded final Custom Diffusion weights plus all six token
+files before exiting successfully. These are training-integrity results only;
+whether cyan transfer improves remains unanswered until matched generation and
+review are complete.
 
 ## SafetyChecker diagnosis boundary
 

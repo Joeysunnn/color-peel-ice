@@ -43,14 +43,14 @@ biases, so this evidence does not authorize the statement that entanglement is
 “solved.” It supports a successful ColorPeel-on-CLEVR training/generation
 reproduction plus an auditable, mixed disentanglement diagnosis.
 
-## Diagnosis-first follow-up — turquoise selected, retraining pending
+## Diagnosis-first follow-up — turquoise retrained, evaluation pending
 
 The baseline checkpoint is now the frozen comparison anchor. Its source run is
 `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`
 at training commit `c8c874d00318ae7c1df2265c8627787d316a1ce3`; the completed
 evaluation adapters are anchored at `b059bd5e92cf1994581d8600111d3ed5830dc7d5`.
-The ordered diagnostics are complete; no follow-up training or matched
-evaluation result is claimed yet.
+The ordered diagnostics and selected follow-up training are complete; no
+matched evaluation result is claimed yet.
 
 Human review is primary for image semantics and currently remains qualitative:
 the grid was mostly correct with roughly one or two black images; subject-only
@@ -74,6 +74,14 @@ vanilla SD. The user selected `turquoise` as the strongest trained-K/V
 initializer. The review was not completed through the randomized blind ledger,
 so no blind win rate is claimed. The only intended training change is the
 `<c2*>` initializer.
+
+Both dedicated turquoise smokes passed. The full commit-`0959d1e` run completed
+1500/1500 finite loss rows, saved `checkpoint-1000`, and produced nonzero
+gradient/update evidence for all six modifier tokens. `<c2*>` was exposed and
+updated on all 500 of its steps. The final Custom Diffusion and six token files
+were saved and reloaded successfully. Matched 900-image generation is pending;
+it will explicitly disable the SafetyChecker that the ordered diagnostic proved
+was replacing false-positive outputs with exact-black images.
 
 The ordered `diagnostics_v1` safety investigation, held-out multiview rendering
 and training, any factor-aware loss, and natural multi-object evaluation are

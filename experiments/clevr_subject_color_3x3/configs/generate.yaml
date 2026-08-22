@@ -10,6 +10,8 @@
     "pretrained-model-name-or-path": "CompVis/stable-diffusion-v1-4",
     "device": "cuda:0",
     "dtype": "float16",
+    "disable-safety-checker": true,
+    "acknowledge-safety-risk": true,
     "skip-existing": true
   },
   "protocol": {
@@ -17,6 +19,7 @@
     "guidance_scale": 6.0,
     "seed_start": 42,
     "seed_end_inclusive": 61,
-    "expected_images": 900
+    "expected_images": 900,
+    "safety_checker_policy": "disabled_after_confirmed_false_positive_with_explicit_acknowledgement"
   }
 }

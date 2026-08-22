@@ -416,7 +416,7 @@ before the 1500-step config. Do not run the other candidates as a sweep.
 ```bash
 export COLORPEEL_CONCEPTS_LIST="$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/train_assets/concepts.json"
 COMMIT=$(git rev-parse HEAD)
-RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__cyan_initializer_ablation__${COMMIT:0:7}__42__preflight"
+RUN_ID="$(date +%Y%m%d-%H%M%S)__clevr_subject_color_3x3__cyan_initializer_ablation__${COMMIT:0:7}__42"
 CUDA_VISIBLE_DEVICES=3 conda run -n colorpeel017 python \
   scripts/launch/colorpeel_run.py \
   --config experiments/clevr_subject_color_3x3/configs/train_cyan_initializer.yaml \
@@ -447,6 +447,15 @@ Only after both validators return `passed`, create a fresh run ID with variant
 `cyan_initializer_ablation` and execute the same launcher command without
 `--dry-run`. The tracked 1500-step config directly locks `turquoise`; no other
 training argument changes.
+
+Executed turquoise evidence runs:
+
+- 2-step: `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-233300__clevr_subject_color_3x3__smoke2-turquoise-first-two__0959d1e__42`
+- 9-step: `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-233340__clevr_subject_color_3x3__smoke9-turquoise-full-grid__0959d1e__42`
+- 1500-step: `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-233433__clevr_subject_color_3x3__cyan_initializer_ablation__0959d1e__42`
+
+Both smoke validators passed. The full manifest succeeded with return code 0
+and 1500 finite metric rows.
 
 ## Multiview held-out protocol — render and training pending
 

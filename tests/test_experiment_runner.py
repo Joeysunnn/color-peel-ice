@@ -149,6 +149,8 @@ class ExperimentRunnerTests(unittest.TestCase):
             generate, Path("/runs/current"), environment
         )
         self.assertIn("--skip-existing", generate_command)
+        self.assertIn("--disable-safety-checker", generate_command)
+        self.assertIn("--acknowledge-safety-risk", generate_command)
         self.assertIn("CompVis/stable-diffusion-v1-4", generate_command)
 
         segment = colorpeel_run.read_config(configs_dir / "segment.yaml")

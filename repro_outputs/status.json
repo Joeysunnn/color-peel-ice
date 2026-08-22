@@ -24,9 +24,9 @@
   "server_checkout_status": "success_clean_at_e161b71",
   "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
   "server_verified_commit": "e161b71ad7ccf900b7c62082fa07b756d9e6b43a",
-  "current_worktree_status": "turquoise_pre_run_verified_local_pending_commit",
-  "server_pre_run_changes_status": "pending_github_push_and_fast_forward",
-  "current_changes_test_status": "success_73_tests_plus_compile_json_yaml_and_manifest_dry_runs",
+  "current_worktree_status": "matched_generation_safety_policy_verified_local_pending_commit",
+  "server_pre_run_changes_status": "training_commit_fast_forwarded_generation_policy_pending_push",
+  "current_changes_test_status": "success_74_tests_plus_compile_json_yaml_and_manifest_dry_runs",
   "diagnosis_first_github_status": "pushed_e161b71",
   "diagnosis_first_server_status": "deployed_diagnostics_complete_turquoise_selected",
   "server_environment_status": "created_verified_and_frozen",
@@ -42,7 +42,7 @@
     "source_output_overwrite_allowed": false,
     "new_hash_claimed_by_this_update": false
   },
-  "diagnosis_first_status": "diagnostics_complete_turquoise_selected_training_pending",
+  "diagnosis_first_status": "diagnostics_and_turquoise_training_complete_matched_evaluation_pending",
   "human_review_status": "observed_qualitative_folder_level_not_blinded_turquoise_selected",
   "human_review_evidence_priority": "primary_for_image_semantics",
   "automated_evaluator_role": "secondary_diagnostic",
@@ -70,9 +70,23 @@
     "token_id": 19899,
     "selection_method": "human_qualitative_folder_review",
     "blind_review_completed": false,
-    "training_status": "pending_dual_smoke"
+    "training_status": "succeeded_after_dual_smoke"
   },
-  "cyan_initializer_ablation_status": "turquoise_selected_dual_smoke_pending",
+  "cyan_initializer_ablation_status": "succeeded_1500_of_1500_finite",
+  "turquoise_training": {
+    "commit": "0959d1ed5ce99553dfa107987efd84b6313a972c",
+    "smoke_2step_status": "passed",
+    "smoke_2step_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-233300__clevr_subject_color_3x3__smoke2-turquoise-first-two__0959d1e__42",
+    "smoke_9step_status": "passed",
+    "smoke_9step_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-233340__clevr_subject_color_3x3__smoke9-turquoise-full-grid__0959d1e__42",
+    "full_status": "succeeded",
+    "full_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-233433__clevr_subject_color_3x3__cyan_initializer_ablation__0959d1e__42",
+    "finite_metric_rows": 1500,
+    "c2_exposure_steps": 500,
+    "c2_nonzero_gradient_steps": 500,
+    "c2_embedding_delta_l2": 0.02310725674033165,
+    "matched_generation_status": "pending"
+  },
   "subject_diagnostic_status": "completed_75_of_75_ok_human_accepts_paired_color_conditions",
   "subject_diagnostic_protocol": {
     "expected_images": 75,
@@ -108,7 +122,7 @@
     "large run artifacts stay outside Git"
   ],
   "unverified_inferences": [
-    "turquoise initialization may improve learned-token cyan transfer; the prospective retrain has not run",
+    "turquoise initialization may improve learned-token cyan transfer; matched generation and review have not run",
     "folder-level review supports but does not numerically quantify the multi-BPE initializer diagnosis"
   ],
   "protocol_deviations": [
@@ -118,7 +132,7 @@
     "sampling and CLEVR evaluation adapters are added"
   ],
   "human_decisions_required": [],
-  "next_safe_action": "test and push the selected turquoise configs, fast-forward the server checkout, then require both dedicated smoke validators to pass before the fresh 1500-step run",
+  "next_safe_action": "push and fast-forward the explicitly acknowledged matched-generation SafetyChecker policy, then generate the fresh 900-image turquoise comparison set",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",

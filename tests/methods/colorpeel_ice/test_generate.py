@@ -1,8 +1,10 @@
 import importlib.util
+import json
 from collections import Counter
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 
 ROOT = Path(__file__).parents[3]
@@ -52,6 +54,34 @@ def test_dry_run_writes_manifest_without_model(tmp_path):
     manifest_path = tmp_path / "generation_manifest.jsonl"
     assert manifest_path.is_file()
     assert len(manifest_path.read_text(encoding="utf-8").splitlines()) == 900
+
+
+def test_safety_disable_requires_acknowledgement_and_is_recorded(tmp_path):
+    with pytest.raises(SystemExit):
+        clevr_inference.parse_args(
+            ["--output-dir", str(tmp_path), "--dry-run", "--disable-safety-checker"]
+        )
+    with pytest.raises(SystemExit):
+        clevr_inference.parse_args(
+            ["--output-dir", str(tmp_path), "--dry-run", "--acknowledge-safety-risk"]
+        )
+
+    clevr_inference.main(
+        [
+            "--output-dir",
+            str(tmp_path),
+            "--dry-run",
+            "--disable-safety-checker",
+            "--acknowledge-safety-risk",
+        ]
+    )
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "generation_manifest.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(rows) == 900
+    assert all(row["safety_checker_disabled"] for row in rows)
+    assert all(row["safety_risk_acknowledged"] for row in rows)
 
 
 def test_skip_existing_only_skips_decodable_images(tmp_path):

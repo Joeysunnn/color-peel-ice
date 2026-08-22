@@ -135,6 +135,10 @@ not assign a commit hash or claim server deployment.
 - `experiments/clevr_subject_color_3x3/configs/smoke_turquoise_2step.yaml` and
   `smoke_turquoise_9step.yaml` preserve the established smoke contracts while
   changing only the `<c2*>` initializer for the selected ablation.
+- `scripts/methods/colorpeel_ice/generate.py` now applies the already approved
+  SafetyChecker policy to matched evaluation: disablement requires an explicit
+  paired acknowledgement and both booleans are written into all 900 manifest
+  rows. This does not alter the training checkpoint or frozen baseline images.
 - `src/train/initializer_token_utils.py` and its training call site reject
   multi-piece initializer words. This is scientifically meaningful for future
   runs because cached SD 1.4 tokenization splits `cyan` into `[1470, 550]`.
