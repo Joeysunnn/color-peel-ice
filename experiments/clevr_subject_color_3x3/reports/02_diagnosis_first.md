@@ -1,6 +1,6 @@
 # 02 — Diagnosis-first follow-up
 
-- Status: **pending; baseline frozen and no follow-up model run claimed**
+- Status: **diagnostics running; baseline frozen and no follow-up training claimed**
 - Study: `clevr_subject_color_3x3`
 - Method: `colorpeel_ice`
 - Parent report: [`01_colorpeel_clevr_baseline.md`](01_colorpeel_clevr_baseline.md)
@@ -50,8 +50,8 @@ alone does not prove subject-color token entanglement.
 |---|---|---|---|
 | 0. Freeze baseline | report 01 plus immutable run paths | training/evaluation commits, manifests, checkpoint path, generation path; no overwrite | **confirmed by existing records**; no new hashes claimed |
 | 1. Human adjudication | per-item review ledger outside Git | image ID, prompt, seed, visible shape, visible color, black/ambiguous flags, reviewer note | **pending**; only qualitative summary exists |
-| 2. Black-image diagnosis | `diagnostics_v1` | same checkpoint/prompt/seed; default SafetyChecker result and NSFW flag; separate explicitly acknowledged checker-disabled output; final FP32 finite checkpoint/pixel audit; distinct output directories | **pending** |
-| 3. Cyan diagnosis and initializer selection | 540-image cyan packet and 540 randomized single-image blind-review rows; then one selected initializer | trained/vanilla, candidate, template-family evidence; completed human CSV; verified single-token candidates; explicit human approval of one candidate | **pending**; tokenizer evidence exists, but no packet or candidate decision |
+| 2. Black-image diagnosis | `diagnostics_v1` | same checkpoint/prompt/seed; default SafetyChecker result and NSFW flag; separate explicitly acknowledged checker-disabled output; conditional FP32 finite checkpoint/pixel audit; distinct output directories | **completed**; checker-on 19/19 flagged and black, checker-off 19/19 finite and nonblack; FP32 not required |
+| 3. Cyan diagnosis and initializer selection | 540-image cyan packet and 540 randomized single-image blind-review rows; then one selected initializer | trained/vanilla, candidate, template-family evidence; completed human CSV; verified single-token candidates; explicit human approval of one candidate | **running**; no candidate decision |
 | 3b. Subject diagnosis | 75-image trained-K/V protocol | 3 shapes × seeds 42–46 × learned-only, natural-only, and learned+literal red/cyan/gray; per-image status and human review | **pending; not run** |
 | 4. Cyan initializer train | `cyan_initializer_ablation` | gates 1–3 closed, clean Git commit, dry-run provenance, fresh training run, unchanged non-initializer settings | **conditional / not run** |
 | 5. Matched evaluation | baseline protocol on the new checkpoint | fresh 900-row manifest, human review, secondary automated metrics, direct paired comparison | **conditional / not run** |
@@ -61,6 +61,19 @@ alone does not prove subject-color token entanglement.
 
 Each gate closes only from named artifacts. A script, config, dry-run, or
 process start is not evidence that a diagnostic or model run succeeded.
+
+## Executed black-image diagnosis
+
+Commit `ca3d313` was deployed through Git and passed 73 server tests. Under
+FP16 with the default checker, all 19 exact-black source IDs were again flagged
+and returned black. Under the same prompts, seeds, weights, steps, CFG, GPU,
+and FP16 dtype, disabling only the checker recovered all 19 as finite, nonblack
+images. The conditional FP32 stage was not needed. This closes the black-image
+branch as SafetyChecker filtering rather than training instability.
+
+The checker-disabled 540-image cyan diagnostic and the subsequent 75-image
+subject diagnostic are running. Their images, blind review, candidate choice,
+and any follow-up training remain pending.
 
 ## Approved single-variable training change
 
@@ -95,7 +108,8 @@ three shapes × seeds 42–46 × five conditions. The conditions are learned
 subject-only, natural-word subject-only, and the learned subject paired with
 literal red, cyan, or gray. This tests whether the gray subject-only tendency
 persists when color is explicitly supplied without changing the checkpoint.
-It is pending and has no server output.
+Its server generation is queued behind the running cyan diagnostic; no result
+is claimed yet.
 
 Both cyan and subject diagnostic generators keep the default Stable Diffusion
 SafetyChecker enabled. Disabling it is permitted only when both
@@ -121,8 +135,10 @@ three ordered stages. `safety_flag` keeps FP16 and the default checker;
 `disable_safety` keeps FP16 but requires both the disable and acknowledgement
 flags; `fp32_finite` keeps the checker disabled, audits all learned tensors,
 and checks finite FP32 pixels. Later stages accept only IDs still black in the
-prior status file. The entry point exists, but none of these stages is recorded
-as executed in this handoff.
+prior status file. The first two stages were executed in the run root recorded
+above: 19/19 were flagged and black with the checker, then 19/19 were finite
+and nonblack with only the checker disabled. No IDs remained for
+`fp32_finite`, so it was not executed.
 
 ## Interpretation boundary
 

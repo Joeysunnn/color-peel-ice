@@ -82,3 +82,19 @@ YAML, and dry-run manifest checks. The local all-in-one pytest process requires
 incompatible OpenMP runtimes through PyTorch and NumPy; isolated suites pass
 without it. This is a local test-runner condition and is not exported to server
 training or inference.
+
+Commit `ca3d313c4d081bcdec5fda6979b05c4fde3415c0` was pushed and deployed to the
+clean server checkout through Git. The server repeated all 73 tests in 5.40
+seconds. In the ordered black-image diagnostic, all 19 source-black IDs were
+again flagged by the default checker and returned black under FP16; disabling
+only the checker recovered 19/19 finite, nonblack images under the same FP16
+settings. FP32 fallback was therefore not required. These black outputs are a
+SafetyChecker filtering artifact, not evidence of diffusion/VAE instability.
+
+The source-aware transfer rerun retained 600 rows with 588 valid masks. Median
+source references from the nine GT masks were red `[83,35,35]`, cyan
+`[38,91,91]`, and gray `[58,58,58]`. Cyan mean 50%-pixel DeltaE improved from
+66.0792 against nominal RGB to 42.5543 against the rendered-metal reference,
+but remained weak. The 540 cyan and 75 subject controls are currently
+generating on GPU 3; no initializer has been selected and no retraining has
+begun.

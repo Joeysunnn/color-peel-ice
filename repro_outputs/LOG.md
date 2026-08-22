@@ -273,3 +273,30 @@ success.
   73 tests passed in 18.38 seconds. Compileall, 8 JSON files, 9 YAML files, and
   `git diff --check` also passed. The environment flag is not part of any
   server run command.
+
+## 2026-08-22 — server deployment and ordered black-image result
+
+- Pushed `ca3d313c4d081bcdec5fda6979b05c4fde3415c0` to
+  `origin/repro/2026-08-22-colorpeel-diagnostics`. The server checkout was
+  clean before deployment and now tracks the same branch and commit; no code
+  was copied or edited directly on the server.
+- The server `colorpeel017` environment passed all 73 tests in 5.40 seconds and
+  compileall passed.
+- Runtime root:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-191800__diagnostics_v1__ca3d313__42`.
+- Stage 1 kept FP16 and the default SafetyChecker. It selected all 19 exact-black
+  source IDs; 19/19 reruns recorded `nsfw_content_detected=true` and remained
+  black.
+- Stage 2 kept FP16 and changed only SafetyChecker disablement with explicit
+  acknowledgement. All 19 outputs were finite and nonblack, with 19 successful
+  status rows. Therefore Stage 3 FP32 was not run.
+- Source-aware color evaluation wrote 600 rows: 588 successful and 12 existing
+  mask failures. GT-mask median references were red `[83,35,35]`, cyan
+  `[38,91,91]`, and gray `[58,58,58]`. Mean nominal/source DeltaE at the 50%
+  pixel fraction was red 16.5341/30.3232, cyan 66.0792/42.5543, and gray
+  12.0731/12.9418. Source-aware scoring explains part, but not all, of cyan's
+  transfer deficit.
+- PID 2806571 was launched for the checker-disabled 540-image cyan diagnostic,
+  followed by the 75-image subject diagnostic and blinded-review packet. At
+  this evidence snapshot the job was running; no candidate or training result
+  was selected.

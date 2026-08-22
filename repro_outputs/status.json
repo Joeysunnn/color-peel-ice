@@ -4,7 +4,7 @@
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
-  "target_commit": "b059bd5e92cf1994581d8600111d3ed5830dc7d5",
+  "target_commit": "ca3d313c4d081bcdec5fda6979b05c4fde3415c0",
   "baseline_commit": "021f5c74cee6c231a03b8b49bb96750cadfc4e06",
   "readme_first": true,
   "selected_goal": "ColorPeel on a 3x3 CLEVR subject-color grid with six shared tokens",
@@ -20,15 +20,15 @@
   "evidence_level": "mixed",
   "local_test_status": "success",
   "local_pytest": "73 passed in 18.38s with KMP_DUPLICATE_LIB_OK=TRUE for the local Anaconda PyTorch/NumPy OpenMP coexistence issue",
-  "github_push_status": "success",
-  "server_checkout_status": "success_clean_at_b059bd5",
+  "github_push_status": "success_diagnosis_branch_ca3d313",
+  "server_checkout_status": "success_clean_at_ca3d313",
   "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
-  "server_verified_commit": "b059bd5e92cf1994581d8600111d3ed5830dc7d5",
+  "server_verified_commit": "ca3d313c4d081bcdec5fda6979b05c4fde3415c0",
   "current_worktree_status": "diagnosis_first_pre_run_verified_local",
   "server_pre_run_changes_status": "fast_forwarded_via_github",
   "current_changes_test_status": "success_73_tests_plus_compile_json_yaml_and_manifest_dry_runs",
-  "diagnosis_first_github_status": "pending_push",
-  "diagnosis_first_server_status": "not_deployed_not_run",
+  "diagnosis_first_github_status": "pushed_ca3d313",
+  "diagnosis_first_server_status": "deployed_tested_diagnostics_running",
   "server_environment_status": "created_verified_and_frozen",
   "training_status": "succeeded_1500_of_1500_finite",
   "generation_status": "succeeded_900_of_900_valid",
@@ -46,8 +46,14 @@
   "human_review_status": "observed_qualitative_no_per_seed_ledger",
   "human_review_evidence_priority": "primary_for_image_semantics",
   "automated_evaluator_role": "secondary_diagnostic",
-  "safety_diagnostic_status": "pending_not_run",
-  "cyan_diagnostic_status": "pending_not_run",
+  "safety_diagnostic_status": "completed_safety_checker_confirmed_19_of_19",
+  "safety_diagnostic": {
+    "run_root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-191800__diagnostics_v1__ca3d313__42",
+    "stage1": "fp16_checker_enabled_19_nsfw_true_19_black",
+    "stage2": "fp16_checker_disabled_19_finite_19_nonblack",
+    "stage3": "not_required_no_stage2_black_outputs"
+  },
+  "cyan_diagnostic_status": "running_generation_pid_2806571",
   "cyan_diagnostic_protocol": {
     "expected_images": 540,
     "trained_kv_rows": 300,
@@ -57,7 +63,7 @@
     "review_unit": "randomized_blinded_single_image",
     "safety_checker_default": "enabled",
     "disable_requires_paired_flags": true,
-    "execution_status": "not_run"
+    "execution_status": "running"
   },
   "cyan_initializer_ablation_status": "conditional_candidate_not_selected_not_run",
   "subject_diagnostic_status": "pending_not_run",
@@ -128,7 +134,7 @@
       "turquoise": [19899]
     }
   },
-  "verified_commit_count": 5,
+  "verified_commit_count": 7,
   "outputs": {
     "summary": "repro_outputs/SUMMARY.md",
     "commands": "repro_outputs/COMMANDS.md",
@@ -148,6 +154,7 @@
     "Grounded-SAM and Qwen3-VL were executed as independent stages.",
     "The first Grounded-SAM run is retained as a 600-row API-compatibility failure record; b059bd5 fixed only the pinned Transformers keyword.",
     "Single-axis contingency tables show strong output bias, so no entanglement-solved claim is made.",
-    "The frozen baseline remains complete; all diagnosis-first, initializer, multiview, new-loss, and natural multi-object follow-up results remain pending or conditional."
+    "The frozen baseline remains complete; initializer, multiview, new-loss, and natural multi-object follow-up results remain pending or conditional.",
+    "The 19 exact-black baseline outputs were reproduced with the FP16 checker enabled and all recovered when only the checker was disabled; FP32 fallback was therefore not run."
   ]
 }

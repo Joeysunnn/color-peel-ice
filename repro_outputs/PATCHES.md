@@ -159,3 +159,9 @@ Highest follow-up scientific risk: changing initializer semantics for a new
 training run. Highest safety-relevant diagnostic risk: disabling the Stable
 Diffusion SafetyChecker. A factor-aware loss and natural multi-object
 evaluation have no approved implementation/config and remain conditional.
+
+Verified pre-run commit: `ca3d313c4d081bcdec5fda6979b05c4fde3415c0`
+(`repro: add diagnosis-first ColorPeel controls`). Local and server suites each
+passed 73 tests. Runtime evidence is stored outside Git under the diagnostics
+run root recorded in `LOG.md`; generated images and learned weights remain
+outside Git.
