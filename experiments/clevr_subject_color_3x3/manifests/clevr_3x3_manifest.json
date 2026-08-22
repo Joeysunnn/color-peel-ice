@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "source_dataset": "clevr_basic_neutral_stage1_gt",
+  "material": "metal",
+  "prompt_template": "a photo of {subject_token} shape in {color_token} color",
+  "shapes": [
+    {
+      "name": "cube",
+      "token": "<s1*>",
+      "initializer": "cube",
+      "foreground_pixels": 13900
+    },
+    {
+      "name": "sphere",
+      "token": "<s2*>",
+      "initializer": "sphere",
+      "foreground_pixels": 14973
+    },
+    {
+      "name": "cylinder",
+      "token": "<s3*>",
+      "initializer": "cylinder",
+      "foreground_pixels": 22868
+    }
+  ],
+  "colors": [
+    {
+      "name": "red",
+      "token": "<c1*>",
+      "initializer": "red",
+      "rgb": [173, 35, 35]
+    },
+    {
+      "name": "cyan",
+      "token": "<c2*>",
+      "initializer": "cyan",
+      "rgb": [41, 208, 208]
+    },
+    {
+      "name": "gray",
+      "token": "<c3*>",
+      "initializer": "gray",
+      "rgb": [87, 87, 87]
+    }
+  ],
+  "samples": [
+    {
+      "id": "003_cube_red_metal",
+      "shape": "cube",
+      "color": "red",
+      "subject_token": "<s1*>",
+      "color_token": "<c1*>",
+      "rgb": [173, 35, 35],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s1*> shape in <c1*> color"]
+    },
+    {
+      "id": "013_cube_cyan_metal",
+      "shape": "cube",
+      "color": "cyan",
+      "subject_token": "<s1*>",
+      "color_token": "<c2*>",
+      "rgb": [41, 208, 208],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s1*> shape in <c2*> color"]
+    },
+    {
+      "id": "001_cube_gray_metal",
+      "shape": "cube",
+      "color": "gray",
+      "subject_token": "<s1*>",
+      "color_token": "<c3*>",
+      "rgb": [87, 87, 87],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s1*> shape in <c3*> color"]
+    },
+    {
+      "id": "019_sphere_red_metal",
+      "shape": "sphere",
+      "color": "red",
+      "subject_token": "<s2*>",
+      "color_token": "<c1*>",
+      "rgb": [173, 35, 35],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s2*> shape in <c1*> color"]
+    },
+    {
+      "id": "029_sphere_cyan_metal",
+      "shape": "sphere",
+      "color": "cyan",
+      "subject_token": "<s2*>",
+      "color_token": "<c2*>",
+      "rgb": [41, 208, 208],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s2*> shape in <c2*> color"]
+    },
+    {
+      "id": "017_sphere_gray_metal",
+      "shape": "sphere",
+      "color": "gray",
+      "subject_token": "<s2*>",
+      "color_token": "<c3*>",
+      "rgb": [87, 87, 87],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s2*> shape in <c3*> color"]
+    },
+    {
+      "id": "035_cylinder_red_metal",
+      "shape": "cylinder",
+      "color": "red",
+      "subject_token": "<s3*>",
+      "color_token": "<c1*>",
+      "rgb": [173, 35, 35],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s3*> shape in <c1*> color"]
+    },
+    {
+      "id": "045_cylinder_cyan_metal",
+      "shape": "cylinder",
+      "color": "cyan",
+      "subject_token": "<s3*>",
+      "color_token": "<c2*>",
+      "rgb": [41, 208, 208],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s3*> shape in <c2*> color"]
+    },
+    {
+      "id": "033_cylinder_gray_metal",
+      "shape": "cylinder",
+      "color": "gray",
+      "subject_token": "<s3*>",
+      "color_token": "<c3*>",
+      "rgb": [87, 87, 87],
+      "material": "metal",
+      "instance_prompt": ["a photo of <s3*> shape in <c3*> color"]
+    }
+  ]
+}

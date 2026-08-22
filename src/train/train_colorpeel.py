@@ -11,6 +11,7 @@ import random
 import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
+from token_gradient_utils import modifier_rows_to_zero
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -1122,13 +1123,13 @@ def main(args):
                         grads_text_encoder = text_encoder.module.get_input_embeddings().weight.grad
                     else:
                         grads_text_encoder = text_encoder.get_input_embeddings().weight.grad
-                    # Get the index for tokens that we want to zero the grads for
-                    index_grads_to_zero = torch.arange(len(tokenizer)) != modifier_token_id[0]
-                    
-                    for i in range(len(modifier_token_id[1:])):
-                        index_grads_to_zero = index_grads_to_zero & (
-                            torch.arange(len(tokenizer)) != modifier_token_id[i]
-                        )
+                    # Keep gradients for every modifier row. The official loop
+                    # skipped the final token because it iterated over N-1 IDs.
+                    index_grads_to_zero = torch.tensor(
+                        modifier_rows_to_zero(len(tokenizer), modifier_token_id),
+                        device=grads_text_encoder.device,
+                        dtype=torch.bool,
+                    )
                     grads_text_encoder.data[index_grads_to_zero, :] = grads_text_encoder.data[
                         index_grads_to_zero, :
                     ].fill_(0)

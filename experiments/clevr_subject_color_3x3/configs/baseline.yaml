@@ -1,0 +1,54 @@
+schema_version: 1
+status: pending
+stage: train
+run:
+  study: clevr_subject_color_3x3
+  variant: baseline
+  seed: 42
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+data_manifest: experiments/clevr_subject_color_3x3/manifests/clevr_3x3_manifest.json
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_RUN_ROOT}/clevr_subject_color_3x3/train_assets/concepts.json
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 1500
+  checkpointing_steps: 1000
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.2
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.01
+  adam_epsilon: 1.0e-8
+  hflip: true
+  modifier_token: "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>"
+  initializer_token: "cube+sphere+cylinder+red+cyan+gray"
+protocol:
+  github_fork_url: https://github.com/Joeysunnn/color-peel-ice.git
+  upstream_url: https://github.com/moatifbutt/color-peel
+  baseline_commit: 021f5c74cee6c231a03b8b49bb96750cadfc4e06
+  diffusers_ref: v0.17.0
+  material: metal
+  colors: [red, cyan, gray]
+  subjects: [cube, sphere, cylinder]
+  gt_masks_in_training: false
+  xformers: false
+  prior_preservation: false
+  resume: false
+  non_modifier_embedding_preservation: pending_human_review
+evaluation:
+  status: pending
+  seed_start: 42
+  seed_end_inclusive: 61
+  num_inference_steps: 100
+  guidance_scale: 6.0
+  claim_threshold: null

@@ -1,0 +1,83 @@
+# CLEVR subject-color 3×3 study
+
+- Study slug: `clevr_subject_color_3x3`
+- Method slug: `colorpeel_ice`
+- Status: **pending**
+- Baseline: ColorPeel commit `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
+- Dataset root: `/home/r12user5/Documents/Jiawei/papers/ICE/datasets/clevr_basic_neutral_stage1_gt`
+- Run root: `$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/<run_id>/`
+
+## Research question
+
+Can the official ColorPeel training mechanism learn three subject tokens and three color tokens on the locked CLEVR metal 3×3 grid while exposing subject/color leakage with predeclared evaluation outputs?
+
+This is a ColorPeel-on-CLEVR reproduction. ICE supplies the problem context only. ICE stages, losses, masks, token parameterizations, and other method content are excluded.
+
+## Locked concepts
+
+| Token | Meaning | Initializer |
+|---|---|---|
+| `<s1*>` | cube | `cube` |
+| `<s2*>` | sphere | `sphere` |
+| `<s3*>` | cylinder | `cylinder` |
+| `<c1*>` | red | `red` |
+| `<c2*>` | cyan | `cyan` |
+| `<c3*>` | gray | `gray` |
+
+Material is fixed to `metal` and has no learned token. Every prompt uses `a photo of <subject-token> shape in <color-token> color`.
+
+## Locked sample grid
+
+| Shape | Red | Cyan | Gray |
+|---|---|---|---|
+| cube | `003_cube_red_metal` | `013_cube_cyan_metal` | `001_cube_gray_metal` |
+| sphere | `019_sphere_red_metal` | `029_sphere_cyan_metal` | `017_sphere_gray_metal` |
+| cylinder | `035_cylinder_red_metal` | `045_cylinder_cyan_metal` | `033_cylinder_gray_metal` |
+
+The source inventory is expected to contain 48 samples (`3 shapes × 8 colors × 2 materials`). Images and GT masks are expected to be 512×512, with masks binary. These facts remain **pending** in this study until a run-specific data audit is named in a report. GT masks are audit/evaluation assets only and must not enter the training loss.
+
+## Baseline protocol
+
+The tracked baseline is [`configs/baseline.yaml`](configs/baseline.yaml). It locks:
+
+- `CompVis/stable-diffusion-v1-4`, Diffusers `v0.17.0`, 512 px;
+- Custom Diffusion cross-attention K/V optimization plus modifier embeddings;
+- batch 1, 1500 steps, LR `1e-5`, scaled LR, constant scheduler, zero warmup;
+- seed 42, CAA/cosine weight 0.2, gradient accumulation 1;
+- AdamW β₁ 0.9, β₂ 0.999, weight decay 0.01, ε `1e-8`;
+- max gradient norm 1.0, two data workers, checkpoint interval 1000;
+- mixed precision `no`, xFormers off, prior preservation off, resume off.
+
+Mixed precision `no` is an explicit run lock because the official repository delegates this choice to Accelerate. The other values follow the inspected official launcher/parser unless the config says otherwise.
+
+## Unresolved training conflict
+
+Status: **pending**.
+
+The official code passes the full text-embedding parameter to AdamW with weight decay 0.01. Zeroing non-modifier gradients does not by itself prove that AdamW leaves those embedding values unchanged. Before any smoke or full run:
+
+1. choose and review a narrow value-preserving update strategy;
+2. add a value-level before/after optimizer-step test with weight decay enabled;
+3. verify all six modifier rows can change while every non-modifier row remains unchanged;
+4. record the resulting comparability effect in the baseline report.
+
+No gradient-only test may close this conflict.
+
+## Evaluation outputs
+
+The planned protocol uses seeds 42–61 and records:
+
+- nine-grid reconstruction, subject-only, color-only, and ten color-transfer prompt families;
+- official ColorPeel color metrics separately from CLEVR-specific diagnostics;
+- shape, color, and joint accuracy from frozen deterministic predictions;
+- `subject token × predicted color` and `color token × predicted shape` contingency tables;
+- explicit segmentation and prediction failure rows.
+
+No custom numerical threshold defines “entanglement solved.” All results are currently **pending**.
+
+## Records
+
+- Manifest policy: [`manifests/README.md`](manifests/README.md)
+- Report index: [`reports/README.md`](reports/README.md)
+- Baseline report: [`reports/01_colorpeel_clevr_baseline.md`](reports/01_colorpeel_clevr_baseline.md)
+- Literature: [ColorPeel](../../literature/notes/2024_butt_colorpeel.md), [ICE](../../literature/notes/2025_cendra_ice.md)
