@@ -192,6 +192,17 @@ class SmokeConfigTests(unittest.TestCase):
         positions = [source.index(operation) for operation in ordered_operations]
         self.assertEqual(positions, sorted(positions))
 
+    def test_accelerate_0203_logging_uses_project_configuration(self):
+        source = (REPO_ROOT / "src" / "train" / "train_colorpeel.py").read_text(
+            encoding="utf-8"
+        )
+        project_config_start = source.index("accelerator_project_config = ProjectConfiguration(")
+        accelerator_start = source.index("accelerator = Accelerator(", project_config_start)
+        project_config_source = source[project_config_start:accelerator_start]
+        accelerator_source = source[accelerator_start:source.index("\n\n", accelerator_start)]
+        self.assertIn("logging_dir=logging_dir", project_config_source)
+        self.assertNotIn("logging_dir=logging_dir", accelerator_source)
+
 
 class SmokeAuditValidatorTests(unittest.TestCase):
     @staticmethod

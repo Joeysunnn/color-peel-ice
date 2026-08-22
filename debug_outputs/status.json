@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "status": "patch_implemented_pending_rerun",
+  "failure_stage": "accelerator_initialization",
+  "optimization_steps_completed": 0,
+  "cause": "accelerate_0.20.3_logging_dir_api_mismatch",
+  "fix_scope": "logging_configuration_only",
+  "scientific_semantics_changed": false,
+  "failed_run_commit": "6adca6dab9ad177c58a99b6ab26662cc92e8c140"
+}

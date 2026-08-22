@@ -706,8 +706,10 @@ def _compute_cosine(attention_maps: torch.Tensor,indices_to_alter: List[int],):
 
 def main(args):
     logging_dir = Path(args.output_dir, args.logging_dir)
-    accelerator_project_config = ProjectConfiguration(total_limit=args.checkpoints_total_limit)
-    accelerator = Accelerator(gradient_accumulation_steps=args.gradient_accumulation_steps,mixed_precision=args.mixed_precision,log_with=args.report_to,logging_dir=logging_dir,project_config=accelerator_project_config,)
+    accelerator_project_config = ProjectConfiguration(
+        logging_dir=logging_dir, total_limit=args.checkpoints_total_limit
+    )
+    accelerator = Accelerator(gradient_accumulation_steps=args.gradient_accumulation_steps,mixed_precision=args.mixed_precision,log_with=args.report_to,project_config=accelerator_project_config,)
 
     # Currently, it's not possible to do gradient accumulation when training two models with accelerate.accumulate
     # This will be enabled soon in accelerate. For now, we don't allow gradient accumulation when training two models.
