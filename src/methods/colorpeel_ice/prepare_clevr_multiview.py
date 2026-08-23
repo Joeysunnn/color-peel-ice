@@ -324,7 +324,7 @@ def _validate_vector_sum(base: Any, offset: Any, final: Any, label: str) -> None
         f"{label} vectors must contain three numeric values",
     )
     _require(
-        all(abs((float(base[index]) + float(offset[index])) - float(final[index])) < 1e-9 for index in range(3)),
+        all(abs((float(base[index]) + float(offset[index])) - float(final[index])) <= 1e-6 for index in range(3)),
         f"{label} final location does not equal base plus jitter",
     )
 

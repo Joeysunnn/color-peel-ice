@@ -59,6 +59,16 @@ class MultiviewProtocolTests(unittest.TestCase):
                 self.assertIsNone(row[field])
             self.assertIsNone(row["empirical_rgb"])
 
+    def test_vector_sum_allows_only_blender_float32_rounding(self):
+        MODULE._validate_vector_sum(
+            [7.481131076812744, -6.5076398849487305, 5.279051303863525],
+            [-0.06422106498087743, -0.3582052753411801, 0.37571427349391007],
+            [7.416910171508789, -6.865845203399658, 5.654765605926514],
+            "Camera",
+        )
+        with self.assertRaisesRegex(MODULE.ProtocolError, "base plus jitter"):
+            MODULE._validate_vector_sum([1.0, 2.0, 3.0], [0.1, 0.2, 0.3], [1.10001, 2.2, 3.3], "Camera")
+
     def test_folds_are_exact_matchings_with_two_partners_per_axis(self):
         actual = {
             fold["id"]: {tuple(pair) for pair in fold["held_out"]}
