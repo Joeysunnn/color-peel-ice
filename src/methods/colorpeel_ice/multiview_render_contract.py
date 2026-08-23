@@ -78,6 +78,7 @@ EXPECTED_PROFILE_V2 = {
         "elevation_jitter_degrees": 10.0,
         "distance_jitter_fraction": 0.05,
         "rotation_policy": "look_at_object_center_negative_z_y_up",
+        "base_constraint_policy": "mute_before_explicit_look_at",
     },
     "lights": {
         "order": ["Lamp_Key", "Lamp_Back", "Lamp_Fill"],

@@ -276,6 +276,15 @@ class MultiviewRealizationTests(unittest.TestCase):
                     "sampling_model": profile["camera"]["sampling_model"],
                     "target_policy": "object_location",
                     "look_at_target": target,
+                    "base_constraint_policy": profile["camera"]["base_constraint_policy"],
+                    "base_constraints": [{
+                        "name": "Track To",
+                        "type": "TRACK_TO",
+                        "mute": False,
+                        "influence": 1.0,
+                        "target": "Empty",
+                    }],
+                    "final_constraints_muted": True,
                     "base_pose": {
                         "location": camera_base,
                         "rotation_euler_xyz": [1.0, 0.0, 0.7],

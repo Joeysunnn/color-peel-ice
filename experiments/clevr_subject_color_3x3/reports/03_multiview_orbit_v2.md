@@ -10,7 +10,9 @@ jitter while preserving the base camera rotation; v2 extracts the base
 radius, azimuth, and elevation relative to the realized object's center, then
 applies deterministic orbit offsets of ±18 degrees azimuth, ±10 degrees
 elevation, and ±5 percent distance. The camera local `-Z` axis is recomputed to
-look at the object center with local `+Y` as up.
+look at the object center with local `+Y` as up. The base scene's tracked
+camera constraints are recorded and muted before this explicit v2 look-at is
+applied; v1 constraint behavior remains untouched.
 
 Object pose/scale/material, neutral world and ground values, white-light
 settings and jitter range, Cycles seed, resolution, samples, render assets,

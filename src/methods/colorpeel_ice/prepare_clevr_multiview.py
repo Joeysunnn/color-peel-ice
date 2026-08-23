@@ -411,6 +411,22 @@ def _validate_v2_camera(
     _require(camera.get("target_policy") == "object_location", f"Camera target policy disagrees for {key}")
     _require(camera.get("rotation_policy") == profile["camera"]["rotation_policy"],
              f"Camera rotation policy disagrees for {key}")
+    _require(camera.get("base_constraint_policy") == profile["camera"]["base_constraint_policy"],
+             f"Camera base constraint policy disagrees for {key}")
+    constraints = camera.get("base_constraints")
+    _require(isinstance(constraints, list), f"Camera base constraints are missing for {key}")
+    for constraint in constraints:
+        _require(
+            isinstance(constraint, dict)
+            and set(constraint) == {"name", "type", "mute", "influence", "target"}
+            and isinstance(constraint["name"], str)
+            and isinstance(constraint["type"], str)
+            and isinstance(constraint["mute"], bool)
+            and isinstance(constraint["influence"], (int, float)),
+            f"Camera base constraint metadata is invalid for {key}",
+        )
+    _require(camera.get("final_constraints_muted") is True,
+             f"Camera base constraints were not muted for {key}")
     target = camera.get("look_at_target")
     _require(isinstance(target, list) and len(target) == 3 and
              all(isinstance(value, (int, float)) for value in target),

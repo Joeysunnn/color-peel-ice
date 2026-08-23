@@ -482,7 +482,6 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
     camera = bpy.data.objects.get(profile["camera"]["name"])
     require(camera is not None and camera.type == "CAMERA", "Base scene is missing Camera")
     require(camera.parent is None, "Orbit camera must not have a parent")
-    require(len(camera.constraints) == 0, "Orbit camera must not have active constraints")
     require(abs(float(camera.data.shift_x)) <= 1e-9 and abs(float(camera.data.shift_y)) <= 1e-9,
             "Orbit camera requires zero lens shift")
     camera.data.dof.use_dof = False
@@ -490,8 +489,23 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
 
     target = _tuple(obj.matrix_world.translation)
     base_location = _tuple(camera.matrix_world.translation)
-    base_rotation_euler = _tuple(camera.rotation_euler)
-    base_quaternion = camera.rotation_euler.to_quaternion()
+    base_rotation_euler = _tuple(camera.matrix_world.to_euler())
+    base_quaternion = camera.matrix_world.to_quaternion()
+    base_constraints = [
+        {
+            "name": constraint.name,
+            "type": constraint.type,
+            "mute": bool(constraint.mute),
+            "influence": float(constraint.influence),
+            "target": getattr(getattr(constraint, "target", None), "name", None),
+        }
+        for constraint in camera.constraints
+    ]
+    for constraint in camera.constraints:
+        constraint.mute = True
+    bpy.context.view_layer.update()
+    require(all(constraint.mute for constraint in camera.constraints),
+            "Orbit camera could not mute base constraints")
     base_spherical = spherical_pose(base_location, target)
     jitter = offsets["camera_orbit_jitter"]
     final_radius = base_spherical["radius"] * (1.0 + jitter["distance_fraction"])
@@ -530,6 +544,9 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
         "sampling_model": profile["camera"]["sampling_model"],
         "target_policy": "object_location",
         "look_at_target": target,
+        "base_constraint_policy": profile["camera"]["base_constraint_policy"],
+        "base_constraints": base_constraints,
+        "final_constraints_muted": True,
         "base_pose": {
             "location": base_location,
             "rotation_euler_xyz": base_rotation_euler,
