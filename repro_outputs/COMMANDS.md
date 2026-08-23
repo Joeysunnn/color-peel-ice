@@ -570,3 +570,16 @@ python src/methods/colorpeel_ice/prepare_clevr_multiview.py \
 
 The renderer and realization both succeeded. No command from any staged Fold
 config was executed.
+
+After explicit human approval, all nine Fold configs passed `--dry-run` and
+were launched sequentially with this command shape at commit `9cf1446`:
+
+```bash
+export COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs
+conda run -n colorpeel017 python scripts/launch/colorpeel_run.py \
+  --config <prepared_human_review/folds/fold_{a,b,c}/train_config_seed{42,43,44}.json> \
+  --run-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/<immutable-run-id>"
+```
+
+The detached queue is serial on GPU 3 and stops at the first failure. It uses
+no resume flag, scientific-parameter override, or concurrent Fold process.

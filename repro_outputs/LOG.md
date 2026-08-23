@@ -478,3 +478,19 @@ success.
 - No Fold smoke, 1500-step Fold training, factor-aware loss run, or natural
   multi-object run was started. The next action remains the user's review of
   the v2 contact sheet and review ledger.
+
+## 2026-08-23 — multiview v2 Fold training kickoff
+
+- The user manually accepted the full v2 contact sheet and explicitly released
+  the Fold training gate. No new method or loss was authorized.
+- All nine derived configs passed launcher dry-run: folds A/B/C × seeds
+  42/43/44, 96 image-only training views per fold, and 1500 steps per run.
+- A detached sequential queue started on GPU 3 at commit `9cf1446`. It verifies
+  the pinned commit and clean worktree before every run and stops on the first
+  failure. Campaign root:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-203240__multiview_v2_fold_training_campaign__9cf1446`.
+- Fold A / seed 42 was the first active run. Startup verification observed 141
+  finite metric rows, all six modifier tokens exposed, and an active V100
+  process. The run later crossed step 1000 and wrote `checkpoint-1000` with
+  model, optimizer, scheduler, random-state, and custom-checkpoint artifacts.
+  No completed run or held-out result is claimed yet.

@@ -95,6 +95,14 @@ releases only the v2 multiview Fold training gate. It does not authorize a
 factor-aware loss change, natural multi-object training, or any modification
 to the nine derived Fold configs.
 
+The nine derived configs then passed launcher dry-run and a detached serial
+GPU-3 queue started at commit `9cf1446`. The matrix is folds A/B/C × seeds
+42/43/44, 1500 steps per run. Fold A / seed 42 reached step 141 during startup
+verification with finite reconstruction, CAA, and total losses and exposure of
+all six modifier tokens. It subsequently passed step 1000 and wrote the
+expected accelerator checkpoint while losses remained finite. This is a
+running campaign, not a completed result.
+
 ## Smoke and contact-sheet review checklist
 
 - Confirm scene metadata names `multiview_render_v2` and

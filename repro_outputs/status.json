@@ -128,7 +128,7 @@
     "derived_configs": "nine_human_authorized_for_training",
     "fold_training_status": "not_run"
   },
-  "multiview_training_status": "human_review_passed_authorized_not_started",
+  "multiview_training_status": "running_sequential_fold_a_seed42_first_of_nine",
   "factor_aware_loss_status": "conditional_not_implemented_not_run",
   "natural_multiobject_status": "conditional_not_implemented_not_run",
   "preflight_status": "passed",
@@ -177,7 +177,7 @@
     "derived_fold_configs": 9,
     "derived_config_status": "pending_human_review"
   },
-  "next_safe_action": "preflight the nine immutable v2 Fold configs, then start sequential GPU-3 training with per-run evidence",
+  "next_safe_action": "monitor the detached nine-run GPU-3 Fold queue; validate each manifest, finite metrics, embedding audit, and checkpoints before held-out generation",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
