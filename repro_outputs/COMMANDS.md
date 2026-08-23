@@ -538,3 +538,35 @@ export CUDA_VISIBLE_DEVICES=3
 Use a separate output root for every profile. Explicit `--resume` is allowed
 only with the same v2 request/profile/asset contract. This command is a real
 runtime smoke, not a realization and not authorization to start Fold training.
+
+The accepted smoke was followed by this fresh full-run protocol at commit
+`f7bc52d` (the renderer command was identical to the v2 command above except
+for the new full output root and omission of `--limit`):
+
+```bash
+FULL_V2_RUN=/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-200500__clevr_subject_color_3x3__multiview-render-v2__f7bc52d__420000
+
+python src/methods/colorpeel_ice/prepare_clevr_multiview.py \
+  --protocol experiments/clevr_subject_color_3x3/manifests/clevr_multiview_protocol_v2.json \
+  plan --output-dir "$FULL_V2_RUN/protocol" \
+  --renderer scripts/methods/colorpeel_ice/render_clevr_multiview.py
+
+CUDA_VISIBLE_DEVICES=3 "$BLENDER" --background --python-exit-code 1 \
+  --python scripts/methods/colorpeel_ice/render_clevr_multiview.py -- \
+  --cycles-device CUDA --cycles-print-stats \
+  --requests "$FULL_V2_RUN/protocol/render_requests.jsonl" \
+  --profile experiments/clevr_subject_color_3x3/configs/multiview_render_v2.json \
+  --output-root "$FULL_V2_RUN/rendered" \
+  --properties-json "$ASSETS/properties.json" \
+  --base-scene-blendfile "$ASSETS/base_scene.blend" \
+  --shape-dir "$ASSETS/shapes" --material-dir "$ASSETS/materials"
+
+python src/methods/colorpeel_ice/prepare_clevr_multiview.py \
+  --protocol experiments/clevr_subject_color_3x3/manifests/clevr_multiview_protocol_v2.json \
+  realize --render-root "$FULL_V2_RUN/rendered" \
+  --render-manifest "$FULL_V2_RUN/rendered/renderer_realization.jsonl" \
+  --output-dir "$FULL_V2_RUN/prepared_human_review"
+```
+
+The renderer and realization both succeeded. No command from any staged Fold
+config was executed.

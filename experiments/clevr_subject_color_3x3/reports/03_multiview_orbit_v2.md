@@ -57,6 +57,36 @@ cylinder smoke showed a complete object with a visible top ellipse. This does
 not replace the 45-image full contact-sheet review and does not authorize Fold
 training.
 
+## Full 180-view realization evidence
+
+After the user accepted the runtime smoke, commit
+`f7bc52dffa32345ee09cc25804d67866f68f49de` completed a fresh canonical v2
+run on GPU 3:
+
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-200500__clevr_subject_color_3x3__multiview-render-v2__f7bc52d__420000`
+
+The renderer succeeded without `--limit` or `--resume`: 180/180 realization
+rows and 180/180 `ok` status rows, with no partial directory. The locked
+profile hash is
+`4890b5a481b7f903f383beeee97607c7f8fd410708925eea9223c54cab2b3ece8`;
+the render-contract hash is
+`0aed245c018de072489f0eef337c32e7be71dd8fa45cc78840cce1fdc64c694c0`.
+Every one of the nine cells contains 20 distinct RGB SHA-256 values.
+
+`realize` validated all 180 views, produced the complete 180-row review CSV
+and the 45-image contact sheet, and staged folds A/B/C. Each fold contains six
+concept directories with exactly 16 JPEGs each (96 total) and no non-JPEG
+files. Nine derived turquoise configs remain `pending_human_review`; GT masks
+do not enter the training staging directories. The contact-sheet SHA-256 is
+`0a674ce117d7d34f87c0750fdf48da1fef3aec03336f95574529aaa577ae655cb`.
+
+The final evidence inspection found clear cube visible-face variation and
+cylinder top-ellipse/side-proportion variation. Sphere silhouette stayed
+stable while highlights and shadows moved, as expected. The 45 sampled images
+showed fixed neutral backgrounds, complete objects, and no obvious black,
+clipped, or displaced renders. This inspection is a pre-review sanity check,
+not the user's release of the human gate. No Fold smoke or training was run.
+
 ## Smoke and contact-sheet review checklist
 
 - Confirm scene metadata names `multiview_render_v2` and

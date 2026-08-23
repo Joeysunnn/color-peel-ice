@@ -456,3 +456,25 @@ success.
 - Quick visual inspection showed clear cube face-proportion changes, stable
   framing/background, and a complete cylinder with visible top ellipse. No
   full v2 180-view render, realization, contact sheet, or Fold training ran.
+
+## 2026-08-23 — full orbit renderer v2 realization
+
+- After the user accepted the v2 smoke, the clean server checkout at
+  `f7bc52dffa32345ee09cc25804d67866f68f49de` executed a fresh canonical run:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-200500__clevr_subject_color_3x3__multiview-render-v2__f7bc52d__420000`.
+- Blender 4.2.11/Cycles CUDA used GPU 3. The full command had neither
+  `--limit` nor `--resume`; it succeeded with 180/180 realization rows,
+  180/180 `ok` status rows, zero partial outputs, and 20 unique RGB hashes in
+  each of nine cells.
+- `realize` validated all 180 views. It generated a 180-row human-review CSV,
+  a 45-image contact sheet, three image-only folds of 96 JPEGs each, and nine
+  turquoise configs. Each concept directory contains exactly 16 JPEGs and no
+  other files; all configs remain `pending_human_review`.
+- The contact sheet is 1000x2016 and has SHA-256
+  `0a674ce117d7d34f87c0750fdf48da1fef3aec03336f95574529aaa577ae655cb`.
+  Evidence inspection found visibly changing cube faces and cylinder
+  top/side proportions, expected sphere highlight/shadow movement, fixed
+  neutral backgrounds, and no obvious black or clipped sampled image.
+- No Fold smoke, 1500-step Fold training, factor-aware loss run, or natural
+  multi-object run was started. The next action remains the user's review of
+  the v2 contact sheet and review ledger.
