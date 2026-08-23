@@ -33,3 +33,10 @@ assets. The tracked Blender adapter is a renderer declaration, not success
 evidence. Rendering must first pass an isolated one-view runtime smoke and then
 the complete realization validator. Fold training remains pending even after
 realization until the contact sheet and review CSV receive human approval.
+
+`clevr_multiview_protocol_v2.json` and its separate schema select
+`multiview_render_v2`. They preserve the v1 grid, seeds, view splits, folds,
+background pixel values, light policy, and realization contract. Their only
+scientific change is object-centered camera orbit sampling. v1 remains the
+default protocol; v2 must be selected explicitly with `--protocol` and may not
+resume into a v1 render root (or vice versa).

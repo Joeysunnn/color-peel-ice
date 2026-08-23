@@ -24,12 +24,70 @@ BASE_MANIFEST = (
 PROTOCOL_MANIFEST = (
     REPO_ROOT / "experiments" / "clevr_subject_color_3x3" / "manifests" / "clevr_multiview_protocol.json"
 )
+PROTOCOL_V2_MANIFEST = (
+    REPO_ROOT / "experiments" / "clevr_subject_color_3x3" / "manifests" / "clevr_multiview_protocol_v2.json"
+)
+
+
+def _look_at_quaternion(location, target):
+    direction = [target[index] - location[index] for index in range(3)]
+    direction_norm = math.sqrt(sum(value * value for value in direction))
+    direction = [value / direction_norm for value in direction]
+    projection = direction[2]
+    y_axis = [-projection * direction[0], -projection * direction[1], 1.0 - projection * direction[2]]
+    y_norm = math.sqrt(sum(value * value for value in y_axis))
+    y_axis = [value / y_norm for value in y_axis]
+    z_axis = [-value for value in direction]
+    x_axis = [
+        y_axis[1] * z_axis[2] - y_axis[2] * z_axis[1],
+        y_axis[2] * z_axis[0] - y_axis[0] * z_axis[2],
+        y_axis[0] * z_axis[1] - y_axis[1] * z_axis[0],
+    ]
+    matrix = [
+        [x_axis[0], y_axis[0], z_axis[0]],
+        [x_axis[1], y_axis[1], z_axis[1]],
+        [x_axis[2], y_axis[2], z_axis[2]],
+    ]
+    trace = matrix[0][0] + matrix[1][1] + matrix[2][2]
+    if trace > 0.0:
+        scale = math.sqrt(trace + 1.0) * 2.0
+        return [
+            0.25 * scale,
+            (matrix[2][1] - matrix[1][2]) / scale,
+            (matrix[0][2] - matrix[2][0]) / scale,
+            (matrix[1][0] - matrix[0][1]) / scale,
+        ]
+    largest = max(range(3), key=lambda index: matrix[index][index])
+    if largest == 0:
+        scale = math.sqrt(1.0 + matrix[0][0] - matrix[1][1] - matrix[2][2]) * 2.0
+        return [
+            (matrix[2][1] - matrix[1][2]) / scale,
+            0.25 * scale,
+            (matrix[0][1] + matrix[1][0]) / scale,
+            (matrix[0][2] + matrix[2][0]) / scale,
+        ]
+    if largest == 1:
+        scale = math.sqrt(1.0 + matrix[1][1] - matrix[0][0] - matrix[2][2]) * 2.0
+        return [
+            (matrix[0][2] - matrix[2][0]) / scale,
+            (matrix[0][1] + matrix[1][0]) / scale,
+            0.25 * scale,
+            (matrix[1][2] + matrix[2][1]) / scale,
+        ]
+    scale = math.sqrt(1.0 + matrix[2][2] - matrix[0][0] - matrix[1][1]) * 2.0
+    return [
+        (matrix[1][0] - matrix[0][1]) / scale,
+        (matrix[0][2] + matrix[2][0]) / scale,
+        (matrix[1][2] + matrix[2][1]) / scale,
+        0.25 * scale,
+    ]
 
 
 class MultiviewProtocolTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.base, cls.protocol = MODULE.load_inputs(BASE_MANIFEST, PROTOCOL_MANIFEST)
+        cls.base_v2, cls.protocol_v2 = MODULE.load_inputs(BASE_MANIFEST, PROTOCOL_V2_MANIFEST)
 
     def test_requests_are_nine_cells_by_twenty_views(self):
         requests = MODULE.build_render_requests(self.base, self.protocol)
@@ -58,6 +116,17 @@ class MultiviewProtocolTests(unittest.TestCase):
             for field in MODULE.RENDERER_FIELDS:
                 self.assertIsNone(row[field])
             self.assertIsNone(row["empirical_rgb"])
+
+    def test_v2_plan_is_profile_separated_and_deterministic(self):
+        requests_v1 = MODULE.build_render_requests(self.base, self.protocol)
+        requests_v2 = MODULE.build_render_requests(self.base_v2, self.protocol_v2)
+        self.assertEqual(len(requests_v2), 180)
+        self.assertEqual(requests_v2[0]["renderer_profile_id"], "multiview_render_v2")
+        self.assertEqual(requests_v2[-1]["render_seed"], 420819)
+        self.assertNotEqual(MODULE.canonical_sha256(requests_v1), MODULE.canonical_sha256(requests_v2))
+        for row in requests_v2:
+            for field in MODULE.RENDERER_FIELDS:
+                self.assertIsNone(row[field])
 
     def test_vector_sum_allows_only_blender_float32_rounding(self):
         MODULE._validate_vector_sum(
@@ -124,11 +193,12 @@ class MultiviewRealizationTests(unittest.TestCase):
         self.render_root.mkdir()
         self.output = self.root / "prepared"
         self.base, self.protocol = MODULE.load_inputs(BASE_MANIFEST, PROTOCOL_MANIFEST)
+        self.base_v2, self.protocol_v2 = MODULE.load_inputs(BASE_MANIFEST, PROTOCOL_V2_MANIFEST)
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def _make_realization(self):
+    def _make_realization(self, version=1):
         mask_template = self.root / "mask.png"
         background_template = self.root / "background.png"
         mask = Image.new("L", (512, 512), 0)
@@ -136,12 +206,15 @@ class MultiviewRealizationTests(unittest.TestCase):
         mask.save(mask_template)
         ImageOps.invert(mask).save(background_template)
 
-        requests = MODULE.build_render_requests(self.base, self.protocol)
+        protocol = self.protocol if version == 1 else self.protocol_v2
+        profile = MODULE.EXPECTED_PROFILE if version == 1 else MODULE.EXPECTED_PROFILE_V2
+        renderer_profile = MODULE.EXPECTED_RENDERER_PROFILE if version == 1 else MODULE.EXPECTED_RENDERER_PROFILE_V2
+        requests = MODULE.build_render_requests(self.base, protocol)
         asset_hashes = {"base_scene_blendfile": "a" * 64, "properties_json": "b" * 64}
         contract = {
             "schema_version": 1,
-            "profile_id": MODULE.EXPECTED_PROFILE["profile_id"],
-            "profile_sha256": MODULE.canonical_sha256(MODULE.EXPECTED_PROFILE),
+            "profile_id": profile["profile_id"],
+            "profile_sha256": MODULE.canonical_sha256(profile),
             "requests_sha256": MODULE.canonical_sha256(requests),
             "request_count": 180,
             "asset_sha256": asset_hashes,
@@ -165,20 +238,72 @@ class MultiviewRealizationTests(unittest.TestCase):
             Image.new("RGB", (512, 512), (pixel_value, 20 + request["cell_index"] * 10, 30)).save(image_path)
             shutil.copyfile(mask_template, mask_path)
             shutil.copyfile(background_template, background_mask_path)
-            jitter = MODULE.official_jitter_metadata(request["render_seed"], MODULE.EXPECTED_PROFILE)
+            jitter = (
+                MODULE.official_jitter_metadata(request["render_seed"], profile)
+                if version == 1
+                else MODULE.orbit_jitter_metadata(request["render_seed"], profile)
+            )
             camera_base = [7.4, -6.5, 5.3]
-            camera = {
-                "name": "Camera",
-                "base_location": camera_base,
-                "jitter_offset": jitter["camera_offset"],
-                "final_location": [camera_base[i] + jitter["camera_offset"][i] for i in range(3)],
-                "rotation_euler": [1.0, 0.0, 0.7],
-                "rotation_policy": "preserve_base_scene",
-                "lens": 35.0,
-                "sensor_width": 32.0,
-            }
+            if version == 1:
+                camera = {
+                    "name": "Camera",
+                    "base_location": camera_base,
+                    "jitter_offset": jitter["camera_offset"],
+                    "final_location": [camera_base[i] + jitter["camera_offset"][i] for i in range(3)],
+                    "rotation_euler": [1.0, 0.0, 0.7],
+                    "rotation_policy": "preserve_base_scene",
+                    "lens": 35.0,
+                    "sensor_width": 32.0,
+                }
+            else:
+                object_scale = 1.3 / math.sqrt(2.0) if request["shape"] == "cube" else 1.3
+                target = [0.0, 0.0, object_scale]
+                base_spherical = MODULE.spherical_pose(camera_base, target)
+                orbit_jitter = jitter["camera_orbit_jitter"]
+                final_spherical = {
+                    "radius": base_spherical["radius"] * (1.0 + orbit_jitter["distance_fraction"]),
+                    "azimuth_degrees": (
+                        base_spherical["azimuth_degrees"] + orbit_jitter["azimuth_degrees"] + 180.0
+                    ) % 360.0 - 180.0,
+                    "elevation_degrees": base_spherical["elevation_degrees"] + orbit_jitter["elevation_degrees"],
+                }
+                final_location = MODULE.orbit_location(target, **final_spherical)
+                quaternion = _look_at_quaternion(final_location, target)
+                alignment = MODULE.look_at_alignment(final_location, target, quaternion)
+                y_up_alignment = MODULE.look_at_y_up_alignment(final_location, target, quaternion)
+                camera = {
+                    "name": "Camera",
+                    "sampling_model": profile["camera"]["sampling_model"],
+                    "target_policy": "object_location",
+                    "look_at_target": target,
+                    "base_pose": {
+                        "location": camera_base,
+                        "rotation_euler_xyz": [1.0, 0.0, 0.7],
+                        "rotation_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0],
+                        "spherical": base_spherical,
+                    },
+                    "orbit_jitter": orbit_jitter,
+                    "requested_final_spherical": final_spherical,
+                    "final_pose": {
+                        "location": final_location,
+                        "rotation_euler_xyz": [0.0, 0.0, 0.0],
+                        "rotation_quaternion_wxyz": quaternion,
+                        "spherical": MODULE.spherical_pose(final_location, target),
+                    },
+                    "look_at": {
+                        "track_axis": "-Z",
+                        "up_axis": "Y",
+                        "alignment_cosine": alignment,
+                        "y_up_alignment_cosine": y_up_alignment,
+                        "target_projected_xy": [0.5, 0.5],
+                    },
+                    "rotation_policy": profile["camera"]["rotation_policy"],
+                    "lens": 35.0,
+                    "sensor_width": 32.0,
+                    "shift_xy": [0.0, 0.0],
+                }
             light = {
-                "order": MODULE.EXPECTED_PROFILE["lights"]["order"],
+                "order": profile["lights"]["order"],
                 "lights": {},
                 "fixed_lights": {
                     "Area": {
@@ -190,7 +315,7 @@ class MultiviewRealizationTests(unittest.TestCase):
                     }
                 },
             }
-            for name in MODULE.EXPECTED_PROFILE["lights"]["order"]:
+            for name in profile["lights"]["order"]:
                 offset = jitter["light_offsets"][name]
                 base = light_bases[name]
                 light["lights"][name] = {
@@ -201,10 +326,10 @@ class MultiviewRealizationTests(unittest.TestCase):
                     "type": "AREA",
                     "energy": 1000.0,
                 }
-            background = MODULE.EXPECTED_PROFILE["background"]
+            background = profile["background"]
             object_scale = 1.3 / math.sqrt(2.0) if request["shape"] == "cube" else 1.3
             scene = {
-                "renderer_profile_id": MODULE.EXPECTED_PROFILE["profile_id"],
+                "renderer_profile_id": renderer_profile["id"],
                 "render_seed": request["render_seed"],
                 "cycles_seed": request["render_seed"],
                 "camera": camera,
@@ -239,7 +364,7 @@ class MultiviewRealizationTests(unittest.TestCase):
                 "image": image_path.relative_to(self.render_root).as_posix(),
                 "mask": mask_path.relative_to(self.render_root).as_posix(),
                 "background_mask": background_mask_path.relative_to(self.render_root).as_posix(),
-                "renderer_profile_id": MODULE.EXPECTED_PROFILE["profile_id"],
+                "renderer_profile_id": renderer_profile["id"],
                 "render_contract_sha256": contract_sha256,
                 "foreground_pixels": 201 * 201,
             }
@@ -304,6 +429,44 @@ class MultiviewRealizationTests(unittest.TestCase):
                     "cube+sphere+cylinder+red+turquoise+gray",
                 )
         self.assertEqual(len(list((self.output / "folds").glob("fold_*/train_config_seed*.json"))), 9)
+
+    def test_v2_realization_and_fold_outputs_are_profile_separated(self):
+        _, manifest = self._make_realization(version=2)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = MODULE.main([
+                "--protocol", str(PROTOCOL_V2_MANIFEST),
+                "realize",
+                "--render-root", str(self.render_root),
+                "--render-manifest", str(manifest),
+                "--output-dir", str(self.output),
+            ])
+        self.assertEqual(result["status"], "validated")
+        self.assertEqual(result["realized_view_count"], 180)
+        first_config = json.loads(
+            (self.output / "folds" / "fold_a" / "train_config_seed42.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(first_config["run"]["variant"], "multiview_v2_fold_a_seed42")
+        self.assertEqual(
+            first_config["protocol"]["multiview_protocol"],
+            "clevr_subject_color_3x3_multiview_v2",
+        )
+
+    def test_v2_orbit_metadata_rejects_wrong_target_and_roll(self):
+        records, _ = self._make_realization(version=2)
+        key = (records[0]["cell_id"], records[0]["view_index"])
+        MODULE._validate_view_metadata(records[0], key, MODULE.EXPECTED_PROFILE_V2)
+        wrong_target = json.loads(json.dumps(records[0]))
+        wrong_target["camera"]["look_at_target"][2] += 0.1
+        with self.assertRaisesRegex(MODULE.ProtocolError, "base spherical pose"):
+            MODULE._validate_view_metadata(wrong_target, key, MODULE.EXPECTED_PROFILE_V2)
+        wrong_roll = json.loads(json.dumps(records[0]))
+        wrong_roll["camera"]["final_pose"]["rotation_quaternion_wxyz"] = [
+            -value for value in wrong_roll["camera"]["final_pose"]["rotation_quaternion_wxyz"]
+        ]
+        MODULE._validate_view_metadata(wrong_roll, key, MODULE.EXPECTED_PROFILE_V2)
+        wrong_roll["camera"]["final_pose"]["rotation_quaternion_wxyz"] = [1.0, 0.0, 0.0, 0.0]
+        with self.assertRaisesRegex(MODULE.ProtocolError, "object center|Y-up"):
+            MODULE._validate_view_metadata(wrong_roll, key, MODULE.EXPECTED_PROFILE_V2)
 
     def test_missing_renderer_file_is_rejected(self):
         records, _ = self._make_realization()

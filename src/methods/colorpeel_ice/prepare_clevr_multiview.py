@@ -30,8 +30,14 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.methods.colorpeel_ice.multiview_render_contract import (
     EXPECTED_PROFILE,
+    EXPECTED_PROFILE_V2,
     canonical_sha256,
+    look_at_alignment,
+    look_at_y_up_alignment,
+    orbit_jitter_metadata,
+    orbit_location,
     official_jitter_metadata,
+    spherical_pose,
 )
 
 try:
@@ -66,11 +72,38 @@ EXPECTED_RENDERER_PROFILE = {
         "ground_rgba": [0.5, 0.5, 0.5, 1.0],
     },
 }
+EXPECTED_RENDERER_PROFILE_V2 = {
+    "id": "multiview_render_v2",
+    "config": "../configs/multiview_render_v2.json",
+    "background": EXPECTED_PROFILE_V2["background"],
+}
+EXPECTED_PROTOCOLS = {
+    "clevr_subject_color_3x3_multiview_v1": {
+        "schema": "clevr_multiview_protocol.schema.json",
+        "version": 1,
+        "profile": EXPECTED_PROFILE,
+        "renderer_profile": EXPECTED_RENDERER_PROFILE,
+    },
+    "clevr_subject_color_3x3_multiview_v2": {
+        "schema": "clevr_multiview_protocol_v2.schema.json",
+        "version": 2,
+        "profile": EXPECTED_PROFILE_V2,
+        "renderer_profile": EXPECTED_RENDERER_PROFILE_V2,
+    },
+}
 EXPECTED_FOLDS = {
     "A": {("cube", "red"), ("sphere", "cyan"), ("cylinder", "gray")},
     "B": {("cube", "cyan"), ("sphere", "gray"), ("cylinder", "red")},
     "C": {("cube", "gray"), ("sphere", "red"), ("cylinder", "cyan")},
 }
+
+
+def _protocol_spec(protocol: dict[str, Any]) -> dict[str, Any]:
+    protocol_id = protocol.get("protocol_id")
+    _require(protocol_id in EXPECTED_PROTOCOLS, "Protocol ID changed")
+    return EXPECTED_PROTOCOLS[protocol_id]
+
+
 TRAINING_SEEDS = (42, 43, 44)
 
 
@@ -125,12 +158,9 @@ def load_inputs(base_manifest_path: Path, protocol_path: Path) -> tuple[dict[str
 
 
 def validate_protocol(base_manifest: dict[str, Any], protocol: dict[str, Any]) -> None:
-    _require(protocol.get("$schema") == "clevr_multiview_protocol.schema.json", "Protocol schema changed")
-    _require(protocol.get("version") == 1, "Protocol version must be 1")
-    _require(
-        protocol.get("protocol_id") == "clevr_subject_color_3x3_multiview_v1",
-        "Protocol ID changed",
-    )
+    spec = _protocol_spec(protocol)
+    _require(protocol.get("$schema") == spec["schema"], "Protocol schema changed")
+    _require(protocol.get("version") == spec["version"], "Protocol version changed")
     _require(protocol.get("base_manifest") == "clevr_3x3_manifest.json", "Protocol base manifest changed")
     samples = base_manifest.get("samples", [])
     _require(len(samples) == 9, "Base manifest must contain exactly nine cells")
@@ -154,7 +184,7 @@ def validate_protocol(base_manifest: dict[str, Any], protocol: dict[str, Any]) -
         "cell_stride": 100,
         "formula": "base + cell_index * cell_stride + view_index",
     }, "Render seed rule differs from the locked protocol")
-    _require(protocol.get("renderer_profile") == EXPECTED_RENDERER_PROFILE, "Renderer profile changed")
+    _require(protocol.get("renderer_profile") == spec["renderer_profile"], "Renderer profile changed")
 
     folds = protocol.get("folds", [])
     actual_folds = {
@@ -186,6 +216,7 @@ def validate_protocol(base_manifest: dict[str, Any], protocol: dict[str, Any]) -
 
 
 def build_render_requests(base_manifest: dict[str, Any], protocol: dict[str, Any]) -> list[dict[str, Any]]:
+    profile = _protocol_spec(protocol)["profile"]
     requests: list[dict[str, Any]] = []
     for cell_index, cell in enumerate(base_manifest["samples"]):
         for view_index in range(20):
@@ -202,8 +233,8 @@ def build_render_requests(base_manifest: dict[str, Any], protocol: dict[str, Any
                 "view_index": view_index,
                 "split": split,
                 "render_seed": 420000 + cell_index * 100 + view_index,
-                "renderer_profile_id": EXPECTED_PROFILE["profile_id"],
-                "renderer_profile_sha256": canonical_sha256(EXPECTED_PROFILE),
+                "renderer_profile_id": profile["profile_id"],
+                "renderer_profile_sha256": canonical_sha256(profile),
                 "camera": None,
                 "light": None,
                 "background": None,
@@ -223,6 +254,7 @@ def validate_render_requests(
     base_manifest: dict[str, Any],
     protocol: dict[str, Any],
 ) -> None:
+    profile = _protocol_spec(protocol)["profile"]
     _require(len(requests) == 180, f"Expected 180 render requests, got {len(requests)}")
     keys = {(record.get("cell_id"), record.get("view_index")) for record in requests}
     _require(len(keys) == 180, "Each cell/view pair must be unique")
@@ -238,9 +270,9 @@ def validate_render_requests(
         _require(record.get("cell_index") == cell_index, f"Wrong cell_index for {cell_id}")
         _require(record.get("render_seed") == 420000 + cell_index * 100 + view_index,
                  f"Wrong render_seed for {cell_id} view {view_index}")
-        _require(record.get("renderer_profile_id") == EXPECTED_PROFILE["profile_id"],
+        _require(record.get("renderer_profile_id") == profile["profile_id"],
                  f"Wrong renderer profile for {cell_id}")
-        _require(record.get("renderer_profile_sha256") == canonical_sha256(EXPECTED_PROFILE),
+        _require(record.get("renderer_profile_sha256") == canonical_sha256(profile),
                  f"Wrong renderer profile hash for {cell_id}")
         for field in ("shape", "color", "subject_token", "color_token"):
             _require(record.get(field) == cell[field], f"Wrong {field} for {cell_id}")
@@ -263,6 +295,7 @@ def plan_protocol(
     renderer: Path | None,
 ) -> dict[str, Any]:
     requests = build_render_requests(base_manifest, protocol)
+    profile = _protocol_spec(protocol)["profile"]
     output_dir = output_dir.resolve()
     _require_empty_output_dir(output_dir)
     requests_path = output_dir / "render_requests.jsonl"
@@ -274,8 +307,8 @@ def plan_protocol(
         "blocked_reason": None if renderer_available else "multiview_renderer_not_provided_or_missing",
         "renderer": str(renderer_path) if renderer_path is not None else None,
         "renderer_available": renderer_available,
-        "renderer_profile_id": EXPECTED_PROFILE["profile_id"],
-        "renderer_profile_sha256": canonical_sha256(EXPECTED_PROFILE),
+        "renderer_profile_id": profile["profile_id"],
+        "renderer_profile_sha256": canonical_sha256(profile),
         "render_request_manifest": str(requests_path),
         "request_count": 180,
         "images_created": 0,
@@ -340,10 +373,27 @@ def _vector_matches(actual: Any, expected: list[float]) -> bool:
     )
 
 
-def _validate_view_metadata(record: dict[str, Any], key: tuple[str, int]) -> None:
-    expected = official_jitter_metadata(record["render_seed"], EXPECTED_PROFILE)
-    camera = record["camera"]
-    _require(camera.get("name") == "Camera", f"Camera name disagrees for {key}")
+def _numeric_vector(actual: Any, length: int) -> bool:
+    return (
+        isinstance(actual, list)
+        and len(actual) == length
+        and all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in actual)
+    )
+
+
+def _numeric_mapping_matches(actual: Any, expected: dict[str, float]) -> bool:
+    return (
+        isinstance(actual, dict)
+        and set(actual) == set(expected)
+        and all(
+            isinstance(actual[name], (int, float))
+            and abs(float(actual[name]) - float(expected[name])) <= 1e-6
+            for name in expected
+        )
+    )
+
+
+def _validate_v1_camera(camera: dict[str, Any], expected: dict[str, Any], key: tuple[str, int]) -> None:
     _require(camera.get("jitter_offset") == expected["camera_offset"], f"Camera jitter disagrees for {key}")
     _require(camera.get("rotation_policy") == "preserve_base_scene", f"Camera rotation policy disagrees for {key}")
     _validate_vector_sum(
@@ -351,15 +401,109 @@ def _validate_view_metadata(record: dict[str, Any], key: tuple[str, int]) -> Non
     )
     _require(isinstance(camera.get("rotation_euler"), list) and len(camera["rotation_euler"]) == 3,
              f"Camera rotation is missing for {key}")
+
+
+def _validate_v2_camera(
+    camera: dict[str, Any], expected: dict[str, Any], profile: dict[str, Any], key: tuple[str, int]
+) -> None:
+    _require(camera.get("sampling_model") == profile["camera"]["sampling_model"],
+             f"Camera sampling model disagrees for {key}")
+    _require(camera.get("target_policy") == "object_location", f"Camera target policy disagrees for {key}")
+    _require(camera.get("rotation_policy") == profile["camera"]["rotation_policy"],
+             f"Camera rotation policy disagrees for {key}")
+    target = camera.get("look_at_target")
+    _require(isinstance(target, list) and len(target) == 3 and
+             all(isinstance(value, (int, float)) for value in target),
+             f"Camera look-at target is invalid for {key}")
+    jitter = camera.get("orbit_jitter")
+    expected_jitter = expected["camera_orbit_jitter"]
+    _require(_numeric_mapping_matches(jitter, expected_jitter), f"Camera orbit jitter disagrees for {key}")
+    _require(-profile["camera"]["azimuth_jitter_degrees"] <= float(jitter["azimuth_degrees"]) <
+             profile["camera"]["azimuth_jitter_degrees"], f"Camera azimuth jitter is out of range for {key}")
+    _require(-profile["camera"]["elevation_jitter_degrees"] <= float(jitter["elevation_degrees"]) <
+             profile["camera"]["elevation_jitter_degrees"], f"Camera elevation jitter is out of range for {key}")
+    _require(-profile["camera"]["distance_jitter_fraction"] <= float(jitter["distance_fraction"]) <
+             profile["camera"]["distance_jitter_fraction"], f"Camera distance jitter is out of range for {key}")
+
+    base_pose = camera.get("base_pose", {})
+    final_pose = camera.get("final_pose", {})
+    base_location = base_pose.get("location")
+    final_location = final_pose.get("location")
+    _require(_numeric_vector(base_location, 3), f"Camera base location is invalid for {key}")
+    _require(_numeric_vector(final_location, 3), f"Camera final location is invalid for {key}")
+    recomputed_base = spherical_pose(base_location, target)
+    _require(_numeric_mapping_matches(base_pose.get("spherical"), recomputed_base),
+             f"Camera base spherical pose disagrees for {key}")
+    requested = {
+        "radius": recomputed_base["radius"] * (1.0 + float(jitter["distance_fraction"])),
+        "azimuth_degrees": (
+            recomputed_base["azimuth_degrees"] + float(jitter["azimuth_degrees"]) + 180.0
+        ) % 360.0 - 180.0,
+        "elevation_degrees": recomputed_base["elevation_degrees"] + float(jitter["elevation_degrees"]),
+    }
+    _require(requested["radius"] > 0.0 and -89.0 < requested["elevation_degrees"] < 89.0,
+             f"Camera requested orbit pose is invalid for {key}")
+    _require(_numeric_mapping_matches(camera.get("requested_final_spherical"), requested),
+             f"Camera requested final spherical pose disagrees for {key}")
+    expected_location = orbit_location(
+        target, requested["radius"], requested["azimuth_degrees"], requested["elevation_degrees"]
+    )
+    _require(_vector_matches(final_location, expected_location), f"Camera final orbit location disagrees for {key}")
+    _require(_numeric_mapping_matches(final_pose.get("spherical"), spherical_pose(final_location, target)),
+             f"Camera final spherical pose disagrees for {key}")
+    quaternion = final_pose.get("rotation_quaternion_wxyz")
+    _require(isinstance(quaternion, list) and len(quaternion) == 4 and
+             all(isinstance(value, (int, float)) for value in quaternion),
+             f"Camera final quaternion is invalid for {key}")
+    quaternion_norm = math.sqrt(sum(float(value) ** 2 for value in quaternion))
+    _require(abs(quaternion_norm - 1.0) <= 1e-6, f"Camera final quaternion is not normalized for {key}")
+    alignment = look_at_alignment(final_location, target, quaternion)
+    y_up_alignment = look_at_y_up_alignment(final_location, target, quaternion)
+    _require(alignment >= 1.0 - 1e-6, f"Camera does not look at object center for {key}")
+    _require(y_up_alignment >= 1.0 - 1e-6, f"Camera roll does not preserve Y-up for {key}")
+    look_at = camera.get("look_at", {})
+    _require(look_at.get("track_axis") == "-Z" and look_at.get("up_axis") == "Y",
+             f"Camera look-at axes disagree for {key}")
+    _require(isinstance(look_at.get("alignment_cosine"), (int, float)) and
+             abs(float(look_at["alignment_cosine"]) - alignment) <= 1e-6,
+             f"Camera look-at alignment metadata disagrees for {key}")
+    _require(isinstance(look_at.get("y_up_alignment_cosine"), (int, float)) and
+             abs(float(look_at["y_up_alignment_cosine"]) - y_up_alignment) <= 1e-6,
+             f"Camera Y-up alignment metadata disagrees for {key}")
+    projected = look_at.get("target_projected_xy")
+    _require(_vector_matches(projected, [0.5, 0.5]), f"Camera target is not at optical center for {key}")
+    _require(_vector_matches(camera.get("shift_xy"), [0.0, 0.0]), f"Camera lens shift changed for {key}")
+    for pose_name, pose in (("base", base_pose), ("final", final_pose)):
+        _require(isinstance(pose.get("rotation_euler_xyz"), list) and len(pose["rotation_euler_xyz"]) == 3,
+                 f"Camera {pose_name} Euler rotation is missing for {key}")
+        _require(isinstance(pose.get("rotation_quaternion_wxyz"), list) and
+                 len(pose["rotation_quaternion_wxyz"]) == 4,
+                 f"Camera {pose_name} quaternion is missing for {key}")
+
+
+def _validate_view_metadata(
+    record: dict[str, Any], key: tuple[str, int], profile: dict[str, Any] = EXPECTED_PROFILE
+) -> None:
+    expected = (
+        official_jitter_metadata(record["render_seed"], profile)
+        if profile["profile_id"] == "multiview_render_v1"
+        else orbit_jitter_metadata(record["render_seed"], profile)
+    )
+    camera = record["camera"]
+    _require(camera.get("name") == "Camera", f"Camera name disagrees for {key}")
+    if profile["profile_id"] == "multiview_render_v1":
+        _validate_v1_camera(camera, expected, key)
+    else:
+        _validate_v2_camera(camera, expected, profile, key)
     _require(isinstance(camera.get("lens"), (int, float)) and camera["lens"] > 0, f"Camera lens is invalid for {key}")
     _require(isinstance(camera.get("sensor_width"), (int, float)) and camera["sensor_width"] > 0,
              f"Camera sensor is invalid for {key}")
 
     light = record["light"]
-    _require(light.get("order") == EXPECTED_PROFILE["lights"]["order"], f"Light order disagrees for {key}")
+    _require(light.get("order") == profile["lights"]["order"], f"Light order disagrees for {key}")
     lights = light.get("lights", {})
-    _require(set(lights) == set(EXPECTED_PROFILE["lights"]["order"]), f"Light set disagrees for {key}")
-    for name in EXPECTED_PROFILE["lights"]["order"]:
+    _require(set(lights) == set(profile["lights"]["order"]), f"Light set disagrees for {key}")
+    for name in profile["lights"]["order"]:
         metadata = lights[name]
         expected_offset = expected["light_offsets"][name]
         _require(metadata.get("jitter_offset") == expected_offset, f"{name} jitter disagrees for {key}")
@@ -371,9 +515,9 @@ def _validate_view_metadata(record: dict[str, Any], key: tuple[str, int]) -> Non
         _require(isinstance(metadata.get("type"), str) and metadata["type"], f"{name} type is missing for {key}")
         _require(isinstance(metadata.get("energy"), (int, float)), f"{name} energy is missing for {key}")
     fixed_lights = light.get("fixed_lights", {})
-    _require(set(fixed_lights) == set(EXPECTED_PROFILE["lights"]["fixed_order"]),
+    _require(set(fixed_lights) == set(profile["lights"]["fixed_order"]),
              f"Fixed light set disagrees for {key}")
-    for name in EXPECTED_PROFILE["lights"]["fixed_order"]:
+    for name in profile["lights"]["fixed_order"]:
         metadata = fixed_lights[name]
         _require(metadata.get("base_location") == metadata.get("final_location"),
                  f"Fixed light {name} moved for {key}")
@@ -439,12 +583,15 @@ def validate_realization(
 ) -> list[dict[str, Any]]:
     render_root = render_root.resolve()
     _require(render_root.is_dir(), f"Render root is not a directory: {render_root}")
+    spec = _protocol_spec(protocol)
+    profile = spec["profile"]
+    renderer_profile = spec["renderer_profile"]
     expected = build_render_requests(base_manifest, protocol)
     contract = _read_json(render_root / "render_contract.json")
     _require(isinstance(contract, dict), "Render contract must be an object")
     _require(contract.get("schema_version") == 1, "Render contract version changed")
-    _require(contract.get("profile_id") == EXPECTED_PROFILE["profile_id"], "Render contract profile changed")
-    _require(contract.get("profile_sha256") == canonical_sha256(EXPECTED_PROFILE), "Render profile hash changed")
+    _require(contract.get("profile_id") == profile["profile_id"], "Render contract profile changed")
+    _require(contract.get("profile_sha256") == canonical_sha256(profile), "Render profile hash changed")
     _require(contract.get("requests_sha256") == canonical_sha256(expected), "Render request hash changed")
     _require(contract.get("request_count") == 180, "Render contract request count changed")
     _require(isinstance(contract.get("asset_sha256"), dict) and contract["asset_sha256"],
@@ -465,6 +612,7 @@ def validate_realization(
         sample["id"]: {field: set() for field in ("camera", "light")}
         for sample in base_manifest["samples"]
     }
+    base_camera_values: dict[str, set[str]] = {sample["id"]: set() for sample in base_manifest["samples"]}
     for expected_record in expected:
         key = (expected_record["cell_id"], expected_record["view_index"])
         supplied = actual_by_key[key]
@@ -477,12 +625,14 @@ def validate_realization(
             _require(isinstance(supplied.get(field), dict) and supplied[field],
                      f"Renderer must populate nonempty {field} metadata for {key}")
         _require(
-            supplied["background"] == EXPECTED_RENDERER_PROFILE["background"],
+            supplied["background"] == renderer_profile["background"],
             f"Renderer changed the fixed background for {key}",
         )
         for field in ("camera", "light"):
             metadata_values[expected_record["cell_id"]][field].add(_metadata_key(supplied[field]))
-        _validate_view_metadata(supplied, key)
+        _validate_view_metadata(supplied, key, profile)
+        if profile["profile_id"] == "multiview_render_v2":
+            base_camera_values[expected_record["cell_id"]].add(_metadata_key(supplied["camera"]["base_pose"]))
 
         paths = {
             field: _resolved_under(render_root, supplied.get(field), field)
@@ -495,7 +645,7 @@ def validate_realization(
         _require(isinstance(scene, dict), f"Scene JSON must be an object: {paths['scene_json']}")
         for field in ("render_seed", "camera", "light", "background"):
             _require(scene.get(field) == supplied[field], f"Scene {field} disagrees with realization for {key}")
-        _require(scene.get("renderer_profile_id") == EXPECTED_RENDERER_PROFILE["id"],
+        _require(scene.get("renderer_profile_id") == renderer_profile["id"],
                  f"Scene renderer profile disagrees for {key}")
         _require(scene.get("cycles_seed") == expected_record["render_seed"], f"Scene cycles seed disagrees for {key}")
         renderer = scene.get("renderer", {})
@@ -528,12 +678,17 @@ def validate_realization(
             _vector_matches(objects[0].get("3d_coords"), [0.0, 0.0, expected_scale]),
             f"Scene object coordinates disagree for {key}",
         )
+        if profile["profile_id"] == "multiview_render_v2":
+            _require(
+                _vector_matches(supplied["camera"].get("look_at_target"), objects[0]["3d_coords"]),
+                f"Camera look-at target is not the object center for {key}",
+            )
 
         hashes = supplied.get("artifact_sha256", {})
         _require(isinstance(hashes, dict), f"Artifact hashes are missing for {key}")
         for field, path in paths.items():
             _require(hashes.get(field) == _file_sha256(path), f"Artifact hash disagrees for {key}: {field}")
-        _require(supplied.get("renderer_profile_id") == EXPECTED_RENDERER_PROFILE["id"],
+        _require(supplied.get("renderer_profile_id") == renderer_profile["id"],
                  f"Realization renderer profile disagrees for {key}")
         _require(supplied.get("render_contract_sha256") == contract_sha256,
                  f"Render contract hash disagrees for {key}")
@@ -559,6 +714,9 @@ def validate_realization(
         _require(len(hashes) == 20, f"Cell {cell_id} must contain 20 distinct rendered images")
         for field, values in metadata_values[cell_id].items():
             _require(len(values) > 1, f"Cell {cell_id} has no realized {field} variation")
+        if profile["profile_id"] == "multiview_render_v2":
+            _require(len(base_camera_values[cell_id]) == 1,
+                     f"Cell {cell_id} changed the base camera pose across views")
     return realized
 
 
@@ -734,7 +892,8 @@ def build_fold_outputs(
         for seed in TRAINING_SEEDS:
             train_config = json.loads(json.dumps(base_config))
             train_config["status"] = "pending_human_review"
-            train_config["run"]["variant"] = f"multiview_fold_{fold_id.lower()}_seed{seed}"
+            variant_prefix = "multiview" if protocol["version"] == 1 else "multiview_v2"
+            train_config["run"]["variant"] = f"{variant_prefix}_fold_{fold_id.lower()}_seed{seed}"
             train_config["run"]["seed"] = seed
             train_config["data_manifest"] = str(realized_manifest_path)
             train_config["args"]["concepts_list"] = str(concepts_path)

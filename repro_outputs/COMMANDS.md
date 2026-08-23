@@ -512,3 +512,29 @@ the user reviews `multiview_human_review.csv` and
 There is no approved command/config for a factor-aware loss or natural
 multi-object evaluation. Both remain conditional; do not improvise an entry
 point or report an output.
+
+## Multiview renderer v2 orbit smoke — no Fold training
+
+v2 must be selected explicitly; the default remains v1:
+
+```bash
+python src/methods/colorpeel_ice/prepare_clevr_multiview.py \
+  --protocol experiments/clevr_subject_color_3x3/manifests/clevr_multiview_protocol_v2.json \
+  plan --output-dir "$RENDER_V2_RUN/protocol" \
+  --renderer scripts/methods/colorpeel_ice/render_clevr_multiview.py
+
+export CUDA_VISIBLE_DEVICES=3
+"$BLENDER" --background --python-exit-code 1 \
+  --python scripts/methods/colorpeel_ice/render_clevr_multiview.py -- \
+  --cycles-device CUDA --cycles-print-stats \
+  --requests "$RENDER_V2_RUN/protocol/render_requests.jsonl" \
+  --profile experiments/clevr_subject_color_3x3/configs/multiview_render_v2.json \
+  --output-root "$SMOKE_V2_RUN/rendered" \
+  --properties-json "$ASSETS/properties.json" \
+  --base-scene-blendfile "$ASSETS/base_scene.blend" \
+  --shape-dir "$ASSETS/shapes" --material-dir "$ASSETS/materials" --limit 1
+```
+
+Use a separate output root for every profile. Explicit `--resume` is allowed
+only with the same v2 request/profile/asset contract. This command is a real
+runtime smoke, not a realization and not authorization to start Fold training.

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "clevr_multiview_protocol_v2.schema.json",
+  "title": "ColorPeel CLEVR 3x3 orbit multiview protocol v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "protocol_id", "base_manifest", "views_per_cell", "view_splits",
+    "render_seed", "renderer_profile", "folds", "realization_contract"
+  ],
+  "properties": {
+    "$schema": {"const": "clevr_multiview_protocol_v2.schema.json"},
+    "version": {"const": 2},
+    "protocol_id": {"const": "clevr_subject_color_3x3_multiview_v2"},
+    "base_manifest": {"const": "clevr_3x3_manifest.json"},
+    "views_per_cell": {"const": 20},
+    "view_splits": {"const": {"train": {"start": 0, "stop": 16}, "audit": {"start": 16, "stop": 20}}},
+    "render_seed": {"const": {"base": 420000, "cell_stride": 100, "formula": "base + cell_index * cell_stride + view_index"}},
+    "renderer_profile": {
+      "const": {
+        "id": "multiview_render_v2",
+        "config": "../configs/multiview_render_v2.json",
+        "background": {
+          "profile_id": "clevr_neutral_fixed_v2",
+          "varied": false,
+          "world_rgba": [0.05, 0.05, 0.05, 1.0],
+          "ground_rgba": [0.5, 0.5, 0.5, 1.0]
+        }
+      }
+    },
+    "folds": {
+      "const": [
+        {"id": "A", "held_out": [["cube", "red"], ["sphere", "cyan"], ["cylinder", "gray"]]},
+        {"id": "B", "held_out": [["cube", "cyan"], ["sphere", "gray"], ["cylinder", "red"]]},
+        {"id": "C", "held_out": [["cube", "gray"], ["sphere", "red"], ["cylinder", "cyan"]]}
+      ]
+    },
+    "realization_contract": {
+      "const": {
+        "resolution": [512, 512],
+        "image_mode": "RGB",
+        "mask_mode": "L",
+        "mask_values": [0, 255],
+        "renderer_owned_fields": ["camera", "light", "background", "scene_json", "image", "mask", "background_mask"],
+        "empirical_rgb": {"space": "srgb_u8", "statistic": "masked_mean", "source": "realized_view_gt_mask"}
+      }
+    }
+  }
+}

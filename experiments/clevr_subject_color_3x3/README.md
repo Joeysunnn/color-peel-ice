@@ -144,6 +144,12 @@ This stage ends at the generated human-review CSV and the 45-image contact
 sheet (views 0/4/8/12/16 for every cell). Fold training is prohibited until a
 new human approval is recorded.
 
+`multiview_render_v2` is an additive variant documented in
+[`reports/03_multiview_orbit_v2.md`](reports/03_multiview_orbit_v2.md). Its only
+scientific change from v1 is deterministic object-centered orbit sampling
+(±18° azimuth, ±10° elevation, ±5% distance) with camera look-at recomputed for
+the realized object center. v1 remains unchanged and remains the default.
+
 ## Records
 
 - Manifest policy: [`manifests/README.md`](manifests/README.md)

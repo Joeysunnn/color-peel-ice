@@ -30,9 +30,11 @@ from typing import Any, Iterable
 try:
     import bpy
     from bpy_extras.object_utils import world_to_camera_view
+    from mathutils import Vector
 except ImportError:  # ordinary Python is supported for validation/unit tests
     bpy = None
     world_to_camera_view = None
+    Vector = None
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -42,7 +44,12 @@ if str(REPO_ROOT) not in sys.path:
 from src.methods.colorpeel_ice.multiview_render_contract import (  # noqa: E402
     EXPECTED_PROFILE,
     canonical_sha256,
+    look_at_alignment,
+    look_at_y_up_alignment,
+    orbit_jitter_metadata,
+    orbit_location,
     official_jitter_metadata,
+    spherical_pose,
     validate_profile as validate_locked_profile,
 )
 
@@ -148,7 +155,10 @@ def validate_profile(profile: Any) -> dict[str, Any]:
         raise RendererError(str(exc)) from exc
 
 
-def validate_requests(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def validate_requests(
+    records: list[dict[str, Any]],
+    profile: dict[str, Any] = EXPECTED_PROFILE,
+) -> list[dict[str, Any]]:
     require(len(records) == 180, f"Expected 180 render requests, got {len(records)}")
     seen: set[tuple[str, int]] = set()
     for record in records:
@@ -163,9 +173,9 @@ def validate_requests(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 f"Invalid split for {key}")
         expected_seed = 420000 + record["cell_index"] * 100 + record["view_index"]
         require(record["render_seed"] == expected_seed, f"Invalid render_seed for {key}")
-        require(record["renderer_profile_id"] == EXPECTED_PROFILE["profile_id"],
+        require(record["renderer_profile_id"] == profile["profile_id"],
                 f"Invalid renderer profile for {key}")
-        require(record["renderer_profile_sha256"] == canonical_sha256(EXPECTED_PROFILE),
+        require(record["renderer_profile_sha256"] == canonical_sha256(profile),
                 f"Invalid renderer profile hash for {key}")
         require(record["shape"] in {"cube", "sphere", "cylinder"}, f"Invalid shape for {key}")
         require(record["color"] in {"red", "cyan", "gray"}, f"Invalid color for {key}")
@@ -466,6 +476,130 @@ def apply_view_jitter(profile: dict[str, Any], render_seed: int) -> tuple[dict[s
     return camera_metadata, light_metadata
 
 
+def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[dict[str, Any], dict[str, Any]]:
+    require(profile["profile_id"] == "multiview_render_v2", "Orbit camera requires multiview_render_v2")
+    offsets = orbit_jitter_metadata(render_seed, profile)
+    camera = bpy.data.objects.get(profile["camera"]["name"])
+    require(camera is not None and camera.type == "CAMERA", "Base scene is missing Camera")
+    require(camera.parent is None, "Orbit camera must not have a parent")
+    require(len(camera.constraints) == 0, "Orbit camera must not have active constraints")
+    require(abs(float(camera.data.shift_x)) <= 1e-9 and abs(float(camera.data.shift_y)) <= 1e-9,
+            "Orbit camera requires zero lens shift")
+    camera.data.dof.use_dof = False
+    bpy.context.view_layer.update()
+
+    target = _tuple(obj.matrix_world.translation)
+    base_location = _tuple(camera.matrix_world.translation)
+    base_rotation_euler = _tuple(camera.rotation_euler)
+    base_quaternion = camera.rotation_euler.to_quaternion()
+    base_spherical = spherical_pose(base_location, target)
+    jitter = offsets["camera_orbit_jitter"]
+    final_radius = base_spherical["radius"] * (1.0 + jitter["distance_fraction"])
+    final_azimuth = (
+        base_spherical["azimuth_degrees"] + jitter["azimuth_degrees"] + 180.0
+    ) % 360.0 - 180.0
+    final_elevation = base_spherical["elevation_degrees"] + jitter["elevation_degrees"]
+    require(final_radius > 0.0, "Orbit camera radius must remain positive")
+    require(-89.0 < final_elevation < 89.0, "Orbit camera elevation is too close to a pole")
+    requested_location = orbit_location(target, final_radius, final_azimuth, final_elevation)
+    camera.location = requested_location
+    direction = Vector(target) - camera.matrix_world.translation
+    require(direction.length > 0.0, "Orbit camera cannot occupy the look-at target")
+    look_at_quaternion = direction.to_track_quat("-Z", "Y")
+    camera.rotation_mode = "QUATERNION"
+    camera.rotation_quaternion = look_at_quaternion
+    bpy.context.view_layer.update()
+
+    final_location = _tuple(camera.matrix_world.translation)
+    final_quaternion = camera.rotation_quaternion
+    quaternion_wxyz = [
+        float(final_quaternion.w), float(final_quaternion.x),
+        float(final_quaternion.y), float(final_quaternion.z),
+    ]
+    alignment = look_at_alignment(final_location, target, quaternion_wxyz)
+    require(alignment >= 1.0 - 1e-6, f"Orbit camera does not look at object center: {alignment}")
+    y_up_alignment = look_at_y_up_alignment(final_location, target, quaternion_wxyz)
+    require(y_up_alignment >= 1.0 - 1e-6, f"Orbit camera does not preserve Y-up roll: {y_up_alignment}")
+    projected = world_to_camera_view(bpy.context.scene, camera, Vector(target))
+    require(projected.z > 0.0, "Orbit look-at target is behind the camera")
+    require(abs(float(projected.x) - 0.5) <= 1e-5 and abs(float(projected.y) - 0.5) <= 1e-5,
+            "Orbit look-at target is not at the optical center")
+    final_spherical = spherical_pose(final_location, target)
+    camera_metadata = {
+        "name": profile["camera"]["name"],
+        "sampling_model": profile["camera"]["sampling_model"],
+        "target_policy": "object_location",
+        "look_at_target": target,
+        "base_pose": {
+            "location": base_location,
+            "rotation_euler_xyz": base_rotation_euler,
+            "rotation_quaternion_wxyz": [
+                float(base_quaternion.w), float(base_quaternion.x),
+                float(base_quaternion.y), float(base_quaternion.z),
+            ],
+            "spherical": base_spherical,
+        },
+        "orbit_jitter": jitter,
+        "requested_final_spherical": {
+            "radius": final_radius,
+            "azimuth_degrees": final_azimuth,
+            "elevation_degrees": final_elevation,
+        },
+        "final_pose": {
+            "location": final_location,
+            "rotation_euler_xyz": _tuple(camera.rotation_euler),
+            "rotation_quaternion_wxyz": quaternion_wxyz,
+            "spherical": final_spherical,
+        },
+        "look_at": {
+            "track_axis": "-Z",
+            "up_axis": "Y",
+            "alignment_cosine": alignment,
+            "y_up_alignment_cosine": y_up_alignment,
+            "target_projected_xy": [float(projected.x), float(projected.y)],
+        },
+        "rotation_policy": profile["camera"]["rotation_policy"],
+        "lens": float(camera.data.lens),
+        "sensor_width": float(camera.data.sensor_width),
+        "shift_xy": [float(camera.data.shift_x), float(camera.data.shift_y)],
+    }
+
+    light_metadata: dict[str, Any] = {
+        "order": profile["lights"]["order"],
+        "lights": {},
+        "fixed_lights": {},
+    }
+    for name in profile["lights"]["order"]:
+        light = bpy.data.objects.get(name)
+        require(light is not None and light.type == "LIGHT", f"Base scene is missing light {name}")
+        base = _tuple(light.location)
+        offset = offsets["light_offsets"][name]
+        for axis, value in enumerate(offset):
+            light.location[axis] += value
+        light.data.color = tuple(profile["lights"]["rgb"])
+        light_metadata["lights"][name] = {
+            "base_location": base,
+            "jitter_offset": offset,
+            "final_location": _tuple(light.location),
+            "rgb": profile["lights"]["rgb"],
+            "type": light.data.type,
+            "energy": float(light.data.energy),
+        }
+    for name in profile["lights"]["fixed_order"]:
+        light = bpy.data.objects.get(name)
+        require(light is not None and light.type == "LIGHT", f"Base scene is missing fixed light {name}")
+        location = _tuple(light.location)
+        light.data.color = tuple(profile["lights"]["rgb"])
+        light_metadata["fixed_lights"][name] = {
+            "base_location": location,
+            "final_location": location,
+            "rgb": profile["lights"]["rgb"],
+            "type": light.data.type,
+            "energy": float(light.data.energy),
+        }
+    return camera_metadata, light_metadata
+
+
 def configure_mask_outputs(sample_dir: Path, obj) -> None:
     scene = bpy.context.scene
     scene.use_nodes = True
@@ -544,8 +678,13 @@ def render_one(
     cuda_devices = configure_render(profile, request["render_seed"])
     neutralize_scene(profile)
     clear_base_scene_geometry()
-    camera_metadata, light_metadata = apply_view_jitter(profile, request["render_seed"])
-    obj, material_backend = add_object(request, profile, properties, args.shape_dir, args.material_dir)
+    if profile["profile_id"] == "multiview_render_v1":
+        camera_metadata, light_metadata = apply_view_jitter(profile, request["render_seed"])
+        obj, material_backend = add_object(request, profile, properties, args.shape_dir, args.material_dir)
+    else:
+        obj, material_backend = add_object(request, profile, properties, args.shape_dir, args.material_dir)
+        bpy.context.view_layer.update()
+        camera_metadata, light_metadata = apply_orbit_view(profile, request["render_seed"], obj)
 
     final_dir = args.output_root / request["cell_id"] / f"view_{request['view_index']:02d}"
     require(not final_dir.exists(), f"Final output already exists without a valid resume record: {final_dir}")
@@ -628,7 +767,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args = build_parser().parse_args(extract_blender_args() if argv is None else argv)
     args.output_root = args.output_root.resolve()
     profile = validate_profile(load_json(args.profile.resolve()))
-    requests = validate_requests(load_jsonl(args.requests.resolve()))
+    requests = validate_requests(load_jsonl(args.requests.resolve()), profile)
     require(args.limit is None or 1 <= args.limit <= len(requests), "--limit must be between 1 and 180")
     properties, asset_hashes = collect_asset_hashes(
         args.properties_json.resolve(), args.base_scene_blendfile.resolve(),

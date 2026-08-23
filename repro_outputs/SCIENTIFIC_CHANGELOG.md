@@ -41,6 +41,7 @@ success threshold.
 | Disable SafetyChecker | executed only in isolated diagnostics with explicit acknowledgement | Safety-relevant and generation-semantic change; never applied to the frozen baseline artifacts |
 | Disable confirmed false-positive SafetyChecker for matched turquoise evaluation | completed; 900/900 rows recorded paired acknowledgement, 0 black outputs | Prevents post-generation all-zero replacement; changes generation semantics but not training or the frozen baseline |
 | Multiview held-out protocol and fold preparation | 180/180 rendered and validated; staging complete; human review pending; no training | Changes the data/view distribution and evaluation split; not comparable to the single-view baseline as a setting-only rerun |
+| Add versioned `multiview_render_v2` orbit camera | implemented and unit-tested; real Blender smoke pending; v1 untouched; no training | Sole scientific change is camera viewpoint sampling (±18° azimuth, ±10° elevation, ±5% distance) around the object center; all training and non-camera render semantics remain locked |
 | Factor-aware loss | conditional; no approved config or run | Would change the optimization objective and require a separate method-level ablation |
 | Natural multi-object evaluation | conditional; no approved config or run | Extends the task domain; cannot retroactively validate the CLEVR baseline |
 
