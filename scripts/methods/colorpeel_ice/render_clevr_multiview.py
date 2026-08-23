@@ -517,7 +517,8 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
     require(-89.0 < final_elevation < 89.0, "Orbit camera elevation is too close to a pole")
     requested_location = orbit_location(target, final_radius, final_azimuth, final_elevation)
     camera.location = requested_location
-    direction = Vector(target) - camera.matrix_world.translation
+    bpy.context.view_layer.update()
+    direction = Vector(target) - Vector(requested_location)
     require(direction.length > 0.0, "Orbit camera cannot occupy the look-at target")
     look_at_quaternion = direction.to_track_quat("-Z", "Y")
     camera.rotation_mode = "QUATERNION"
