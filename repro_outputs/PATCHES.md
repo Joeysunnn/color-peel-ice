@@ -186,3 +186,6 @@ outside Git.
   from all training concept directories.
 - These are protocol-integrity changes. They do not change ColorPeel's model,
   loss, optimizer, gradients, data loader order, or checkpoint format.
+- Verified code commit: `50b745a1da8c1418a360eac5b9180a4c7e0b36dc`.
+  Local and server suites each passed 77 tests; server deployment was a clean
+  GitHub-only fast-forward.

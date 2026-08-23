@@ -393,3 +393,8 @@ success.
 - The complete local regression suite passed 77 tests in 70.93 seconds with
   the previously documented process-local OpenMP compatibility flag. Compile,
   JSON/YAML parsing, and `git diff --check` also passed.
+- Preflight commit `50b745a1da8c1418a360eac5b9180a4c7e0b36dc`
+  was pushed to the fork. The clean server checkout fast-forwarded from
+  `388dc56` using only `git pull --ff-only`; no server code file was edited.
+  The server `colorpeel017` environment then passed all 77 tests in 6.34
+  seconds and the checkout remained clean.

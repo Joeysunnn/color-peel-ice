@@ -126,5 +126,6 @@ a neutral-background randomization distribution; that scientific choice is
 therefore not silently invented.
 
 The current multiview-preflight worktree passed all 77 local tests plus Python
-compile, JSON/YAML parsing, and diff checks. It has not yet been represented as
-a renderer result, server deployment, or fold-training result.
+compile, JSON/YAML parsing, and diff checks. Commit `50b745a` was pushed and
+deployed to the clean server checkout only by `git pull --ff-only`, where all
+77 tests passed again. This is not a renderer result or fold-training result.
