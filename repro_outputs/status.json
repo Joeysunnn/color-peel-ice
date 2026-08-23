@@ -128,7 +128,26 @@
     "derived_configs": "nine_human_authorized_for_training",
     "fold_training_status": "not_run"
   },
-  "multiview_training_status": "running_sequential_fold_a_seed42_first_of_nine",
+  "multiview_training_status": "running_sequential_completed_1_of_9_active_fold_a_seed43",
+  "multiview_training": {
+    "launch_commit": "9cf1446704ebf0fbc141e0fa28657f81204c8ac0",
+    "campaign": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-203240__multiview_v2_fold_training_campaign__9cf1446",
+    "execution": "sequential_stop_on_first_failure_gpu3",
+    "planned_runs": 9,
+    "completed_runs": 1,
+    "active_run": "multiview_v2_fold_a_seed43",
+    "first_completed_run": {
+      "variant": "multiview_v2_fold_a_seed42",
+      "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-203240__clevr_subject_color_3x3__multiview_v2_fold_a_seed42__9cf1446__42",
+      "status": "succeeded",
+      "completed_steps": 1500,
+      "finite_metric_rows": 1500,
+      "checkpoint_1000": true,
+      "final_weights_and_six_tokens": true,
+      "reload_succeeded": true,
+      "ordinary_vocabulary_drift_policy": "record_only_not_failure"
+    }
+  },
   "factor_aware_loss_status": "conditional_not_implemented_not_run",
   "natural_multiobject_status": "conditional_not_implemented_not_run",
   "preflight_status": "passed",

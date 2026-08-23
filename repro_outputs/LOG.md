@@ -494,3 +494,8 @@ success.
   process. The run later crossed step 1000 and wrote `checkpoint-1000` with
   model, optimizer, scheduler, random-state, and custom-checkpoint artifacts.
   No completed run or held-out result is claimed yet.
+- Fold A / seed 42 then completed 1500/1500 with return code 0. All metric rows
+  were sequential and finite; six-token exposure/nonzero-gradient counts were
+  480–512 with positive embedding deltas. Final Custom Diffusion weights, six
+  token files, embedding audit, and post-save reload were present. The queue
+  advanced automatically to Fold A / seed 43. No held-out result is claimed.

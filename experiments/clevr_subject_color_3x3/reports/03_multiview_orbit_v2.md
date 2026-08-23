@@ -103,6 +103,13 @@ all six modifier tokens. It subsequently passed step 1000 and wrote the
 expected accelerator checkpoint while losses remained finite. This is a
 running campaign, not a completed result.
 
+Fold A / seed 42 subsequently completed 1500/1500 with return code 0 and 1500
+finite, sequential metric rows. All six modifier tokens had nonzero gradients
+on every exposed step and positive final embedding deltas. The step-1000
+checkpoint, final Custom Diffusion weights, six token files, embedding audit,
+and post-save reload all succeeded. The queue then advanced to Fold A / seed
+43; the nine-run campaign remains in progress.
+
 ## Smoke and contact-sheet review checklist
 
 - Confirm scene metadata names `multiview_render_v2` and
