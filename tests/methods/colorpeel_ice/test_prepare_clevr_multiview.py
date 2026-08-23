@@ -68,6 +68,15 @@ class MultiviewProtocolTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(MODULE.ProtocolError, "base plus jitter"):
             MODULE._validate_vector_sum([1.0, 2.0, 3.0], [0.1, 0.2, 0.3], [1.10001, 2.2, 3.3], "Camera")
+        expected_scale = 1.3 / math.sqrt(2.0)
+        self.assertTrue(MODULE._vector_matches(
+            [0.919238805770874, 0.919238805770874, 0.919238805770874],
+            [expected_scale, expected_scale, expected_scale],
+        ))
+        self.assertFalse(MODULE._vector_matches(
+            [0.919248805770874, 0.919238805770874, 0.919238805770874],
+            [expected_scale, expected_scale, expected_scale],
+        ))
 
     def test_folds_are_exact_matchings_with_two_partners_per_axis(self):
         actual = {

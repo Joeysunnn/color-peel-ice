@@ -329,6 +329,17 @@ def _validate_vector_sum(base: Any, offset: Any, final: Any, label: str) -> None
     )
 
 
+def _vector_matches(actual: Any, expected: list[float]) -> bool:
+    return (
+        isinstance(actual, list)
+        and len(actual) == len(expected)
+        and all(
+            isinstance(value, (int, float)) and abs(float(value) - target) <= 1e-6
+            for value, target in zip(actual, expected)
+        )
+    )
+
+
 def _validate_view_metadata(record: dict[str, Any], key: tuple[str, int]) -> None:
     expected = official_jitter_metadata(record["render_seed"], EXPECTED_PROFILE)
     camera = record["camera"]
@@ -507,11 +518,14 @@ def validate_realization(
         _require(objects[0].get("nominal_scale") == 1.3, f"Scene nominal scale disagrees for {key}")
         expected_scale = 1.3 / math.sqrt(2.0) if expected_record["shape"] == "cube" else 1.3
         _require(
-            objects[0].get("applied_scale") == [expected_scale, expected_scale, expected_scale],
+            _vector_matches(
+                objects[0].get("applied_scale"),
+                [expected_scale, expected_scale, expected_scale],
+            ),
             f"Scene applied scale disagrees for {key}",
         )
         _require(
-            objects[0].get("3d_coords") == [0.0, 0.0, expected_scale],
+            _vector_matches(objects[0].get("3d_coords"), [0.0, 0.0, expected_scale]),
             f"Scene object coordinates disagree for {key}",
         )
 
