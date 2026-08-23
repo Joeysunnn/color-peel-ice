@@ -189,3 +189,19 @@ outside Git.
 - Verified code commit: `50b745a1da8c1418a360eac5b9180a4c7e0b36dc`.
   Local and server suites each passed 77 tests; server deployment was a clean
   GitHub-only fast-forward.
+
+## Fixed-neutral renderer realization
+
+- Added locked Blender 4.2.11/Cycles CUDA adapter and immutable
+  `multiview_render_v1` profile. World/ground stay fixed; only camera and three
+  named lights receive deterministic official-style jitter.
+- Resume verifies request/profile/asset fingerprints, finalized file hashes,
+  per-view records, and directory purity before skipping anything.
+- Realization requires RGB decode, complementary binary object/background
+  masks, finite bounded mask area, object visibility, fixed background,
+  deterministic transform metadata, one V100 CUDA device, and unique images.
+- Runtime-only fixes place locked Cycles flags after Blender's `--` and compare
+  Blender float32 transforms with `1e-6` tolerance. Scientific parameters and
+  ColorPeel training math are unchanged.
+- Renderer commit `53a3a0e`; final validator/gate commit `de279ca`. Full run
+  completed 180/180 with zero failures; no fold training was run.

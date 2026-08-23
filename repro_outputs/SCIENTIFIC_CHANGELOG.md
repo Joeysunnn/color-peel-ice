@@ -40,7 +40,7 @@ success threshold.
 | Three-stage black-image/SafetyChecker diagnosis | completed after Stage 2: checker-on FP16 19/19 flagged and black; checker-off FP16 19/19 finite and nonblack; FP32 not required | Confirms the exact-black outputs were checker filtering; diagnostic outputs do not replace baseline images |
 | Disable SafetyChecker | executed only in isolated diagnostics with explicit acknowledgement | Safety-relevant and generation-semantic change; never applied to the frozen baseline artifacts |
 | Disable confirmed false-positive SafetyChecker for matched turquoise evaluation | completed; 900/900 rows recorded paired acknowledgement, 0 black outputs | Prevents post-generation all-zero replacement; changes generation semantics but not training or the frozen baseline |
-| Multiview held-out protocol and fold preparation | protocol implemented; real rendering and training pending | Changes the data/view distribution and evaluation split; not comparable to the single-view baseline as a setting-only rerun |
+| Multiview held-out protocol and fold preparation | 180/180 rendered and validated; staging complete; human review pending; no training | Changes the data/view distribution and evaluation split; not comparable to the single-view baseline as a setting-only rerun |
 | Factor-aware loss | conditional; no approved config or run | Would change the optimization objective and require a separate method-level ablation |
 | Natural multi-object evaluation | conditional; no approved config or run | Extends the task domain; cannot retroactively validate the CLEVR baseline |
 

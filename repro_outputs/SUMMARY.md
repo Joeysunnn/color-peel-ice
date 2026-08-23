@@ -114,18 +114,19 @@ but remained weak. The 540 cyan and 75 subject controls completed. The selected
 `turquoise` initializer passed both smokes, full retraining, matched 900-image
 inference, and the user's qualitative single-view gate.
 
-Multiview preflight found that the existing protocol needed a dedicated
-turquoise base config and stronger realization checks. The prepared changes
-reject the historical multi-piece `cyan` initializer, nonempty/stale output
-directories, repeated-image pseudo-views, and missing camera/light/background
-variation. A real renderer is still required before any fold training. The
-actual 48-image dataset is consistent with object scale 1.3, and the closest
-existing renderer uses 512 Cycles samples and fixed object rotation. Official
-CLEVR supplies camera jitter 0.5 and per-light jitter 1.0, but does not define
-a neutral-background randomization distribution; that scientific choice is
-therefore not silently invented.
+The approved fixed-neutral renderer completed a real one-view V100 smoke and
+the full 180-view run. Renderer commit `53a3a0e` produced 180/180 successful
+records, zero failures, no residual partial directory, binary complementary
+masks, and 20 unique RGB hashes per cell. Realization under validator commit
+`de279ca` passed all profile, asset, scene, transform, hash, mask, split, and
+staging checks. Each fold contains exactly 96 image-only training views and
+three configs locked to `cube+sphere+cylinder+red+turquoise+gray`.
 
-The current multiview-preflight worktree passed all 77 local tests plus Python
-compile, JSON/YAML parsing, and diff checks. Commit `50b745a` was pushed and
-deployed to the clean server checkout only by `git pull --ff-only`, where all
-77 tests passed again. This is not a renderer result or fold-training result.
+The 45-image contact sheet was visually inspected: all sampled objects were
+complete and correctly shaped/colored, backgrounds remained neutral, and the
+camera/light span showed no black or invalid images. The 180-row human-review
+CSV remains unfilled, and all nine derived configs are explicitly
+`pending_human_review`. No fold smoke, 1500-step training, held-out result, or
+disentanglement-success claim exists. The final local and server suites each
+passed 90 tests; every server code update was a clean GitHub `--ff-only`
+fast-forward.

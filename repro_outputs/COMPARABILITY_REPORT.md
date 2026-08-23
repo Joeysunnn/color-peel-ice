@@ -93,7 +93,9 @@ conditions can diagnose black outputs but are not headline generation results.
 `multiview_heldout_v1` changes both data volume and split structure. Its three
 folds hold out different subject-color matchings, so any later result belongs
 to a new multiview study and cannot be merged with the single-view baseline.
-No real renderer output or fold training is currently available. A
-factor-aware loss would change the objective and requires a separate method
-comparison; natural multi-object evaluation changes the domain. Both remain
-conditional and have no result claim.
+The fixed-neutral renderer now provides 180 validated views and image-only fold
+staging, but no fold training or held-out metric is available. The rendered
+study changes data volume, view distribution, and split structure relative to
+the single-view baseline. A factor-aware loss would change the objective and
+requires a separate method comparison; natural multi-object evaluation changes
+the domain. Both remain conditional and have no result claim.

@@ -398,3 +398,28 @@ success.
   `388dc56` using only `git pull --ff-only`; no server code file was edited.
   The server `colorpeel017` environment then passed all 77 tests in 6.34
   seconds and the checkout remained clean.
+
+## 2026-08-23 — fixed-neutral 180-view rendering
+
+- Blender 4.2.11 archive SHA-256 matched
+  `7f084fd57f1351bcae3434fc5450643547e4ad3d69cd93d4dd14a784203ee2ec`;
+  it was installed only under `/home/r12user5/Documents/Jiawei/tools/`.
+- Final smoke:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-105000__clevr_subject_color_3x3__multiview-render-smoke__53a3a0e__42`.
+  It used one CUDA-visible Tesla V100, produced RGB 512×512 and strict
+  complementary binary masks, with mask ratio `0.0501289` and no edge contact.
+- Full run:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-110000__clevr_subject_color_3x3__multiview-render__53a3a0e__42`.
+  Renderer status was `succeeded`: 180 realization rows, 180 `ok` status rows,
+  zero failures, and no `.partial` directory.
+- `realize` validated all 180 views and produced `prepared_human_review/`:
+  180 review rows, a 45-image contact sheet, three folds × 96 image-only
+  training files, and nine configs. All configs use the turquoise initializer
+  and status `pending_human_review`; GT masks are absent from training staging.
+- Runtime exposed only operational validator issues: Blender Cycles arguments
+  must occur after `--`, and Blender stores transforms as float32. The adapter
+  now rejects non-CUDA Cycles CLI values and uses a measured `1e-6` transform
+  tolerance (maximum observed rounding error `2.383989e-7`). No renderer,
+  ColorPeel loss, optimizer, prompt, or data value changed.
+- Final validator/workflow commit: `de279caef13f4e9580825d4e1c5347fd14f5faab`.
+  Local and server suites each passed 90 tests. No Fold training was started.
