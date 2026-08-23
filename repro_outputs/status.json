@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-23T09:38:58+08:00",
+  "generated_at": "2026-08-23T14:10:00+08:00",
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
-  "target_commit": "de279caef13f4e9580825d4e1c5347fd14f5faab",
+  "target_commit": "bb7593042413eba55caa347102dffe8106f7bf7b",
   "baseline_commit": "021f5c74cee6c231a03b8b49bb96750cadfc4e06",
   "readme_first": true,
   "selected_goal": "ColorPeel on a 3x3 CLEVR subject-color grid with six shared tokens",
@@ -20,13 +20,13 @@
   "evidence_level": "mixed",
   "local_test_status": "success",
   "local_pytest": "90 passed with KMP_DUPLICATE_LIB_OK=TRUE for the local Anaconda PyTorch/NumPy OpenMP coexistence issue",
-  "github_push_status": "success_multiview_renderer_and_validation_commit_de279ca",
-  "server_checkout_status": "success_clean_code_at_de279ca_90_tests",
+  "github_push_status": "success_multiview_v2_runtime_commit_bb75930",
+  "server_checkout_status": "success_clean_code_at_bb75930_62_unittest_discovery",
   "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
-  "server_verified_commit": "de279caef13f4e9580825d4e1c5347fd14f5faab",
+  "server_verified_commit": "bb7593042413eba55caa347102dffe8106f7bf7b",
   "current_worktree_status": "multiview_180_render_and_staging_complete_pending_human_review",
-  "server_pre_run_changes_status": "fast_forwarded_via_github_to_de279ca",
-  "current_changes_test_status": "success_local_and_server_90_tests_plus_compile_json_yaml_and_diff_check",
+  "server_pre_run_changes_status": "fast_forwarded_via_github_to_bb75930",
+  "current_changes_test_status": "success_local_and_server_62_unittest_discovery_plus_compile_json_and_diff_check",
   "diagnosis_first_github_status": "pushed_de279ca_multiview_renderer_validation_and_gate",
   "diagnosis_first_server_status": "multiview_180_validated_pending_human_review",
   "server_environment_status": "created_verified_and_frozen",
@@ -103,6 +103,24 @@
     "execution_status": "completed_75_ok"
   },
   "multiview_render_status": "succeeded_180_of_180_zero_failures",
+  "multiview_render_v2_status": "runtime_smoke_passed_cube5_cylinder1_full_realization_not_run",
+  "multiview_render_v2": {
+    "profile_id": "multiview_render_v2",
+    "background_profile_id": "clevr_neutral_fixed_v2",
+    "profile_sha256": "4890b5a481b7f903f383beeee97607c7f8fd410708925eea9223c54cab2b3ece8",
+    "verified_commit": "bb7593042413eba55caa347102dffe8106f7bf7b",
+    "run_root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-140000__clevr_subject_color_3x3__multiview-render-v2-smoke__28a51bb__420000",
+    "cube_views": 5,
+    "cylinder_views": 1,
+    "real_blender_smoke": true,
+    "blender_version": "4.2.11",
+    "cycles_device": "CUDA",
+    "gpu": "Tesla V100-SXM2-32GB",
+    "cycles_samples": 512,
+    "all_smoke_checks_passed": true,
+    "full_realization_status": "not_run",
+    "fold_training_status": "not_run"
+  },
   "multiview_training_status": "pending_human_review_not_run",
   "factor_aware_loss_status": "conditional_not_implemented_not_run",
   "natural_multiobject_status": "conditional_not_implemented_not_run",
@@ -154,7 +172,7 @@
     "derived_fold_configs": 9,
     "derived_config_status": "pending_human_review"
   },
-  "next_safe_action": "user reviews the contact sheet and 180-row review CSV; do not start Fold training before explicit approval",
+  "next_safe_action": "user reviews v2 smoke evidence and decides whether to authorize a fresh 180-view v2 render; do not start Fold training",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
@@ -172,7 +190,7 @@
       "turquoise": [19899]
     }
   },
-  "verified_commit_count": 16,
+  "verified_commit_count": 19,
   "outputs": {
     "summary": "repro_outputs/SUMMARY.md",
     "commands": "repro_outputs/COMMANDS.md",
@@ -197,6 +215,7 @@
     "The cyan and subject diagnostic generations completed 540/540 and 75/75; the user selected turquoise through qualitative folder-level review rather than a completed blind-review ledger.",
     "The matched turquoise inference completed 900/900 with zero black or invalid files; the user reported broad qualitative improvement and authorized multiview held-out validation.",
     "The multiview renderer completed 180/180 views with zero failures; realization produced three 96-image folds and nine turquoise configs gated as pending_human_review.",
-    "Final multiview code de279ca was deployed only by server git pull --ff-only and passed all 90 server tests; no Fold training was run."
+    "Final v1 multiview code de279ca was deployed only by server git pull --ff-only and passed all 90 server tests; no Fold training was run.",
+    "Versioned v2 orbit code bb75930 passed local/server unittest discovery and real Blender smoke on five cube plus one cylinder view; no v2 full realization or Fold training was run."
   ]
 }

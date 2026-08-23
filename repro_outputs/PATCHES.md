@@ -205,3 +205,22 @@ outside Git.
   ColorPeel training math are unchanged.
 - Renderer commit `53a3a0e`; final validator/gate commit `de279ca`. Full run
   completed 180/180 with zero failures; no fold training was run.
+
+## Versioned orbit renderer v2
+
+- Added a separate immutable v2 profile/protocol/schema; v1 files and default
+  dispatch remain unchanged and are guarded by historical SHA-256 tests.
+- Replaced only camera XYZ translation jitter with deterministic spherical
+  orbit sampling around the realized object center. The first three RNG draws
+  remain camera-owned, so same-seed light offsets are identical to v1.
+- Scene metadata and validator now record/recompute base/final pose, spherical
+  offsets, object-center target, normalized quaternion, `-Z` alignment,
+  Y-up roll, optical center, base constraint state, Cycles/GPU/profile/assets,
+  and exact fixed background.
+- Real Blender smoke required two v2-only runtime corrections: record/mute the
+  base scene's `Track To` constraint before explicit look-at, and refresh the
+  dependency graph after setting orbit location. No training or v1 render
+  behavior changed.
+- Implementation commits: `097ec27`, `28a51bb`, and `bb75930`. Real smoke
+  completed five cube views and one cylinder view; full v2 realization and
+  Fold training remain unrun.

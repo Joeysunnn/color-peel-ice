@@ -423,3 +423,36 @@ success.
   ColorPeel loss, optimizer, prompt, or data value changed.
 - Final validator/workflow commit: `de279caef13f4e9580825d4e1c5347fd14f5faab`.
   Local and server suites each passed 90 tests. No Fold training was started.
+
+## 2026-08-23 — versioned orbit renderer v2 smoke
+
+- v2 was added without modifying the v1 profile/protocol/schema. The sole
+  scientific change is camera sampling: object-centered orbit offsets of
+  ±18° azimuth, ±10° elevation, and ±5% distance, with explicit `-Z`/`Y-up`
+  look-at. Fixed background, object settings, light draws, seeds, splits,
+  ColorPeel training code, CAA, AdamW, and masks are unchanged.
+- v1 historical fingerprints remain
+  `246cb06778a74f994311c3e1e3a8a4aa973ce7a308d3cd2732dcdcc021bf8529`
+  for the profile and
+  `97162f88528794f03e553dee70bfacc83b20646587a5ed9a7617f2c23f818c2d`
+  for the canonical requests.
+- Local and server unittest discovery each passed 62 tests after the v2
+  implementation. The server checkout was updated only by GitHub
+  `git pull --ff-only` and ended clean at
+  `bb7593042413eba55caa347102dffe8106f7bf7b`.
+- Two runtime-only faults stopped safely before final images: the base camera's
+  active `Track To` constraint, then a stale dependency-graph location read.
+  v2 records/mutes base constraints and refreshes the view layer before its
+  explicit look-at. These fixes do not touch v1.
+- Runtime root:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-140000__clevr_subject_color_3x3__multiview-render-v2-smoke__28a51bb__420000`.
+  Five cube views and one cylinder view succeeded under real Blender 4.2.11,
+  Cycles CUDA, one visible V100 on GPU 3, and 512 samples.
+- All six outputs passed orbit metadata, object-center, fixed-background,
+  RGB/mask, complement, area, edge, and hash checks. Cube foreground counts
+  were 12,488–14,271 pixels; the cylinder count was 21,222. The five cube RGB
+  hashes were unique; alignment and Y-up cosines were within floating-point
+  tolerance of 1.0.
+- Quick visual inspection showed clear cube face-proportion changes, stable
+  framing/background, and a complete cylinder with visible top ellipse. No
+  full v2 180-view render, realization, contact sheet, or Fold training ran.
