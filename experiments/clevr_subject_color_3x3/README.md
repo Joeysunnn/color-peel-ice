@@ -22,7 +22,7 @@ This is a ColorPeel-on-CLEVR reproduction. ICE supplies the problem context only
 | `<s2*>` | sphere | `sphere` |
 | `<s3*>` | cylinder | `cylinder` |
 | `<c1*>` | red | `red` |
-| `<c2*>` | cyan | `cyan` |
+| `<c2*>` | cyan | `cyan` (historical baseline); `turquoise` (approved follow-up) |
 | `<c3*>` | gray | `gray` |
 
 Material is fixed to `metal` and has no learned token. Every prompt uses `a photo of <subject-token> shape in <color-token> color`.
@@ -123,6 +123,26 @@ separate directory, and never replaces baseline outputs. Multiview rendering
 or training (`multiview_heldout_v1`), a factor-aware loss, and natural
 multi-object evaluation remain pending or conditional and have no completed
 artifacts.
+
+## Locked 180-view rendering gate
+
+The approved `multiview_render_v1` adapter is
+[`../../scripts/methods/colorpeel_ice/render_clevr_multiview.py`](../../scripts/methods/colorpeel_ice/render_clevr_multiview.py)
+with its immutable profile in
+[`configs/multiview_render.json`](configs/multiview_render.json). It uses
+Blender 4.2.11, Cycles CUDA on GPU 3, 512 samples, fixed neutral world/ground,
+and deterministic camera/three-light jitter. Scientific settings cannot be
+overridden at the command line.
+
+Each of the nine cells has 20 views. Views 0--15 are training candidates and
+16--19 are audit-only. A realization must validate all 180 RGB images, binary
+object/background masks, scene metadata, asset hashes, unique per-cell image
+hashes, and exact profile/request fingerprints before fold staging is created.
+All nine derived configs lock `cube+sphere+cylinder+red+turquoise+gray`.
+
+This stage ends at the generated human-review CSV and the 45-image contact
+sheet (views 0/4/8/12/16 for every cell). Fold training is prohibited until a
+new human approval is recorded.
 
 ## Records
 

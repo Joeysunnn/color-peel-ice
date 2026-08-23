@@ -11,6 +11,7 @@
     "views_per_cell",
     "view_splits",
     "render_seed",
+    "renderer_profile",
     "folds",
     "realization_contract"
   ],
@@ -39,6 +40,26 @@
         "formula": {"const": "base + cell_index * cell_stride + view_index"}
       }
     },
+    "renderer_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "config", "background"],
+      "properties": {
+        "id": {"const": "multiview_render_v1"},
+        "config": {"const": "../configs/multiview_render.json"},
+        "background": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profile_id", "varied", "world_rgba", "ground_rgba"],
+          "properties": {
+            "profile_id": {"const": "clevr_neutral_fixed_v1"},
+            "varied": {"const": false},
+            "world_rgba": {"const": [0.05, 0.05, 0.05, 1.0]},
+            "ground_rgba": {"const": [0.5, 0.5, 0.5, 1.0]}
+          }
+        }
+      }
+    },
     "folds": {
       "type": "array",
       "minItems": 3,
@@ -65,7 +86,45 @@
         }
       }
     },
-    "realization_contract": {"type": "object"}
+    "realization_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resolution",
+        "image_mode",
+        "mask_mode",
+        "mask_values",
+        "renderer_owned_fields",
+        "empirical_rgb"
+      ],
+      "properties": {
+        "resolution": {"const": [512, 512]},
+        "image_mode": {"const": "RGB"},
+        "mask_mode": {"const": "L"},
+        "mask_values": {"const": [0, 255]},
+        "renderer_owned_fields": {
+          "const": [
+            "camera",
+            "light",
+            "background",
+            "scene_json",
+            "image",
+            "mask",
+            "background_mask"
+          ]
+        },
+        "empirical_rgb": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["space", "statistic", "source"],
+          "properties": {
+            "space": {"const": "srgb_u8"},
+            "statistic": {"const": "masked_mean"},
+            "source": {"const": "realized_view_gt_mask"}
+          }
+        }
+      }
+    }
   },
   "$defs": {
     "range": {

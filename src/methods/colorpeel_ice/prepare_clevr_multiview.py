@@ -11,15 +11,28 @@ single-view baseline staging and never places GT masks in training directories.
 from __future__ import annotations
 
 import argparse
+import csv
 import filecmp
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import shutil
+import sys
 from typing import Any, Iterable
 
-from PIL import Image, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageOps, ImageStat
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.methods.colorpeel_ice.multiview_render_contract import (
+    EXPECTED_PROFILE,
+    canonical_sha256,
+    official_jitter_metadata,
+)
 
 try:
     import yaml
@@ -38,9 +51,21 @@ DEFAULT_BASE_CONFIG = (
     / "configs"
     / "multiview_base_turquoise.yaml"
 )
-RENDERER_FIELDS = ("camera", "light", "background", "scene_json", "image", "mask")
+RENDERER_FIELDS = (
+    "camera", "light", "background", "scene_json", "image", "mask", "background_mask",
+)
 EXPECTED_MODIFIER_TOKEN = "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>"
 EXPECTED_INITIALIZER_TOKEN = "cube+sphere+cylinder+red+turquoise+gray"
+EXPECTED_RENDERER_PROFILE = {
+    "id": "multiview_render_v1",
+    "config": "../configs/multiview_render.json",
+    "background": {
+        "profile_id": "clevr_neutral_fixed_v1",
+        "varied": False,
+        "world_rgba": [0.05, 0.05, 0.05, 1.0],
+        "ground_rgba": [0.5, 0.5, 0.5, 1.0],
+    },
+}
 EXPECTED_FOLDS = {
     "A": {("cube", "red"), ("sphere", "cyan"), ("cylinder", "gray")},
     "B": {("cube", "cyan"), ("sphere", "gray"), ("cylinder", "red")},
@@ -129,6 +154,7 @@ def validate_protocol(base_manifest: dict[str, Any], protocol: dict[str, Any]) -
         "cell_stride": 100,
         "formula": "base + cell_index * cell_stride + view_index",
     }, "Render seed rule differs from the locked protocol")
+    _require(protocol.get("renderer_profile") == EXPECTED_RENDERER_PROFILE, "Renderer profile changed")
 
     folds = protocol.get("folds", [])
     actual_folds = {
@@ -176,12 +202,15 @@ def build_render_requests(base_manifest: dict[str, Any], protocol: dict[str, Any
                 "view_index": view_index,
                 "split": split,
                 "render_seed": 420000 + cell_index * 100 + view_index,
+                "renderer_profile_id": EXPECTED_PROFILE["profile_id"],
+                "renderer_profile_sha256": canonical_sha256(EXPECTED_PROFILE),
                 "camera": None,
                 "light": None,
                 "background": None,
                 "scene_json": None,
                 "image": None,
                 "mask": None,
+                "background_mask": None,
                 "empirical_rgb": None,
             }
             requests.append(request)
@@ -209,6 +238,10 @@ def validate_render_requests(
         _require(record.get("cell_index") == cell_index, f"Wrong cell_index for {cell_id}")
         _require(record.get("render_seed") == 420000 + cell_index * 100 + view_index,
                  f"Wrong render_seed for {cell_id} view {view_index}")
+        _require(record.get("renderer_profile_id") == EXPECTED_PROFILE["profile_id"],
+                 f"Wrong renderer profile for {cell_id}")
+        _require(record.get("renderer_profile_sha256") == canonical_sha256(EXPECTED_PROFILE),
+                 f"Wrong renderer profile hash for {cell_id}")
         for field in ("shape", "color", "subject_token", "color_token"):
             _require(record.get(field) == cell[field], f"Wrong {field} for {cell_id}")
         _require(record.get("nominal_rgb") == cell["rgb"], f"Wrong nominal_rgb for {cell_id}")
@@ -241,6 +274,8 @@ def plan_protocol(
         "blocked_reason": None if renderer_available else "multiview_renderer_not_provided_or_missing",
         "renderer": str(renderer_path) if renderer_path is not None else None,
         "renderer_available": renderer_available,
+        "renderer_profile_id": EXPECTED_PROFILE["profile_id"],
+        "renderer_profile_sha256": canonical_sha256(EXPECTED_PROFILE),
         "render_request_manifest": str(requests_path),
         "request_count": 180,
         "images_created": 0,
@@ -281,18 +316,104 @@ def _metadata_key(value: dict[str, Any]) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
-def _validate_realized_image(image_path: Path, mask_path: Path) -> tuple[list[float], int]:
+def _validate_vector_sum(base: Any, offset: Any, final: Any, label: str) -> None:
+    _require(
+        all(isinstance(value, (int, float)) for vector in (base, offset, final) for value in vector)
+        if all(isinstance(vector, list) and len(vector) == 3 for vector in (base, offset, final))
+        else False,
+        f"{label} vectors must contain three numeric values",
+    )
+    _require(
+        all(abs((float(base[index]) + float(offset[index])) - float(final[index])) < 1e-9 for index in range(3)),
+        f"{label} final location does not equal base plus jitter",
+    )
+
+
+def _validate_view_metadata(record: dict[str, Any], key: tuple[str, int]) -> None:
+    expected = official_jitter_metadata(record["render_seed"], EXPECTED_PROFILE)
+    camera = record["camera"]
+    _require(camera.get("name") == "Camera", f"Camera name disagrees for {key}")
+    _require(camera.get("jitter_offset") == expected["camera_offset"], f"Camera jitter disagrees for {key}")
+    _require(camera.get("rotation_policy") == "preserve_base_scene", f"Camera rotation policy disagrees for {key}")
+    _validate_vector_sum(
+        camera.get("base_location"), camera.get("jitter_offset"), camera.get("final_location"), f"Camera {key}"
+    )
+    _require(isinstance(camera.get("rotation_euler"), list) and len(camera["rotation_euler"]) == 3,
+             f"Camera rotation is missing for {key}")
+    _require(isinstance(camera.get("lens"), (int, float)) and camera["lens"] > 0, f"Camera lens is invalid for {key}")
+    _require(isinstance(camera.get("sensor_width"), (int, float)) and camera["sensor_width"] > 0,
+             f"Camera sensor is invalid for {key}")
+
+    light = record["light"]
+    _require(light.get("order") == EXPECTED_PROFILE["lights"]["order"], f"Light order disagrees for {key}")
+    lights = light.get("lights", {})
+    _require(set(lights) == set(EXPECTED_PROFILE["lights"]["order"]), f"Light set disagrees for {key}")
+    for name in EXPECTED_PROFILE["lights"]["order"]:
+        metadata = lights[name]
+        expected_offset = expected["light_offsets"][name]
+        _require(metadata.get("jitter_offset") == expected_offset, f"{name} jitter disagrees for {key}")
+        _validate_vector_sum(
+            metadata.get("base_location"), metadata.get("jitter_offset"), metadata.get("final_location"),
+            f"{name} {key}",
+        )
+        _require(metadata.get("rgb") == [1.0, 1.0, 1.0], f"{name} color disagrees for {key}")
+        _require(isinstance(metadata.get("type"), str) and metadata["type"], f"{name} type is missing for {key}")
+        _require(isinstance(metadata.get("energy"), (int, float)), f"{name} energy is missing for {key}")
+    fixed_lights = light.get("fixed_lights", {})
+    _require(set(fixed_lights) == set(EXPECTED_PROFILE["lights"]["fixed_order"]),
+             f"Fixed light set disagrees for {key}")
+    for name in EXPECTED_PROFILE["lights"]["fixed_order"]:
+        metadata = fixed_lights[name]
+        _require(metadata.get("base_location") == metadata.get("final_location"),
+                 f"Fixed light {name} moved for {key}")
+        _require(metadata.get("rgb") == [1.0, 1.0, 1.0], f"Fixed light {name} color disagrees for {key}")
+        _require(isinstance(metadata.get("type"), str) and metadata["type"],
+                 f"Fixed light {name} type is missing for {key}")
+        _require(isinstance(metadata.get("energy"), (int, float)),
+                 f"Fixed light {name} energy is missing for {key}")
+
+
+def _validate_realized_image(
+    image_path: Path,
+    mask_path: Path,
+    background_mask_path: Path,
+) -> tuple[list[float], int]:
     try:
-        with Image.open(image_path) as image, Image.open(mask_path) as mask:
+        with (
+            Image.open(image_path) as image,
+            Image.open(mask_path) as mask,
+            Image.open(background_mask_path) as background_mask,
+        ):
             image.load()
             mask.load()
+            background_mask.load()
             _require(image.size == (512, 512) and image.mode == "RGB", f"Invalid RGB image: {image_path}")
             _require(mask.size == (512, 512) and mask.mode == "L", f"Invalid L mask: {mask_path}")
+            _require(
+                background_mask.size == (512, 512) and background_mask.mode == "L",
+                f"Invalid L background mask: {background_mask_path}",
+            )
             histogram = mask.histogram()
             values = [value for value, count in enumerate(histogram) if count]
             _require(values == [0, 255], f"Mask must contain exactly [0, 255]: {mask_path}")
+            background_histogram = background_mask.histogram()
+            background_values = [value for value, count in enumerate(background_histogram) if count]
+            _require(
+                background_values == [0, 255],
+                f"Background mask must contain exactly [0, 255]: {background_mask_path}",
+            )
+            difference = ImageChops.difference(background_mask, ImageOps.invert(mask))
+            _require(difference.getbbox() is None, f"Object/background masks are not complements: {mask_path}")
             foreground = histogram[255]
             _require(foreground > 0, f"Mask is empty: {mask_path}")
+            ratio = foreground / (512 * 512)
+            _require(0.005 <= ratio <= 0.90, f"Mask ratio is outside 0.005-0.90: {mask_path}")
+            bbox = mask.getbbox()
+            _require(bbox is not None, f"Mask bounding box is empty: {mask_path}")
+            _require(
+                bbox[0] > 0 and bbox[1] > 0 and bbox[2] < 512 and bbox[3] < 512,
+                f"Object mask touches an image edge: {mask_path}",
+            )
             mean = [round(value, 6) for value in ImageStat.Stat(image, mask=mask).mean]
             return mean, foreground
     except OSError as exc:
@@ -308,6 +429,16 @@ def validate_realization(
     render_root = render_root.resolve()
     _require(render_root.is_dir(), f"Render root is not a directory: {render_root}")
     expected = build_render_requests(base_manifest, protocol)
+    contract = _read_json(render_root / "render_contract.json")
+    _require(isinstance(contract, dict), "Render contract must be an object")
+    _require(contract.get("schema_version") == 1, "Render contract version changed")
+    _require(contract.get("profile_id") == EXPECTED_PROFILE["profile_id"], "Render contract profile changed")
+    _require(contract.get("profile_sha256") == canonical_sha256(EXPECTED_PROFILE), "Render profile hash changed")
+    _require(contract.get("requests_sha256") == canonical_sha256(expected), "Render request hash changed")
+    _require(contract.get("request_count") == 180, "Render contract request count changed")
+    _require(isinstance(contract.get("asset_sha256"), dict) and contract["asset_sha256"],
+             "Render contract asset hashes are missing")
+    contract_sha256 = canonical_sha256(contract)
     expected_by_key = {(record["cell_id"], record["view_index"]): record for record in expected}
     _require(len(realized_records) == 180, f"Expected 180 realized views, got {len(realized_records)}")
     actual_by_key = {(record.get("cell_id"), record.get("view_index")): record for record in realized_records}
@@ -315,10 +446,12 @@ def validate_realization(
              "Realization must contain every cell/view exactly once")
 
     realized: list[dict[str, Any]] = []
-    used_paths: dict[str, set[Path]] = {field: set() for field in ("scene_json", "image", "mask")}
+    used_paths: dict[str, set[Path]] = {
+        field: set() for field in ("scene_json", "image", "mask", "background_mask")
+    }
     image_hashes: dict[str, set[str]] = {sample["id"]: set() for sample in base_manifest["samples"]}
     metadata_values: dict[str, dict[str, set[str]]] = {
-        sample["id"]: {field: set() for field in ("camera", "light", "background")}
+        sample["id"]: {field: set() for field in ("camera", "light")}
         for sample in base_manifest["samples"]
     }
     for expected_record in expected:
@@ -326,16 +459,24 @@ def validate_realization(
         supplied = actual_by_key[key]
         for field in (
             "cell_index", "shape", "color", "material", "subject_token", "color_token",
-            "nominal_rgb", "split", "render_seed",
+            "nominal_rgb", "split", "render_seed", "renderer_profile_id", "renderer_profile_sha256",
         ):
             _require(supplied.get(field) == expected_record[field], f"Realization changed {field} for {key}")
         for field in ("camera", "light", "background"):
             _require(isinstance(supplied.get(field), dict) and supplied[field],
                      f"Renderer must populate nonempty {field} metadata for {key}")
+        _require(
+            supplied["background"] == EXPECTED_RENDERER_PROFILE["background"],
+            f"Renderer changed the fixed background for {key}",
+        )
+        for field in ("camera", "light"):
             metadata_values[expected_record["cell_id"]][field].add(_metadata_key(supplied[field]))
+        _validate_view_metadata(supplied, key)
 
-        paths = {field: _resolved_under(render_root, supplied.get(field), field)
-                 for field in ("scene_json", "image", "mask")}
+        paths = {
+            field: _resolved_under(render_root, supplied.get(field), field)
+            for field in ("scene_json", "image", "mask", "background_mask")
+        }
         for field, path in paths.items():
             _require(path not in used_paths[field], f"Realized {field} is reused: {path}")
             used_paths[field].add(path)
@@ -343,12 +484,51 @@ def validate_realization(
         _require(isinstance(scene, dict), f"Scene JSON must be an object: {paths['scene_json']}")
         for field in ("render_seed", "camera", "light", "background"):
             _require(scene.get(field) == supplied[field], f"Scene {field} disagrees with realization for {key}")
+        _require(scene.get("renderer_profile_id") == EXPECTED_RENDERER_PROFILE["id"],
+                 f"Scene renderer profile disagrees for {key}")
+        _require(scene.get("cycles_seed") == expected_record["render_seed"], f"Scene cycles seed disagrees for {key}")
+        renderer = scene.get("renderer", {})
+        _require(renderer.get("blender_version") == "4.2.11", f"Scene Blender version disagrees for {key}")
+        _require(renderer.get("engine") == "CYCLES", f"Scene render engine disagrees for {key}")
+        _require(renderer.get("cycles_samples") == 512, f"Scene Cycles samples disagree for {key}")
+        _require(renderer.get("cycles_device") == "CUDA", f"Scene Cycles device disagrees for {key}")
+        devices = renderer.get("cuda_devices", [])
+        _require(len(devices) == 1 and "V100" in devices[0].get("name", ""), f"Scene CUDA device disagrees for {key}")
+        _require(isinstance(scene.get("asset_sha256"), dict) and scene["asset_sha256"],
+                 f"Scene asset hashes are missing for {key}")
+        _require(scene["asset_sha256"] == contract["asset_sha256"], f"Scene asset hashes disagree for {key}")
         objects = scene.get("objects", [])
         _require(len(objects) == 1, f"Scene must contain one object for {key}")
         for field in ("shape", "color", "material"):
             _require(objects[0].get(field) == expected_record[field], f"Scene {field} disagrees for {key}")
+        _require(objects[0].get("material_backend") == "clevr_asset_node_group",
+                 f"Scene material backend disagrees for {key}")
+        _require(objects[0].get("rotation") == 0.0, f"Scene object rotation disagrees for {key}")
+        _require(objects[0].get("nominal_scale") == 1.3, f"Scene nominal scale disagrees for {key}")
+        expected_scale = 1.3 / math.sqrt(2.0) if expected_record["shape"] == "cube" else 1.3
+        _require(
+            objects[0].get("applied_scale") == [expected_scale, expected_scale, expected_scale],
+            f"Scene applied scale disagrees for {key}",
+        )
+        _require(
+            objects[0].get("3d_coords") == [0.0, 0.0, expected_scale],
+            f"Scene object coordinates disagree for {key}",
+        )
 
-        mean, foreground = _validate_realized_image(paths["image"], paths["mask"])
+        hashes = supplied.get("artifact_sha256", {})
+        _require(isinstance(hashes, dict), f"Artifact hashes are missing for {key}")
+        for field, path in paths.items():
+            _require(hashes.get(field) == _file_sha256(path), f"Artifact hash disagrees for {key}: {field}")
+        _require(supplied.get("renderer_profile_id") == EXPECTED_RENDERER_PROFILE["id"],
+                 f"Realization renderer profile disagrees for {key}")
+        _require(supplied.get("render_contract_sha256") == contract_sha256,
+                 f"Render contract hash disagrees for {key}")
+
+        mean, foreground = _validate_realized_image(
+            paths["image"], paths["mask"], paths["background_mask"]
+        )
+        _require(supplied.get("foreground_pixels") == foreground,
+                 f"Foreground pixel count disagrees for {key}")
         image_hashes[expected_record["cell_id"]].add(_file_sha256(paths["image"]))
         record = {**expected_record, **supplied}
         record["empirical_rgb"] = {
@@ -366,6 +546,62 @@ def validate_realization(
         for field, values in metadata_values[cell_id].items():
             _require(len(values) > 1, f"Cell {cell_id} has no realized {field} variation")
     return realized
+
+
+def write_human_review_outputs(
+    render_root: Path,
+    realized: list[dict[str, Any]],
+    base_manifest: dict[str, Any],
+    output_dir: Path,
+) -> tuple[Path, Path]:
+    review_path = output_dir / "multiview_human_review.csv"
+    fieldnames = [
+        "generation_id", "cell_id", "shape", "color", "material", "render_seed",
+        "view_index", "split", "image", "mask", "background_mask", "observed_shape",
+        "observed_color", "object_complete", "object_clipped", "mask_aligned",
+        "lighting_ok", "background_neutral", "artifact_or_invalid", "confidence",
+        "reviewer_id", "comment",
+    ]
+    with review_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for record in realized:
+            writer.writerow({
+                "generation_id": f"{record['cell_id']}:v{record['view_index']:02d}",
+                "cell_id": record["cell_id"],
+                "shape": record["shape"],
+                "color": record["color"],
+                "material": record["material"],
+                "render_seed": record["render_seed"],
+                "view_index": record["view_index"],
+                "split": record["split"],
+                "image": record["image"],
+                "mask": record["mask"],
+                "background_mask": record["background_mask"],
+            })
+
+    selected_views = (0, 4, 8, 12, 16)
+    tile_width, tile_height, label_height = 200, 200, 24
+    sheet = Image.new("RGB", (tile_width * 5, (tile_height + label_height) * 9), "white")
+    draw = ImageDraw.Draw(sheet)
+    records_by_key = {(record["cell_id"], record["view_index"]): record for record in realized}
+    for row_index, cell in enumerate(base_manifest["samples"]):
+        for column_index, view_index in enumerate(selected_views):
+            record = records_by_key[(cell["id"], view_index)]
+            with Image.open(_resolved_under(render_root, record["image"], "image")) as source:
+                thumbnail = source.convert("RGB")
+                thumbnail.thumbnail((tile_width - 8, tile_height - 8), Image.Resampling.LANCZOS)
+                x = column_index * tile_width + (tile_width - thumbnail.width) // 2
+                y = row_index * (tile_height + label_height) + label_height + (tile_height - thumbnail.height) // 2
+                sheet.paste(thumbnail, (x, y))
+            draw.text(
+                (column_index * tile_width + 4, row_index * (tile_height + label_height) + 4),
+                f"{cell['id']} v{view_index:02d} {record['split']}",
+                fill="black",
+            )
+    contact_sheet_path = output_dir / "multiview_contact_sheet.png"
+    sheet.save(contact_sheet_path)
+    return review_path, contact_sheet_path
 
 
 def _stage_image(source: Path, destination: Path) -> None:
@@ -513,6 +749,9 @@ def realize_protocol(
     realized_path = output_dir / "realized_views.jsonl"
     _write_jsonl(realized_path, realized)
     folds = build_fold_outputs(render_root, realized, base_manifest, protocol, output_dir, base_config)
+    review_path, contact_sheet_path = write_human_review_outputs(
+        render_root, realized, base_manifest, output_dir
+    )
     result = {
         "status": "validated",
         "realized_view_count": len(realized),
@@ -522,6 +761,8 @@ def realize_protocol(
         "training_seeds": list(TRAINING_SEEDS),
         "training_uses_gt_masks": False,
         "realized_manifest": str(realized_path),
+        "human_review_csv": str(review_path),
+        "contact_sheet": str(contact_sheet_path),
         "folds": folds,
     }
     _write_json(output_dir / "protocol_status.json", result)

@@ -457,32 +457,57 @@ Executed turquoise evidence runs:
 Both smoke validators passed. The full manifest succeeded with return code 0
 and 1500 finite metric rows.
 
-## Multiview held-out protocol — render and training pending
+## Multiview held-out protocol — locked renderer, execution pending
 
-Planning without a real renderer intentionally records a blocked protocol
-rather than fabricating images:
+The renderer is tracked, but its runtime result must be established separately.
+Plan requests with the real adapter:
 
 ```bash
 python src/methods/colorpeel_ice/prepare_clevr_multiview.py plan \
-  --output-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/multiview_heldout_v1/protocol"
+  --output-dir "$RENDER_RUN/protocol" \
+  --renderer scripts/methods/colorpeel_ice/render_clevr_multiview.py
 ```
 
-With a reviewed real renderer, add
-`--renderer <real_multiview_renderer.py>`. Only after that renderer produces
-180 real views plus its realization manifest may validation run:
+Blender must be the verified 4.2.11 archive, run only with GPU 3. The first
+command is a one-view smoke in an isolated output root. `--python-exit-code 1`
+is required so Blender converts script exceptions into a failing process:
+
+```bash
+export CUDA_VISIBLE_DEVICES=3
+BLENDER=/home/r12user5/Documents/Jiawei/tools/blender-4.2.11-linux-x64/blender
+ASSETS=/home/r12user5/Documents/Jiawei/papers/CLEVER/image_generation/data
+
+"$BLENDER" --background --python-exit-code 1 --cycles-device CUDA \
+  --cycles-print-stats \
+  --python scripts/methods/colorpeel_ice/render_clevr_multiview.py -- \
+  --requests "$RENDER_RUN/protocol/render_requests.jsonl" \
+  --profile experiments/clevr_subject_color_3x3/configs/multiview_render.json \
+  --output-root "$SMOKE_RUN/rendered" \
+  --properties-json "$ASSETS/properties.json" \
+  --base-scene-blendfile "$ASSETS/base_scene.blend" \
+  --shape-dir "$ASSETS/shapes" --material-dir "$ASSETS/materials" --limit 1
+```
+
+After inspecting smoke evidence, use a fresh full output root and the same
+command without `--limit`. An interrupted full run may be continued only with
+explicit `--resume`; all inputs, fingerprints, finalized files, and hashes must
+still agree. Once 180 views complete, realize and stage the folds:
 
 ```bash
 python src/methods/colorpeel_ice/prepare_clevr_multiview.py realize \
-  --render-root <render_root> \
-  --render-manifest <renderer_realization.jsonl> \
-  --output-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/multiview_heldout_v1/prepared"
+  --render-root "$RENDER_RUN/rendered" \
+  --render-manifest "$RENDER_RUN/rendered/renderer_realization.jsonl" \
+  --output-dir "$RENDER_RUN/prepared"
 ```
 
 `realize` conditionally derives nine configs: folds A/B/C × seeds 42/43/44,
 named `train_config_seed42.json`, `train_config_seed43.json`, and
 `train_config_seed44.json` below each fold. Their variants are
 `multiview_fold_{a|b|c}_seed{42|43|44}`. No renderer output, realized manifest,
-derived config, or multiview training is currently claimed.
+or derived config is claimed until runtime evidence is recorded. Even after
+successful staging, do not launch any fold smoke or 1500-step training before
+the user reviews `multiview_human_review.csv` and
+`multiview_contact_sheet.png`.
 
 There is no approved command/config for a factor-aware loss or natural
 multi-object evaluation. Both remain conditional; do not improvise an entry

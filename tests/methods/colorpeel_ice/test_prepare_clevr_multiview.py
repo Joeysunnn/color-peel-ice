@@ -2,12 +2,15 @@ import contextlib
 import importlib.util
 import io
 import json
+import math
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageOps
 
 
 REPO_ROOT = Path(__file__).parents[3]
@@ -38,6 +41,17 @@ class MultiviewProtocolTests(unittest.TestCase):
             self.assertEqual(sum(row["split"] == "audit" for row in rows), 4)
             for row in rows:
                 self.assertEqual(row["render_seed"], 420000 + cell_index * 100 + row["view_index"])
+
+    def test_direct_cli_imports_shared_contract_from_repo_root(self):
+        result = subprocess.run(
+            [sys.executable, str(MODULE_PATH), "--help"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("{plan,realize}", result.stdout)
 
     def test_protocol_does_not_fabricate_renderer_metadata(self):
         for row in MODULE.build_render_requests(self.base, self.protocol):
@@ -97,36 +111,107 @@ class MultiviewRealizationTests(unittest.TestCase):
 
     def _make_realization(self):
         mask_template = self.root / "mask.png"
-        mask_data = bytearray(b"\xff" * (512 * 512))
-        mask_data[0] = 0
-        Image.frombytes("L", (512, 512), bytes(mask_data)).save(mask_template)
+        background_template = self.root / "background.png"
+        mask = Image.new("L", (512, 512), 0)
+        ImageDraw.Draw(mask).rectangle((156, 156, 356, 356), fill=255)
+        mask.save(mask_template)
+        ImageOps.invert(mask).save(background_template)
 
+        requests = MODULE.build_render_requests(self.base, self.protocol)
+        asset_hashes = {"base_scene_blendfile": "a" * 64, "properties_json": "b" * 64}
+        contract = {
+            "schema_version": 1,
+            "profile_id": MODULE.EXPECTED_PROFILE["profile_id"],
+            "profile_sha256": MODULE.canonical_sha256(MODULE.EXPECTED_PROFILE),
+            "requests_sha256": MODULE.canonical_sha256(requests),
+            "request_count": 180,
+            "asset_sha256": asset_hashes,
+        }
+        (self.render_root / "render_contract.json").write_text(json.dumps(contract), encoding="utf-8")
+        contract_sha256 = MODULE.canonical_sha256(contract)
         records = []
-        for request in MODULE.build_render_requests(self.base, self.protocol):
+        light_bases = {
+            "Lamp_Key": [6.4, -2.9, 4.2],
+            "Lamp_Back": [-1.1, 2.6, 5.8],
+            "Lamp_Fill": [-4.6, -4.0, 3.0],
+        }
+        for request in requests:
             view_dir = self.render_root / request["cell_id"] / f"view_{request['view_index']:02d}"
             view_dir.mkdir(parents=True)
             image_path = view_dir / "img.jpg"
             mask_path = view_dir / f"mask_{request['shape']}_0.png"
+            background_mask_path = view_dir / "background.png"
             scene_path = view_dir / "scene.json"
             pixel_value = 10 + request["view_index"] * 12
             Image.new("RGB", (512, 512), (pixel_value, 20 + request["cell_index"] * 10, 30)).save(image_path)
             shutil.copyfile(mask_template, mask_path)
-            camera = {"azimuth_degrees": request["view_index"]}
-            light = {"renderer_value": request["render_seed"]}
-            background = {"renderer_id": "neutral", "variant": request["view_index"]}
+            shutil.copyfile(background_template, background_mask_path)
+            jitter = MODULE.official_jitter_metadata(request["render_seed"], MODULE.EXPECTED_PROFILE)
+            camera_base = [7.4, -6.5, 5.3]
+            camera = {
+                "name": "Camera",
+                "base_location": camera_base,
+                "jitter_offset": jitter["camera_offset"],
+                "final_location": [camera_base[i] + jitter["camera_offset"][i] for i in range(3)],
+                "rotation_euler": [1.0, 0.0, 0.7],
+                "rotation_policy": "preserve_base_scene",
+                "lens": 35.0,
+                "sensor_width": 32.0,
+            }
+            light = {
+                "order": MODULE.EXPECTED_PROFILE["lights"]["order"],
+                "lights": {},
+                "fixed_lights": {
+                    "Area": {
+                        "base_location": [0.0, 0.0, 10.0],
+                        "final_location": [0.0, 0.0, 10.0],
+                        "rgb": [1.0, 1.0, 1.0],
+                        "type": "SUN",
+                        "energy": 0.45,
+                    }
+                },
+            }
+            for name in MODULE.EXPECTED_PROFILE["lights"]["order"]:
+                offset = jitter["light_offsets"][name]
+                base = light_bases[name]
+                light["lights"][name] = {
+                    "base_location": base,
+                    "jitter_offset": offset,
+                    "final_location": [base[i] + offset[i] for i in range(3)],
+                    "rgb": [1.0, 1.0, 1.0],
+                    "type": "AREA",
+                    "energy": 1000.0,
+                }
+            background = MODULE.EXPECTED_PROFILE["background"]
+            object_scale = 1.3 / math.sqrt(2.0) if request["shape"] == "cube" else 1.3
             scene = {
+                "renderer_profile_id": MODULE.EXPECTED_PROFILE["profile_id"],
                 "render_seed": request["render_seed"],
+                "cycles_seed": request["render_seed"],
                 "camera": camera,
                 "light": light,
                 "background": background,
+                "renderer": {
+                    "blender_version": "4.2.11",
+                    "engine": "CYCLES",
+                    "cycles_samples": 512,
+                    "cycles_device": "CUDA",
+                    "cuda_devices": [{"name": "Tesla V100-SXM2-32GB", "type": "CUDA", "id": "CUDA_0"}],
+                },
+                "asset_sha256": asset_hashes,
                 "objects": [{
                     "shape": request["shape"],
                     "color": request["color"],
                     "material": request["material"],
+                    "material_backend": "clevr_asset_node_group",
+                    "rotation": 0.0,
+                    "nominal_scale": 1.3,
+                    "applied_scale": [object_scale, object_scale, object_scale],
+                    "3d_coords": [0.0, 0.0, object_scale],
                 }],
             }
             scene_path.write_text(json.dumps(scene), encoding="utf-8")
-            records.append({
+            record = {
                 **request,
                 "camera": camera,
                 "light": light,
@@ -134,7 +219,16 @@ class MultiviewRealizationTests(unittest.TestCase):
                 "scene_json": scene_path.relative_to(self.render_root).as_posix(),
                 "image": image_path.relative_to(self.render_root).as_posix(),
                 "mask": mask_path.relative_to(self.render_root).as_posix(),
-            })
+                "background_mask": background_mask_path.relative_to(self.render_root).as_posix(),
+                "renderer_profile_id": MODULE.EXPECTED_PROFILE["profile_id"],
+                "render_contract_sha256": contract_sha256,
+                "foreground_pixels": 201 * 201,
+            }
+            record["artifact_sha256"] = {
+                field: MODULE._file_sha256(self.render_root / record[field])
+                for field in ("scene_json", "image", "mask", "background_mask")
+            }
+            records.append(record)
         manifest = self.root / "renderer_realization.jsonl"
         manifest.write_text("".join(json.dumps(row) + "\n" for row in records), encoding="utf-8")
         return records, manifest
@@ -155,7 +249,11 @@ class MultiviewRealizationTests(unittest.TestCase):
         self.assertEqual(realized[0]["nominal_rgb"], [173, 35, 35])
         self.assertEqual(realized[0]["empirical_rgb"]["value"], [10.0, 20.0, 30.0])
         self.assertEqual(realized[0]["empirical_rgb"]["source"], "realized_view_gt_mask")
-        self.assertEqual(realized[0]["empirical_rgb"]["foreground_pixels"], 512 * 512 - 1)
+        self.assertEqual(realized[0]["empirical_rgb"]["foreground_pixels"], 201 * 201)
+        review_rows = (self.output / "multiview_human_review.csv").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(review_rows), 181)
+        with Image.open(self.output / "multiview_contact_sheet.png") as contact_sheet:
+            self.assertEqual(contact_sheet.size, (1000, 2016))
 
         for fold_id in ("a", "b", "c"):
             fold_dir = self.output / "folds" / f"fold_{fold_id}"
@@ -188,18 +286,8 @@ class MultiviewRealizationTests(unittest.TestCase):
         self.assertEqual(len(list((self.output / "folds").glob("fold_*/train_config_seed*.json"))), 9)
 
     def test_missing_renderer_file_is_rejected(self):
-        requests = MODULE.build_render_requests(self.base, self.protocol)
-        records = []
-        for request in requests:
-            records.append({
-                **request,
-                "camera": {"renderer": "real"},
-                "light": {"renderer": "real"},
-                "background": {"renderer": "real"},
-                "scene_json": "missing/scene.json",
-                "image": "missing/img.jpg",
-                "mask": "missing/mask.png",
-            })
+        records, _ = self._make_realization()
+        records[0]["scene_json"] = "missing/scene.json"
         with self.assertRaisesRegex(MODULE.ProtocolError, "Missing realized scene_json"):
             MODULE.validate_realization(self.render_root, records, self.base, self.protocol)
 
@@ -210,7 +298,22 @@ class MultiviewRealizationTests(unittest.TestCase):
         for record in records[1:]:
             if record["cell_id"] == first_cell:
                 shutil.copyfile(first_image, self.render_root / record["image"])
+                record["artifact_sha256"]["image"] = MODULE._file_sha256(self.render_root / record["image"])
         with self.assertRaisesRegex(MODULE.ProtocolError, "20 distinct rendered images"):
+            MODULE.validate_realization(self.render_root, records, self.base, self.protocol)
+
+    def test_fixed_background_drift_is_rejected(self):
+        records, _ = self._make_realization()
+        records[0]["background"] = {**records[0]["background"], "varied": True}
+        with self.assertRaisesRegex(MODULE.ProtocolError, "fixed background"):
+            MODULE.validate_realization(self.render_root, records, self.base, self.protocol)
+
+    def test_noncomplementary_background_mask_is_rejected(self):
+        records, _ = self._make_realization()
+        background_path = self.render_root / records[0]["background_mask"]
+        shutil.copyfile(self.root / "mask.png", background_path)
+        records[0]["artifact_sha256"]["background_mask"] = MODULE._file_sha256(background_path)
+        with self.assertRaisesRegex(MODULE.ProtocolError, "not complements"):
             MODULE.validate_realization(self.render_root, records, self.base, self.protocol)
 
     def test_nonempty_output_directory_is_rejected(self):
