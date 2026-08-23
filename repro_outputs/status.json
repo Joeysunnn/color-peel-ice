@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-22T23:22:40+08:00",
+  "generated_at": "2026-08-23T09:38:58+08:00",
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
-  "target_commit": "e161b71ad7ccf900b7c62082fa07b756d9e6b43a",
+  "target_commit": "388dc56c03fe69f846656a5d8e0e8897891cd896",
   "baseline_commit": "021f5c74cee6c231a03b8b49bb96750cadfc4e06",
   "readme_first": true,
   "selected_goal": "ColorPeel on a 3x3 CLEVR subject-color grid with six shared tokens",
@@ -19,16 +19,16 @@
   "highest_patch_risk": "modifier-token gradient-mask boundary correction",
   "evidence_level": "mixed",
   "local_test_status": "success",
-  "local_pytest": "73 passed in 18.38s with KMP_DUPLICATE_LIB_OK=TRUE for the local Anaconda PyTorch/NumPy OpenMP coexistence issue",
-  "github_push_status": "success_diagnosis_e161b71_turquoise_pre_run_commit_pending",
-  "server_checkout_status": "success_clean_at_e161b71",
+  "local_pytest": "77 passed in 70.93s with KMP_DUPLICATE_LIB_OK=TRUE for the local Anaconda PyTorch/NumPy OpenMP coexistence issue",
+  "github_push_status": "success_matched_generation_commit_388dc56",
+  "server_checkout_status": "success_clean_at_388dc56",
   "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
-  "server_verified_commit": "e161b71ad7ccf900b7c62082fa07b756d9e6b43a",
-  "current_worktree_status": "matched_generation_safety_policy_verified_local_pending_commit",
-  "server_pre_run_changes_status": "training_commit_fast_forwarded_generation_policy_pending_push",
-  "current_changes_test_status": "success_74_tests_plus_compile_json_yaml_and_manifest_dry_runs",
-  "diagnosis_first_github_status": "pushed_e161b71",
-  "diagnosis_first_server_status": "deployed_diagnostics_complete_turquoise_selected",
+  "server_verified_commit": "388dc56c03fe69f846656a5d8e0e8897891cd896",
+  "current_worktree_status": "matched_human_gate_documented_multiview_preflight_hardened_renderer_parameter_pending",
+  "server_pre_run_changes_status": "fast_forwarded_via_github_and_matched_generation_completed",
+  "current_changes_test_status": "success_77_tests_plus_compile_json_yaml_and_diff_check",
+  "diagnosis_first_github_status": "pushed_388dc56",
+  "diagnosis_first_server_status": "matched_generation_complete_human_gate_passed",
   "server_environment_status": "created_verified_and_frozen",
   "training_status": "succeeded_1500_of_1500_finite",
   "generation_status": "succeeded_900_of_900_valid",
@@ -42,8 +42,8 @@
     "source_output_overwrite_allowed": false,
     "new_hash_claimed_by_this_update": false
   },
-  "diagnosis_first_status": "diagnostics_and_turquoise_training_complete_matched_evaluation_pending",
-  "human_review_status": "observed_qualitative_folder_level_not_blinded_turquoise_selected",
+  "diagnosis_first_status": "single_view_human_gate_passed_multiview_next",
+  "human_review_status": "observed_qualitative_not_blinded_turquoise_matched_inference_broadly_improved",
   "human_review_evidence_priority": "primary_for_image_semantics",
   "automated_evaluator_role": "secondary_diagnostic",
   "safety_diagnostic_status": "completed_safety_checker_confirmed_19_of_19",
@@ -85,7 +85,10 @@
     "c2_exposure_steps": 500,
     "c2_nonzero_gradient_steps": 500,
     "c2_embedding_delta_l2": 0.02310725674033165,
-    "matched_generation_status": "pending"
+    "matched_generation_status": "succeeded_900_valid_0_black_0_invalid",
+    "matched_generation_commit": "388dc56c03fe69f846656a5d8e0e8897891cd896",
+    "matched_generation_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-235330__clevr_subject_color_3x3__generate__388dc56__42",
+    "matched_human_gate": "passed_qualitative_broad_improvement"
   },
   "subject_diagnostic_status": "completed_75_of_75_ok_human_accepts_paired_color_conditions",
   "subject_diagnostic_protocol": {
@@ -99,8 +102,8 @@
     "disable_requires_paired_flags": true,
     "execution_status": "completed_75_ok"
   },
-  "multiview_render_status": "pending_no_real_renderer_output",
-  "multiview_training_status": "conditional_not_run",
+  "multiview_render_status": "blocked_pending_neutral_background_distribution_and_renderer_adapter",
+  "multiview_training_status": "pending_renderer_realization_not_run",
   "factor_aware_loss_status": "conditional_not_implemented_not_run",
   "natural_multiobject_status": "conditional_not_implemented_not_run",
   "preflight_status": "passed",
@@ -122,8 +125,8 @@
     "large run artifacts stay outside Git"
   ],
   "unverified_inferences": [
-    "turquoise initialization may improve learned-token cyan transfer; matched generation and review have not run",
-    "folder-level review supports but does not numerically quantify the multi-BPE initializer diagnosis"
+    "folder-level review supports but does not numerically quantify the multi-BPE initializer diagnosis",
+    "single-view improvement may or may not generalize to unseen subject-color combinations and new views"
   ],
   "protocol_deviations": [
     "CLEVR 3x3 replaces official sample data",
@@ -131,8 +134,21 @@
     "last-token gradient defect is corrected",
     "sampling and CLEVR evaluation adapters are added"
   ],
-  "human_decisions_required": [],
-  "next_safe_action": "push and fast-forward the explicitly acknowledged matched-generation SafetyChecker policy, then generate the fresh 900-image turquoise comparison set",
+  "human_decisions_required": [
+    "lock the neutral world/ground background variation distribution for the 180-view renderer"
+  ],
+  "renderer_preflight": {
+    "compliant_renderer_available": false,
+    "object_scale": 1.3,
+    "object_scale_evidence": "existing dataset cube z coordinate and actual modern renderer default",
+    "cycles_samples": 512,
+    "object_rotation": "fixed_zero",
+    "official_camera_jitter": 0.5,
+    "official_per_light_jitter": 1.0,
+    "neutral_background_variation": "pending_explicit_decision",
+    "server_blender_available": false
+  },
+  "next_safe_action": "lock neutral-background variation, then implement a tracked renderer adapter locally and validate one view before rendering all 180",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
@@ -150,7 +166,7 @@
       "turquoise": [19899]
     }
   },
-  "verified_commit_count": 7,
+  "verified_commit_count": 10,
   "outputs": {
     "summary": "repro_outputs/SUMMARY.md",
     "commands": "repro_outputs/COMMANDS.md",
@@ -170,8 +186,9 @@
     "Grounded-SAM and Qwen3-VL were executed as independent stages.",
     "The first Grounded-SAM run is retained as a 600-row API-compatibility failure record; b059bd5 fixed only the pinned Transformers keyword.",
     "Single-axis contingency tables show strong output bias, so no entanglement-solved claim is made.",
-    "The frozen baseline remains complete; turquoise retraining, multiview, new-loss, and natural multi-object follow-up results remain pending or conditional.",
+    "The frozen baseline remains complete; turquoise retraining and matched inference are complete, while multiview, new-loss, and natural multi-object follow-up remain pending or conditional.",
     "The 19 exact-black baseline outputs were reproduced with the FP16 checker enabled and all recovered when only the checker was disabled; FP32 fallback was therefore not run.",
-    "The cyan and subject diagnostic generations completed 540/540 and 75/75; the user selected turquoise through qualitative folder-level review rather than a completed blind-review ledger."
+    "The cyan and subject diagnostic generations completed 540/540 and 75/75; the user selected turquoise through qualitative folder-level review rather than a completed blind-review ledger.",
+    "The matched turquoise inference completed 900/900 with zero black or invalid files; the user reported broad qualitative improvement and authorized multiview held-out validation."
   ]
 }

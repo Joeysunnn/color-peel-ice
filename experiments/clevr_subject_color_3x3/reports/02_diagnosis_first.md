@@ -1,6 +1,6 @@
 # 02 — Diagnosis-first follow-up
 
-- Status: **diagnostics and `turquoise` retraining complete; matched evaluation pending**
+- Status: **single-view diagnosis complete; human gate passed; multiview held-out next**
 - Study: `clevr_subject_color_3x3`
 - Method: `colorpeel_ice`
 - Parent report: [`01_colorpeel_clevr_baseline.md`](01_colorpeel_clevr_baseline.md)
@@ -52,6 +52,12 @@ randomized 540-row blind-review ledger. It is therefore qualitative and
 unblinded. It closes the user-selection gate but is not reported as a blind
 win rate or numerical accuracy.
 
+- **observed, 2026-08-23 matched inference**: after changing only `<c2*>`
+  initialization to `turquoise`, the user inspected the new inference folders
+  and reported broad improvement across the protocol, with outputs now mostly
+  meeting the requested behavior. This is the explicit human gate to proceed
+  to multiview held-out validation; it is not converted into a numerical rate.
+
 These observations revise the interpretation of the automated contingency
 tables without deleting them. In particular, Qwen's sphere-only `other` labels
 conflict with the human observation of mostly gray spheres. Single-axis prompts
@@ -69,8 +75,8 @@ alone does not prove subject-color token entanglement.
 | 3. Cyan diagnosis and initializer selection | 540-image cyan packet and 540 randomized single-image blind-review rows; then one selected initializer | trained/vanilla, candidate, template-family evidence; verified single-token candidates; explicit human approval of one candidate | **completed with protocol deviation**; 540/540 generated, folder-level review selected `turquoise`; randomized blind ledger not completed |
 | 3b. Subject diagnosis | 75-image trained-K/V protocol | 3 shapes × seeds 42–46 × learned-only, natural-only, and learned+literal red/cyan/gray; per-image status and human review | **completed qualitatively**; 75/75 generated and all paired-color conditions accepted by the user |
 | 4. Cyan initializer train | `cyan_initializer_ablation` | clean Git commit, dual smoke provenance, fresh training run, unchanged non-initializer settings | **completed** at commit `0959d1e`; both smokes passed and 1500/1500 loss rows were finite |
-| 5. Matched evaluation | baseline protocol on the new checkpoint | fresh 900-row manifest, human review, secondary automated metrics, direct paired comparison | **pending**; formal follow-up disables the confirmed false-positive SafetyChecker with explicit recorded acknowledgement |
-| 6. Held-out multiview | `multiview_heldout_v1`; conditional `multiview_fold_{a|b|c}_seed{42|43|44}` | renderer provenance and held-out-view manifest before any training; separate render and train records | **pending; no render or training claimed** |
+| 5. Matched evaluation | baseline protocol on the new checkpoint | fresh 900-row manifest, human review, secondary automated metrics, direct paired comparison | **human gate passed**; 900/900 valid, 0 black, 0 invalid; qualitative review reports broad improvement; secondary automated rescoring remains optional/pending |
+| 6. Held-out multiview | `multiview_heldout_v1`; conditional `multiview_fold_{a|b|c}_seed{42|43|44}` | renderer provenance and held-out-view manifest before any training; separate render and train records | **next stage**; protocol ready, real renderer/output still under verification |
 | 7. Factor-aware loss | no approved config | explicit loss definition, ablation control, code review, new method-risk approval | **conditional; not implemented or run** |
 | 8. Natural multi-object test | no approved config | frozen prompt/image protocol and human rubric after synthetic diagnosis | **conditional; not implemented or run** |
 
@@ -90,8 +96,8 @@ The checker-disabled diagnostic completed with 540/540 cyan status rows and
 75/75 subject status rows marked `ok`; the randomized review and condition-key
 CSVs each contain 540 data rows. The user reviewed the organized condition
 folders, accepted every learned-subject plus literal-color group, and selected
-`turquoise` from the trained-K/V cyan candidates. Follow-up training remains
-pending and will use a fresh run directory.
+`turquoise` from the trained-K/V cyan candidates. Follow-up training and its
+matched 900-image inference have now completed in fresh run directories.
 
 ## Approved single-variable training change
 
@@ -150,9 +156,11 @@ initial-to-final L2 delta of `0.0231073`. Ordinary-vocabulary AdamW drift was
 recorded for 49,408 rows and remained non-enforced, as required.
 
 The run saved and reloaded final Custom Diffusion weights plus all six token
-files before exiting successfully. These are training-integrity results only;
-whether cyan transfer improves remains unanswered until matched generation and
-review are complete.
+files before exiting successfully. Matched inference completed at
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-235330__clevr_subject_color_3x3__generate__388dc56__42`:
+900/900 RGB 512×512 images were valid, with zero exact-black outputs. The user
+then reported broad qualitative improvement and accepted progression to the
+multiview held-out study.
 
 ## SafetyChecker diagnosis boundary
 
@@ -179,6 +187,24 @@ default for subject-only prompts, and an initializer-localized cyan failure.
 Because learned `<c2*>` failed while literal colors worked with both vanilla
 and trained K/V, and because the historical `cyan` initializer was silently
 truncated from two tokenizer pieces, the initializer is the leading causal
-explanation. The `turquoise` single-variable retrain is still required to test
-that explanation prospectively. Multiview data, a new loss, and natural
-multi-object evaluation remain later conditional studies.
+explanation. The prospective `turquoise` single-variable retrain and matched
+human review support that explanation. This closes the current single-view
+gate, not the general disentanglement claim: multiview held-out validation is
+next, while a new loss and natural multi-object evaluation remain conditional.
+
+## Multiview preflight boundary
+
+The three held-out folds, 16/4 view split, and three training seeds are
+structurally valid. Before rendering, the multiview preparer was hardened to
+use a dedicated turquoise base config, require an empty isolated output,
+reject duplicate rendered images and missing camera/light/background
+variation, and record held-out train-view and audit-view subsets separately.
+These changes affect protocol integrity only; ColorPeel loss, CAA, K/V scope,
+AdamW behavior, and training step order are unchanged.
+
+No current tracked renderer satisfies the 180-view realization contract. The
+actual 48-image data and closest modern renderer support object scale 1.3,
+512 Cycles samples, and fixed object rotation. Official CLEVR supplies camera
+jitter 0.5 and key/fill/back light jitter 1.0. It does not specify how to vary
+the neutral world/ground background, so no range is selected without an
+explicit experiment decision.

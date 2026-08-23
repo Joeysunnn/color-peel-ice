@@ -3,7 +3,7 @@
 - GitHub fork: `https://github.com/Joeysunnn/color-peel-ice.git`
 - Official upstream baseline: `021f5c74cee6c231a03b8b49bb96750cadfc4e06`
 - Working branch: `repro/2026-08-22-colorpeel-diagnostics`
-- Server-verified evaluation commit: `b059bd5e92cf1994581d8600111d3ed5830dc7d5`
+- Server-verified matched-inference commit: `388dc56c03fe69f846656a5d8e0e8897891cd896`
 - Baseline status: `completed_with_reported_evaluation_failures`
 - Baseline code/test status: `success` (46 isolated final tests; compile and JSON checks
   passed; `git diff --check` clean apart from line-ending notices)
@@ -19,7 +19,7 @@ Qwen stages were deployed from the same clean Git history.
 
 The server checkout at `/home/r12user5/Documents/Jiawei/colorpeel/` was created
 from the GitHub branch and updated only with `git pull --ff-only`; it was clean
-at `c8c874d` when runs launched. The isolated `colorpeel017` environment was
+at `388dc56` after matched inference. The isolated `colorpeel017` environment was
 recreated and frozen. Existing `ice` and `ice-vlm` environments and shared
 model caches were inspected read-only and not modified.
 
@@ -43,14 +43,15 @@ biases, so this evidence does not authorize the statement that entanglement is
 “solved.” It supports a successful ColorPeel-on-CLEVR training/generation
 reproduction plus an auditable, mixed disentanglement diagnosis.
 
-## Diagnosis-first follow-up — turquoise retrained, evaluation pending
+## Diagnosis-first follow-up — single-view human gate passed
 
 The baseline checkpoint is now the frozen comparison anchor. Its source run is
 `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-130816__clevr_subject_color_3x3__baseline__c8c874d__42`
 at training commit `c8c874d00318ae7c1df2265c8627787d316a1ce3`; the completed
 evaluation adapters are anchored at `b059bd5e92cf1994581d8600111d3ed5830dc7d5`.
-The ordered diagnostics and selected follow-up training are complete; no
-matched evaluation result is claimed yet.
+The ordered diagnostics, selected follow-up training, and matched inference are
+complete. The matched semantic result is a qualitative human decision, not a
+computed accuracy.
 
 Human review is primary for image semantics and currently remains qualitative:
 the grid was mostly correct with roughly one or two black images; subject-only
@@ -79,13 +80,15 @@ Both dedicated turquoise smokes passed. The full commit-`0959d1e` run completed
 1500/1500 finite loss rows, saved `checkpoint-1000`, and produced nonzero
 gradient/update evidence for all six modifier tokens. `<c2*>` was exposed and
 updated on all 500 of its steps. The final Custom Diffusion and six token files
-were saved and reloaded successfully. Matched 900-image generation is pending;
-it will explicitly disable the SafetyChecker that the ordered diagnostic proved
-was replacing false-positive outputs with exact-black images.
+were saved and reloaded successfully. Matched inference then completed 900/900
+valid RGB 512×512 images with zero exact-black outputs while explicitly
+recording SafetyChecker disablement and acknowledgement. The user reported
+broad, protocol-wide improvement and approved progression to multiview
+held-out validation.
 
-The ordered `diagnostics_v1` safety investigation, held-out multiview rendering
-and training, any factor-aware loss, and natural multi-object evaluation are
-all pending or conditional. SafetyChecker-disabled outputs are diagnostic-only,
+The ordered `diagnostics_v1` safety investigation is complete. Held-out
+multiview rendering/training is next; any factor-aware loss and natural
+multi-object evaluation remain conditional. SafetyChecker-disabled outputs are diagnostic-only,
 require explicit acknowledgement, and may not replace baseline outputs.
 
 The diagnosis-first implementation passed 73 local tests plus compile, JSON,
@@ -107,6 +110,21 @@ The source-aware transfer rerun retained 600 rows with 588 valid masks. Median
 source references from the nine GT masks were red `[83,35,35]`, cyan
 `[38,91,91]`, and gray `[58,58,58]`. Cyan mean 50%-pixel DeltaE improved from
 66.0792 against nominal RGB to 42.5543 against the rendered-metal reference,
-but remained weak. The 540 cyan and 75 subject controls are currently
-generating on GPU 3; no initializer has been selected and no retraining has
-begun.
+but remained weak. The 540 cyan and 75 subject controls completed. The selected
+`turquoise` initializer passed both smokes, full retraining, matched 900-image
+inference, and the user's qualitative single-view gate.
+
+Multiview preflight found that the existing protocol needed a dedicated
+turquoise base config and stronger realization checks. The prepared changes
+reject the historical multi-piece `cyan` initializer, nonempty/stale output
+directories, repeated-image pseudo-views, and missing camera/light/background
+variation. A real renderer is still required before any fold training. The
+actual 48-image dataset is consistent with object scale 1.3, and the closest
+existing renderer uses 512 Cycles samples and fixed object rotation. Official
+CLEVR supplies camera jitter 0.5 and per-light jitter 1.0, but does not define
+a neutral-background randomization distribution; that scientific choice is
+therefore not silently invented.
+
+The current multiview-preflight worktree passed all 77 local tests plus Python
+compile, JSON/YAML parsing, and diff checks. It has not yet been represented as
+a renderer result, server deployment, or fold-training result.

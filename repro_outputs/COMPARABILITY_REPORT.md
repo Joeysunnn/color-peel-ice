@@ -78,6 +78,12 @@ completed blind-review ledger, so candidate win rates are unavailable. The histo
 baseline configured `cyan`, which the cached tokenizer splits into two IDs;
 the follow-up requires a true single-token initializer. This is a meaningful
 initializer-semantics change and must not be described as an operational fix.
+The matched 900-image run completed without black or invalid files, and the
+user reported broad qualitative improvement. Because the review was not a
+completed per-item blinded ledger, it supports the progression decision but
+does not provide a numerical effect size. The new run also disables a
+SafetyChecker that remained enabled in the frozen baseline, so raw black-image
+counts are not a like-for-like model-quality metric.
 
 `diagnostics_v1` changes generation conditions in ordered, isolated steps:
 FP16 with the default SafetyChecker, FP16 with an explicitly disabled checker,

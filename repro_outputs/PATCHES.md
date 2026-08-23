@@ -172,3 +172,17 @@ Verified pre-run commit: `ca3d313c4d081bcdec5fda6979b05c4fde3415c0`
 passed 73 tests. Runtime evidence is stored outside Git under the diagnostics
 run root recorded in `LOG.md`; generated images and learned weights remain
 outside Git.
+
+## Multiview preflight hardening
+
+- `configs/multiview_base_turquoise.yaml` keeps all official training values
+  and the literal official AdamW policy while locking the selected one-token
+  `turquoise` initializer.
+- `prepare_clevr_multiview.py` now rejects a wrong modifier/initializer map,
+  protocol identity drift, nonempty output directories, contaminated staging,
+  repeated rendered images, and absent camera/light/background variation.
+- Fold evidence now separates held-out train-index views (48 per fold) from
+  matched held-out audit-index views (12 per fold); GT masks remain excluded
+  from all training concept directories.
+- These are protocol-integrity changes. They do not change ColorPeel's model,
+  loss, optimizer, gradients, data loader order, or checkpoint format.

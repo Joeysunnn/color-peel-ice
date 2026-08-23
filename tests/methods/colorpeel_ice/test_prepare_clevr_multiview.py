@@ -65,6 +65,12 @@ class MultiviewProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.ProtocolError, "Held-out folds"):
             MODULE.validate_protocol(self.base, changed)
 
+    def test_protocol_identity_is_locked(self):
+        changed = json.loads(json.dumps(self.protocol))
+        changed["version"] = 2
+        with self.assertRaisesRegex(MODULE.ProtocolError, "version"):
+            MODULE.validate_protocol(self.base, changed)
+
     def test_plan_records_blocked_renderer_without_creating_images(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "protocol"
@@ -90,9 +96,7 @@ class MultiviewRealizationTests(unittest.TestCase):
         self.temp.cleanup()
 
     def _make_realization(self):
-        image_template = self.root / "image.jpg"
         mask_template = self.root / "mask.png"
-        Image.new("RGB", (512, 512), (10, 20, 30)).save(image_template)
         mask_data = bytearray(b"\xff" * (512 * 512))
         mask_data[0] = 0
         Image.frombytes("L", (512, 512), bytes(mask_data)).save(mask_template)
@@ -104,11 +108,12 @@ class MultiviewRealizationTests(unittest.TestCase):
             image_path = view_dir / "img.jpg"
             mask_path = view_dir / f"mask_{request['shape']}_0.png"
             scene_path = view_dir / "scene.json"
-            shutil.copyfile(image_template, image_path)
+            pixel_value = 10 + request["view_index"] * 12
+            Image.new("RGB", (512, 512), (pixel_value, 20 + request["cell_index"] * 10, 30)).save(image_path)
             shutil.copyfile(mask_template, mask_path)
             camera = {"azimuth_degrees": request["view_index"]}
             light = {"renderer_value": request["render_seed"]}
-            background = {"renderer_id": "neutral"}
+            background = {"renderer_id": "neutral", "variant": request["view_index"]}
             scene = {
                 "render_seed": request["render_seed"],
                 "camera": camera,
@@ -158,6 +163,8 @@ class MultiviewRealizationTests(unittest.TestCase):
             self.assertEqual(protocol["train_view_count"], 96)
             self.assertEqual(protocol["seen_audit_view_count"], 24)
             self.assertEqual(protocol["held_out_view_count"], 60)
+            self.assertEqual(protocol["held_out_train_view_count"], 48)
+            self.assertEqual(protocol["held_out_audit_view_count"], 12)
             self.assertEqual(protocol["training_seeds"], [42, 43, 44])
             self.assertFalse(protocol["training_uses_gt_masks"])
             concepts = json.loads((fold_dir / "concepts.json").read_text())
@@ -174,6 +181,10 @@ class MultiviewRealizationTests(unittest.TestCase):
                 self.assertEqual(config["run"]["seed"], seed)
                 self.assertEqual(config["args"]["seed"], seed)
                 self.assertEqual(config["args"]["concepts_list"], str(fold_dir / "concepts.json"))
+                self.assertEqual(
+                    config["args"]["initializer_token"],
+                    "cube+sphere+cylinder+red+turquoise+gray",
+                )
         self.assertEqual(len(list((self.output / "folds").glob("fold_*/train_config_seed*.json"))), 9)
 
     def test_missing_renderer_file_is_rejected(self):
@@ -191,6 +202,29 @@ class MultiviewRealizationTests(unittest.TestCase):
             })
         with self.assertRaisesRegex(MODULE.ProtocolError, "Missing realized scene_json"):
             MODULE.validate_realization(self.render_root, records, self.base, self.protocol)
+
+    def test_duplicate_images_are_rejected_as_fake_multiview(self):
+        records, _ = self._make_realization()
+        first_cell = records[0]["cell_id"]
+        first_image = self.render_root / records[0]["image"]
+        for record in records[1:]:
+            if record["cell_id"] == first_cell:
+                shutil.copyfile(first_image, self.render_root / record["image"])
+        with self.assertRaisesRegex(MODULE.ProtocolError, "20 distinct rendered images"):
+            MODULE.validate_realization(self.render_root, records, self.base, self.protocol)
+
+    def test_nonempty_output_directory_is_rejected(self):
+        _, manifest = self._make_realization()
+        self.output.mkdir()
+        (self.output / "stale.txt").write_text("do not mix runs", encoding="utf-8")
+        with self.assertRaisesRegex(MODULE.ProtocolError, "Output directory must be empty"):
+            with contextlib.redirect_stdout(io.StringIO()):
+                MODULE.main([
+                    "realize",
+                    "--render-root", str(self.render_root),
+                    "--render-manifest", str(manifest),
+                    "--output-dir", str(self.output),
+                ])
 
 
 if __name__ == "__main__":

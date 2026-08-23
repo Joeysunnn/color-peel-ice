@@ -352,3 +352,44 @@ success.
   mean/max L2 `6.76598e-05`/`2.21111e-04`, recorded without enforcement.
 - Training success does not establish transfer improvement. The next evidence
   is a fresh matched 900-image run and human review.
+
+## 2026-08-23 — matched turquoise inference and human gate
+
+- Matched run:
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260822-235330__clevr_subject_color_3x3__generate__388dc56__42`.
+- Launcher manifest: `succeeded`, return code 0, commit `388dc56`.
+- The generation manifest contains 900 rows; every row records
+  `safety_checker_disabled=true` and `safety_risk_acknowledged=true`.
+- Read-only image audit found 900 RGB 512×512 PNGs, zero exact-black images,
+  and zero decode/mode/size failures.
+- The user manually inspected the new inference folders and reported broad
+  improvement after the `turquoise` change, with outputs now mostly meeting
+  requirements. This qualitative decision closes the single-view gate and
+  authorizes the next multiview held-out stage. No numerical human accuracy or
+  claim of general disentanglement is inferred.
+- The generation manifest has 900 unique IDs and SHA-256
+  `60e8597629199f59e856a8e246056247c32bb7fb9cf4d360ff0c26aa01624db1`.
+
+## 2026-08-23 — multiview preflight
+
+- The locked fold structure passed review: each of the nine cells is held out
+  once, every axis value retains two training partners, and each fold has 96
+  training views plus matched audit records.
+- Preflight found that fold configs still inherited the frozen baseline's
+  multi-piece `cyan` initializer. A dedicated turquoise multiview base config
+  now prevents that deterministic startup failure without rewriting baseline.
+- Realization validation now rejects nonempty output directories, repeated
+  images presented as multiple views, absent camera/light/background variation,
+  protocol-identity drift, and contaminated image-only staging.
+- No compliant renderer currently exists in the three local repositories.
+  The closest modern Blender script is untracked in the CLEVER checkout and
+  has fixed camera/light/background metadata, so it is read-only reference
+  material rather than an executable dependency.
+- Existing data object coordinates and renderer code support scale 1.3;
+  renderer defaults support 512 Cycles samples and fixed object rotation.
+  Official CLEVR defines camera jitter 0.5 and per-light jitter 1.0. It does
+  not define a neutral-background variation range, so rendering remains
+  blocked on that explicit scientific parameter rather than inventing one.
+- The complete local regression suite passed 77 tests in 70.93 seconds with
+  the previously documented process-local OpenMP compatibility flag. Compile,
+  JSON/YAML parsing, and `git diff --check` also passed.

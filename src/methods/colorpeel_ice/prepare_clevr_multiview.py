@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -30,8 +31,16 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_DIR = REPO_ROOT / "experiments" / "clevr_subject_color_3x3" / "manifests"
 DEFAULT_BASE_MANIFEST = MANIFEST_DIR / "clevr_3x3_manifest.json"
 DEFAULT_PROTOCOL = MANIFEST_DIR / "clevr_multiview_protocol.json"
-DEFAULT_BASE_CONFIG = REPO_ROOT / "experiments" / "clevr_subject_color_3x3" / "configs" / "baseline.yaml"
+DEFAULT_BASE_CONFIG = (
+    REPO_ROOT
+    / "experiments"
+    / "clevr_subject_color_3x3"
+    / "configs"
+    / "multiview_base_turquoise.yaml"
+)
 RENDERER_FIELDS = ("camera", "light", "background", "scene_json", "image", "mask")
+EXPECTED_MODIFIER_TOKEN = "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>"
+EXPECTED_INITIALIZER_TOKEN = "cube+sphere+cylinder+red+turquoise+gray"
 EXPECTED_FOLDS = {
     "A": {("cube", "red"), ("sphere", "cyan"), ("cylinder", "gray")},
     "B": {("cube", "cyan"), ("sphere", "gray"), ("cylinder", "red")},
@@ -91,6 +100,13 @@ def load_inputs(base_manifest_path: Path, protocol_path: Path) -> tuple[dict[str
 
 
 def validate_protocol(base_manifest: dict[str, Any], protocol: dict[str, Any]) -> None:
+    _require(protocol.get("$schema") == "clevr_multiview_protocol.schema.json", "Protocol schema changed")
+    _require(protocol.get("version") == 1, "Protocol version must be 1")
+    _require(
+        protocol.get("protocol_id") == "clevr_subject_color_3x3_multiview_v1",
+        "Protocol ID changed",
+    )
+    _require(protocol.get("base_manifest") == "clevr_3x3_manifest.json", "Protocol base manifest changed")
     samples = base_manifest.get("samples", [])
     _require(len(samples) == 9, "Base manifest must contain exactly nine cells")
     _require(len({sample.get("id") for sample in samples}) == 9, "Cell IDs must be unique")
@@ -133,6 +149,14 @@ def validate_protocol(base_manifest: dict[str, Any], protocol: dict[str, Any]) -
     contract = protocol.get("realization_contract", {})
     _require(contract.get("renderer_owned_fields") == list(RENDERER_FIELDS), "Renderer-owned fields changed")
     _require(contract.get("resolution") == [512, 512], "Realized views must be 512x512")
+    _require(contract.get("image_mode") == "RGB", "Realized image mode must be RGB")
+    _require(contract.get("mask_mode") == "L", "Realized mask mode must be L")
+    _require(contract.get("mask_values") == [0, 255], "Realized mask values must be [0, 255]")
+    _require(contract.get("empirical_rgb") == {
+        "space": "srgb_u8",
+        "statistic": "masked_mean",
+        "source": "realized_view_gt_mask",
+    }, "Empirical RGB contract changed")
 
 
 def build_render_requests(base_manifest: dict[str, Any], protocol: dict[str, Any]) -> list[dict[str, Any]]:
@@ -207,6 +231,7 @@ def plan_protocol(
 ) -> dict[str, Any]:
     requests = build_render_requests(base_manifest, protocol)
     output_dir = output_dir.resolve()
+    _require_empty_output_dir(output_dir)
     requests_path = output_dir / "render_requests.jsonl"
     _write_jsonl(requests_path, requests)
     renderer_path = renderer.resolve() if renderer is not None else None
@@ -234,6 +259,26 @@ def _resolved_under(root: Path, relative: Any, field: str) -> Path:
         raise ProtocolError(f"Realized {field} escapes render root: {relative}") from exc
     _require(candidate.is_file(), f"Missing realized {field}: {candidate}")
     return candidate
+
+
+def _require_empty_output_dir(output_dir: Path) -> None:
+    if output_dir.exists():
+        _require(output_dir.is_dir(), f"Output path is not a directory: {output_dir}")
+        _require(not any(output_dir.iterdir()), f"Output directory must be empty: {output_dir}")
+    else:
+        output_dir.mkdir(parents=True)
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _metadata_key(value: dict[str, Any]) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
 def _validate_realized_image(image_path: Path, mask_path: Path) -> tuple[list[float], int]:
@@ -271,6 +316,11 @@ def validate_realization(
 
     realized: list[dict[str, Any]] = []
     used_paths: dict[str, set[Path]] = {field: set() for field in ("scene_json", "image", "mask")}
+    image_hashes: dict[str, set[str]] = {sample["id"]: set() for sample in base_manifest["samples"]}
+    metadata_values: dict[str, dict[str, set[str]]] = {
+        sample["id"]: {field: set() for field in ("camera", "light", "background")}
+        for sample in base_manifest["samples"]
+    }
     for expected_record in expected:
         key = (expected_record["cell_id"], expected_record["view_index"])
         supplied = actual_by_key[key]
@@ -282,6 +332,7 @@ def validate_realization(
         for field in ("camera", "light", "background"):
             _require(isinstance(supplied.get(field), dict) and supplied[field],
                      f"Renderer must populate nonempty {field} metadata for {key}")
+            metadata_values[expected_record["cell_id"]][field].add(_metadata_key(supplied[field]))
 
         paths = {field: _resolved_under(render_root, supplied.get(field), field)
                  for field in ("scene_json", "image", "mask")}
@@ -298,6 +349,7 @@ def validate_realization(
             _require(objects[0].get(field) == expected_record[field], f"Scene {field} disagrees for {key}")
 
         mean, foreground = _validate_realized_image(paths["image"], paths["mask"])
+        image_hashes[expected_record["cell_id"]].add(_file_sha256(paths["image"]))
         record = {**expected_record, **supplied}
         record["empirical_rgb"] = {
             "value": mean,
@@ -309,6 +361,10 @@ def validate_realization(
             "foreground_pixels": foreground,
         }
         realized.append(record)
+    for cell_id, hashes in image_hashes.items():
+        _require(len(hashes) == 20, f"Cell {cell_id} must contain 20 distinct rendered images")
+        for field, values in metadata_values[cell_id].items():
+            _require(len(values) > 1, f"Cell {cell_id} has no realized {field} variation")
     return realized
 
 
@@ -331,6 +387,12 @@ def _load_training_config(path: Path) -> dict[str, Any]:
     except OSError as exc:
         raise ProtocolError(f"Cannot read baseline training config: {path}") from exc
     _require(isinstance(value, dict) and value.get("stage") == "train", "Baseline config must be a train mapping")
+    args = value.get("args", {})
+    _require(args.get("modifier_token") == EXPECTED_MODIFIER_TOKEN, "Multiview modifier token mapping changed")
+    _require(
+        args.get("initializer_token") == EXPECTED_INITIALIZER_TOKEN,
+        "Multiview base config must use the selected single-token turquoise initializer",
+    )
     return value
 
 
@@ -370,6 +432,7 @@ def build_fold_outputs(
         )):
             cell = cells_by_pair[pair]
             cell_dir = assets_dir / cell["id"]
+            _require(not cell_dir.exists(), f"Training asset directory already exists: {cell_dir}")
             cell_dir.mkdir(parents=True, exist_ok=True)
             records = sorted(
                 (record for record in train_records if record["cell_id"] == cell["id"]),
@@ -379,6 +442,9 @@ def build_fold_outputs(
             for record in records:
                 source = _resolved_under(render_root, record["image"], "image")
                 _stage_image(source, cell_dir / f"view_{record['view_index']:02d}.jpg")
+            expected_names = {f"view_{index:02d}.jpg" for index in range(16)}
+            actual_names = {path.name for path in cell_dir.iterdir()}
+            _require(actual_names == expected_names, f"Fold {fold_id} cell {cell['id']} staging is contaminated")
             concepts.append({"instance_prompt": cell["instance_prompt"], "instance_data_dir": str(cell_dir)})
 
         concepts_path = fold_dir / "concepts.json"
@@ -390,6 +456,8 @@ def build_fold_outputs(
         held_out_records = [
             record for record in realized if (record["shape"], record["color"]) in held_out
         ]
+        held_out_train_views = [record for record in held_out_records if record["split"] == "train"]
+        held_out_audit_views = [record for record in held_out_records if record["split"] == "audit"]
         fold_protocol = {
             "fold_id": fold_id,
             "training_seeds": list(TRAINING_SEEDS),
@@ -398,10 +466,18 @@ def build_fold_outputs(
             "train_view_count": len(train_records),
             "seen_audit_view_count": len(seen_audit),
             "held_out_view_count": len(held_out_records),
+            "held_out_train_view_count": len(held_out_train_views),
+            "held_out_audit_view_count": len(held_out_audit_views),
             "training_uses_gt_masks": False,
             "train_record_ids": [f"{record['cell_id']}:v{record['view_index']:02d}" for record in train_records],
             "seen_audit_record_ids": [f"{record['cell_id']}:v{record['view_index']:02d}" for record in seen_audit],
             "held_out_record_ids": [f"{record['cell_id']}:v{record['view_index']:02d}" for record in held_out_records],
+            "held_out_train_record_ids": [
+                f"{record['cell_id']}:v{record['view_index']:02d}" for record in held_out_train_views
+            ],
+            "held_out_audit_record_ids": [
+                f"{record['cell_id']}:v{record['view_index']:02d}" for record in held_out_audit_views
+            ],
         }
         _write_json(fold_dir / "fold_protocol.json", fold_protocol)
 
@@ -430,9 +506,10 @@ def realize_protocol(
     output_dir: Path,
     base_config: Path,
 ) -> dict[str, Any]:
+    output_dir = output_dir.resolve()
+    _require_empty_output_dir(output_dir)
     records = _read_jsonl(render_manifest)
     realized = validate_realization(render_root, records, base_manifest, protocol)
-    output_dir = output_dir.resolve()
     realized_path = output_dir / "realized_views.jsonl"
     _write_jsonl(realized_path, realized)
     folds = build_fold_outputs(render_root, realized, base_manifest, protocol, output_dir, base_config)
