@@ -87,6 +87,14 @@ showed fixed neutral backgrounds, complete objects, and no obvious black,
 clipped, or displaced renders. This inspection is a pre-review sanity check,
 not the user's release of the human gate. No Fold smoke or training was run.
 
+## Human gate release
+
+On 2026-08-23 the user reported that the full v2 contact sheet had been
+manually reviewed with no issue and explicitly authorized Fold training. This
+releases only the v2 multiview Fold training gate. It does not authorize a
+factor-aware loss change, natural multi-object training, or any modification
+to the nine derived Fold configs.
+
 ## Smoke and contact-sheet review checklist
 
 - Confirm scene metadata names `multiview_render_v2` and

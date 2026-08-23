@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-23T21:00:00+08:00",
+  "generated_at": "2026-08-23T20:28:12+08:00",
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
@@ -103,7 +103,7 @@
     "execution_status": "completed_75_ok"
   },
   "multiview_render_status": "succeeded_180_of_180_zero_failures",
-  "multiview_render_v2_status": "succeeded_180_of_180_realized_pending_human_review",
+  "multiview_render_v2_status": "succeeded_180_of_180_realized_human_review_passed",
   "multiview_render_v2": {
     "profile_id": "multiview_render_v2",
     "background_profile_id": "clevr_neutral_fixed_v2",
@@ -125,10 +125,10 @@
     "rgb_uniqueness": "20_distinct_sha256_per_cell",
     "contact_sheet_sha256": "0a674ce117d7d34f87c0750fdf48da1fef3aec03336f95574529aaa577ae655cb",
     "fold_staging": "three_folds_96_jpeg_each_no_nonjpeg_files",
-    "derived_configs": "nine_pending_human_review",
+    "derived_configs": "nine_human_authorized_for_training",
     "fold_training_status": "not_run"
   },
-  "multiview_training_status": "pending_human_review_not_run",
+  "multiview_training_status": "human_review_passed_authorized_not_started",
   "factor_aware_loss_status": "conditional_not_implemented_not_run",
   "natural_multiobject_status": "conditional_not_implemented_not_run",
   "preflight_status": "passed",
@@ -159,9 +159,7 @@
     "last-token gradient defect is corrected",
     "sampling and CLEVR evaluation adapters are added"
   ],
-  "human_decisions_required": [
-    "complete the 180-row review CSV and approve or reject the contact sheet before any Fold training"
-  ],
+  "human_decisions_required": [],
   "renderer_preflight": {
     "compliant_renderer_available": true,
     "object_scale": 1.3,
@@ -179,7 +177,7 @@
     "derived_fold_configs": 9,
     "derived_config_status": "pending_human_review"
   },
-  "next_safe_action": "user reviews the full v2 contact sheet and 180-row review CSV; do not start Fold training without explicit approval",
+  "next_safe_action": "preflight the nine immutable v2 Fold configs, then start sequential GPU-3 training with per-run evidence",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
