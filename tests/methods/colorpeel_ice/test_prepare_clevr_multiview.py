@@ -294,6 +294,7 @@ class MultiviewRealizationTests(unittest.TestCase):
             self.assertEqual(len(config_paths), 3)
             for seed, config_path in zip((42, 43, 44), config_paths):
                 config = json.loads(config_path.read_text())
+                self.assertEqual(config["status"], "pending_human_review")
                 self.assertEqual(config["run"]["variant"], f"multiview_fold_{fold_id}_seed{seed}")
                 self.assertEqual(config["run"]["seed"], seed)
                 self.assertEqual(config["args"]["seed"], seed)

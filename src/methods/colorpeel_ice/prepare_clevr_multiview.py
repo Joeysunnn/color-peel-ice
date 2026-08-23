@@ -733,6 +733,7 @@ def build_fold_outputs(
 
         for seed in TRAINING_SEEDS:
             train_config = json.loads(json.dumps(base_config))
+            train_config["status"] = "pending_human_review"
             train_config["run"]["variant"] = f"multiview_fold_{fold_id.lower()}_seed{seed}"
             train_config["run"]["seed"] = seed
             train_config["data_manifest"] = str(realized_manifest_path)
