@@ -3,8 +3,8 @@
 
 Run through Blender, for example:
 
-  blender --background --python-exit-code 1 --cycles-device CUDA \
-    --cycles-print-stats --python render_clevr_multiview.py -- \
+  blender --background --python-exit-code 1 --python render_clevr_multiview.py -- \
+    --cycles-device CUDA --cycles-print-stats \
     --requests render_requests.jsonl --profile multiview_render.json \
     --output-root rendered --properties-json data/properties.json \
     --base-scene-blendfile data/base_scene.blend \
@@ -69,7 +69,20 @@ def require(condition: bool, message: str) -> None:
 
 def extract_blender_args(argv: list[str] | None = None) -> list[str]:
     argv = sys.argv if argv is None else argv
-    return argv[argv.index("--") + 1:] if "--" in argv else argv[1:]
+    args = argv[argv.index("--") + 1:] if "--" in argv else argv[1:]
+    cleaned: list[str] = []
+    index = 0
+    while index < len(args):
+        if args[index] == "--cycles-device":
+            require(index + 1 < len(args), "--cycles-device requires CUDA")
+            require(args[index + 1] == "CUDA", "Cycles device must remain CUDA")
+            index += 2
+        elif args[index] == "--cycles-print-stats":
+            index += 1
+        else:
+            cleaned.append(args[index])
+            index += 1
+    return cleaned
 
 
 def build_parser() -> argparse.ArgumentParser:

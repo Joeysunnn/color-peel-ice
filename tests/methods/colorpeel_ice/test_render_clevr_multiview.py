@@ -43,6 +43,20 @@ class RendererContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RENDERER.RendererError, "differs from locked"):
             RENDERER.validate_profile(changed)
 
+    def test_blender_cycles_arguments_are_locked_and_removed_before_argparse(self):
+        argv = [
+            "blender", "--background", "--", "--cycles-device", "CUDA",
+            "--cycles-print-stats", "--requests", "requests.jsonl",
+        ]
+        self.assertEqual(
+            RENDERER.extract_blender_args(argv),
+            ["--requests", "requests.jsonl"],
+        )
+        with self.assertRaisesRegex(RENDERER.RendererError, "remain CUDA"):
+            RENDERER.extract_blender_args([
+                "blender", "--", "--cycles-device", "OPTIX", "--requests", "requests.jsonl",
+            ])
+
     def test_seed_420000_exact_official_draw_order(self):
         offsets = official_jitter_metadata(420000, EXPECTED_PROFILE)
         self.assertEqual(offsets["camera_offset"], [

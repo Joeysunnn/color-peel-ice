@@ -477,9 +477,9 @@ export CUDA_VISIBLE_DEVICES=3
 BLENDER=/home/r12user5/Documents/Jiawei/tools/blender-4.2.11-linux-x64/blender
 ASSETS=/home/r12user5/Documents/Jiawei/papers/CLEVER/image_generation/data
 
-"$BLENDER" --background --python-exit-code 1 --cycles-device CUDA \
-  --cycles-print-stats \
+"$BLENDER" --background --python-exit-code 1 \
   --python scripts/methods/colorpeel_ice/render_clevr_multiview.py -- \
+  --cycles-device CUDA --cycles-print-stats \
   --requests "$RENDER_RUN/protocol/render_requests.jsonl" \
   --profile experiments/clevr_subject_color_3x3/configs/multiview_render.json \
   --output-root "$SMOKE_RUN/rendered" \
