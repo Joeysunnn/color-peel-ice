@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version", "protocol_id", "source_render_protocol_id",
+    "prompt_template", "subjects", "colors", "folds", "training_seeds",
+    "generation_seeds", "sampling", "expected"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "protocol_id": {"const": "clevr_subject_color_3x3_multiview_heldout_bundle_v1"},
+    "source_render_protocol_id": {"const": "clevr_subject_color_3x3_multiview_v2"},
+    "prompt_template": {"const": "a photo of {subject_token} shape in {color_token} color"},
+    "subjects": {"type": "array", "minItems": 3, "maxItems": 3},
+    "colors": {"type": "array", "minItems": 3, "maxItems": 3},
+    "folds": {"type": "array", "minItems": 3, "maxItems": 3},
+    "training_seeds": {"const": [42, 43, 44]},
+    "generation_seeds": {
+      "type": "array", "minItems": 20, "maxItems": 20,
+      "items": {"type": "integer"}, "uniqueItems": true
+    },
+    "sampling": {
+      "type": "object",
+      "required": ["num_inference_steps", "guidance_scale", "dtype", "safety_checker_policy"]
+    },
+    "expected": {
+      "type": "object",
+      "required": [
+        "checkpoints", "prompts_per_checkpoint", "images_per_checkpoint",
+        "seen_images_per_checkpoint", "held_out_images_per_checkpoint",
+        "total_images", "total_seen_images", "total_held_out_images"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

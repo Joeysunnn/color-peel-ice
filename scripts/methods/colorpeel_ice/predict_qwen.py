@@ -1,7 +1,7 @@
 """Predict CLEVR shape/color labels with a frozen Qwen3-VL model.
 
-This stage is independent of ICE. It processes exactly the 300 non-transfer
-manifest items and writes one success or failure JSON object per image.
+This stage is independent of ICE. It supports the locked 300-image baseline or
+the versioned 1620-image multiview campaign and writes one status per image.
 """
 
 from __future__ import annotations
@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from PIL import Image
+
+from src.methods.colorpeel_ice.multiview_evaluation_protocol import (
+    read_evaluation_protocol,
+    validate_campaign_manifest,
+)
 
 
 MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
@@ -53,6 +58,12 @@ def non_transfer_items(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     if len(ids) != len(set(ids)):
         raise ValueError("non-transfer manifest contains duplicate ids")
     return items
+
+
+def multiview_items(
+    rows: Iterable[dict[str, Any]], protocol: dict[str, Any]
+) -> list[dict[str, Any]]:
+    return validate_campaign_manifest(rows, protocol)
 
 
 def write_jsonl(rows: Iterable[dict[str, Any]], path: Path) -> None:
@@ -150,6 +161,10 @@ def _status_base(item: dict[str, Any], image_path: Path) -> dict[str, Any]:
         "predicted_shape": None,
         "predicted_color": None,
         "raw_response": None,
+        "fold_id": item.get("fold_id"),
+        "training_seed": item.get("training_seed"),
+        "generation_seed": item.get("generation_seed"),
+        "combination_status": item.get("combination_status"),
     }
 
 
@@ -210,19 +225,62 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--image-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--evaluation-protocol", type=Path)
     parser.add_argument("--device", default="cuda:3")
-    return parser.parse_args(argv)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--protocol",
+        choices=("baseline", "multiview-heldout"),
+        default="baseline",
+    )
+    args = parser.parse_args(argv)
+    if args.protocol == "multiview-heldout" and args.evaluation_protocol is None:
+        parser.error("--evaluation-protocol is required for multiview-heldout")
+    return args
+
+
+def append_jsonl(row: dict[str, Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        stream.flush()
+
+
+def completed_ids(output: Path, items: list[dict[str, Any]], resume: bool) -> set[str]:
+    if not output.exists():
+        return set()
+    if not resume:
+        raise FileExistsError(f"prediction output already exists; use --resume: {output}")
+    existing = read_jsonl(output)
+    item_ids = {item["id"] for item in items}
+    ids = [row.get("id") for row in existing]
+    if any(not isinstance(item_id, str) or item_id not in item_ids for item_id in ids):
+        raise ValueError("prediction output contains an unknown or invalid id")
+    if len(ids) != len(set(ids)):
+        raise ValueError("prediction output contains duplicate ids")
+    return set(ids)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    items = non_transfer_items(read_jsonl(args.manifest))
+    rows = read_jsonl(args.manifest)
+    if args.protocol == "baseline":
+        items = non_transfer_items(rows)
+    else:
+        protocol = read_evaluation_protocol(args.evaluation_protocol)
+        items = multiview_items(rows, protocol)
+    done = completed_ids(args.output, items, args.resume)
+    pending = [item for item in items if item["id"] not in done]
+    if not pending:
+        return 0
     try:
         predictor = QwenPredictor(args.device)
     except Exception as error:
-        write_jsonl(model_load_failures(items, args.image_dir, error), args.output)
+        for status in model_load_failures(pending, args.image_dir, error):
+            append_jsonl(status, args.output)
         return 1
-    write_jsonl(run_predictions(items, args.image_dir, predictor), args.output)
+    for item in pending:
+        append_jsonl(run_predictions([item], args.image_dir, predictor)[0], args.output)
     return 0
 
 

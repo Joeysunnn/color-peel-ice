@@ -6,6 +6,7 @@ import unittest
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -202,6 +203,69 @@ class ExperimentRunnerTests(unittest.TestCase):
                 colorpeel_run.read_config(color_path)["args"]["mask-dir"],
                 "/external/masks",
             )
+
+    def test_qwen_resume_requires_same_commit_config_and_appends_resume_flag(self):
+        commit = "1234567890abcdef1234567890abcdef12345678"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = {
+                "stage": "predict_qwen",
+                "run": {
+                    "study": "clevr_subject_color_3x3",
+                    "variant": "heldout_qwen",
+                    "seed": 42,
+                },
+                "args": {
+                    "manifest": "/data/campaign.jsonl",
+                    "image-dir": "/",
+                },
+            }
+            config_path = root / "qwen.json"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            run_id = (
+                "20260824-120000__clevr_subject_color_3x3__heldout_qwen__"
+                f"{commit[:7]}__42"
+            )
+            run_dir = root / "runs" / run_id
+            (run_dir / "logs").mkdir(parents=True)
+            (run_dir / "config.yaml").write_text(json.dumps(config), encoding="utf-8")
+            environment = {**os.environ, "COLORPEEL_RUN_ROOT": str(root / "runs")}
+            with patch.dict(os.environ, environment, clear=True), patch.object(
+                colorpeel_run,
+                "git_info",
+                return_value={"commit": commit, "branch": "test"},
+            ):
+                command = colorpeel_run.build_command(config, run_dir, environment)
+                manifest = {
+                    "status": "failed",
+                    "returncode": 1,
+                    "stage": "predict_qwen",
+                    "run": config["run"],
+                    "git": {"commit": commit, "branch": "test"},
+                    "command": command,
+                }
+                (run_dir / "manifest.json").write_text(
+                    json.dumps(manifest), encoding="utf-8"
+                )
+                with patch.object(
+                    colorpeel_run.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(returncode=0),
+                ) as run_mock:
+                    result = colorpeel_run.main(
+                        [
+                            "--config",
+                            str(config_path),
+                            "--run-dir",
+                            str(run_dir),
+                            "--resume",
+                        ]
+                    )
+            self.assertEqual(result, 0)
+            self.assertIn("--resume", run_mock.call_args.args[0])
+            resumed = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(resumed["status"], "succeeded")
+            self.assertEqual(resumed["resume_count"], 1)
 
 
 if __name__ == "__main__":

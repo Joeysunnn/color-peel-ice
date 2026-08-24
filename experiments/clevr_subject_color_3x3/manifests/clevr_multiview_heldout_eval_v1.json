@@ -1,0 +1,40 @@
+{
+  "$schema": "clevr_multiview_heldout_eval_v1.schema.json",
+  "schema_version": 1,
+  "protocol_id": "clevr_subject_color_3x3_multiview_heldout_bundle_v1",
+  "source_render_protocol_id": "clevr_subject_color_3x3_multiview_v2",
+  "prompt_template": "a photo of {subject_token} shape in {color_token} color",
+  "subjects": [
+    {"id": "s1", "token": "<s1*>", "label": "cube"},
+    {"id": "s2", "token": "<s2*>", "label": "sphere"},
+    {"id": "s3", "token": "<s3*>", "label": "cylinder"}
+  ],
+  "colors": [
+    {"id": "c1", "token": "<c1*>", "label": "red"},
+    {"id": "c2", "token": "<c2*>", "label": "cyan"},
+    {"id": "c3", "token": "<c3*>", "label": "gray"}
+  ],
+  "folds": [
+    {"id": "A", "held_out": [["cube", "red"], ["sphere", "cyan"], ["cylinder", "gray"]]},
+    {"id": "B", "held_out": [["cube", "cyan"], ["sphere", "gray"], ["cylinder", "red"]]},
+    {"id": "C", "held_out": [["cube", "gray"], ["sphere", "red"], ["cylinder", "cyan"]]}
+  ],
+  "training_seeds": [42, 43, 44],
+  "generation_seeds": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61],
+  "sampling": {
+    "num_inference_steps": 100,
+    "guidance_scale": 6.0,
+    "dtype": "float16",
+    "safety_checker_policy": "disabled_after_confirmed_false_positive_with_explicit_acknowledgement"
+  },
+  "expected": {
+    "checkpoints": 9,
+    "prompts_per_checkpoint": 9,
+    "images_per_checkpoint": 180,
+    "seen_images_per_checkpoint": 120,
+    "held_out_images_per_checkpoint": 60,
+    "total_images": 1620,
+    "total_seen_images": 1080,
+    "total_held_out_images": 540
+  }
+}

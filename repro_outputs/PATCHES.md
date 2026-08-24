@@ -224,3 +224,18 @@ outside Git.
 - Implementation commits: `097ec27`, `28a51bb`, and `bb75930`. Real smoke
   completed five cube views and one cylinder view; full v2 realization and
   Fold training remain unrun.
+
+## Multiview held-out campaign adapters
+
+- Added an immutable 1620-row complete-bundle protocol and strict shared
+  validator for the exact Fold/seed/cell/generation-seed matrix.
+- Added generation provenance binding to the parent training manifest/config,
+  final model artifacts, protocol file, per-image status, and SHA-256.
+- Added a nine-run bundle stage that rejects incomplete, conflicting, duplicate,
+  non-RGB, wrong-size, or hash-mismatched outputs before creating a legal
+  campaign manifest, randomized human-review ledger, and contact sheets.
+- Added launcher and Qwen resume paths. Resume is allowed only for the exact
+  original run revision/config/command; Qwen persists one row at a time.
+- Added a separate held-out scorer. The original baseline generator and scorer
+  remain unchanged; no training math, loss, optimizer, mask boundary, checkpoint,
+  or prompt template changed.

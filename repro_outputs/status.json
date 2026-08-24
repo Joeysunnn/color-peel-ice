@@ -24,7 +24,7 @@
   "server_checkout_status": "success_clean_code_at_f7bc52d_full_v2_realization",
   "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
   "server_verified_commit": "f7bc52dffa32345ee09cc25804d67866f68f49de",
-  "current_worktree_status": "multiview_180_render_and_staging_complete_pending_human_review",
+  "current_worktree_status": "nine_multiview_fold_runs_validated_heldout_generation_prepared",
   "server_pre_run_changes_status": "fast_forwarded_via_github_to_f7bc52d",
   "current_changes_test_status": "success_json_parse_and_diff_check_docs_only_no_code_changes",
   "diagnosis_first_github_status": "pushed_de279ca_multiview_renderer_validation_and_gate",
@@ -126,16 +126,21 @@
     "contact_sheet_sha256": "0a674ce117d7d34f87c0750fdf48da1fef3aec03336f95574529aaa577ae655cb",
     "fold_staging": "three_folds_96_jpeg_each_no_nonjpeg_files",
     "derived_configs": "nine_human_authorized_for_training",
-    "fold_training_status": "not_run"
+    "fold_training_status": "succeeded_9_of_9"
   },
-  "multiview_training_status": "running_sequential_completed_1_of_9_active_fold_a_seed43",
+  "multiview_training_status": "succeeded_9_of_9",
   "multiview_training": {
     "launch_commit": "9cf1446704ebf0fbc141e0fa28657f81204c8ac0",
     "campaign": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-203240__multiview_v2_fold_training_campaign__9cf1446",
     "execution": "sequential_stop_on_first_failure_gpu3",
     "planned_runs": 9,
-    "completed_runs": 1,
-    "active_run": "multiview_v2_fold_a_seed43",
+    "completed_runs": 9,
+    "active_run": null,
+    "campaign_finished_at": "2026-08-23T21:49:51+08:00",
+    "all_runs_finite_1500_steps": true,
+    "all_runs_checkpoint_1000": true,
+    "all_runs_final_weights_and_six_tokens": true,
+    "all_runs_reload_succeeded": true,
     "first_completed_run": {
       "variant": "multiview_v2_fold_a_seed42",
       "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-203240__clevr_subject_color_3x3__multiview_v2_fold_a_seed42__9cf1446__42",
@@ -147,6 +152,19 @@
       "reload_succeeded": true,
       "ordinary_vocabulary_drift_policy": "record_only_not_failure"
     }
+  },
+  "multiview_heldout_evaluation": {
+    "protocol_id": "clevr_subject_color_3x3_multiview_heldout_bundle_v1",
+    "status": "generation_prepared_not_started",
+    "checkpoints": 9,
+    "images_per_checkpoint": 180,
+    "total_images": 1620,
+    "seen_images": 1080,
+    "held_out_images": 540,
+    "generation_seeds": "42-61",
+    "complete_bundle_only": true,
+    "human_review_is_primary": true,
+    "qwen_is_secondary": true
   },
   "factor_aware_loss_status": "conditional_not_implemented_not_run",
   "natural_multiobject_status": "conditional_not_implemented_not_run",
@@ -196,7 +214,7 @@
     "derived_fold_configs": 9,
     "derived_config_status": "pending_human_review"
   },
-  "next_safe_action": "monitor the detached nine-run GPU-3 Fold queue; validate each manifest, finite metrics, embedding audit, and checkpoints before held-out generation",
+  "next_safe_action": "push and fast-forward the audited held-out adapters, rerun tests on the server, then launch the nine sequential 180-image generation runs on GPU 3",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",

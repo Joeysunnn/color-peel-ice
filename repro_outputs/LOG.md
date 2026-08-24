@@ -499,3 +499,26 @@ success.
   480–512 with positive embedding deltas. Final Custom Diffusion weights, six
   token files, embedding audit, and post-save reload were present. The queue
   advanced automatically to Fold A / seed 43. No held-out result is claimed.
+
+## 2026-08-24 — nine Fold runs complete and held-out campaign prepared
+
+- The sequential GPU-3 queue ended with `CAMPAIGN_SUCCESS` at
+  `2026-08-23T21:49:51+08:00`. All nine Fold/seed runs (A/B/C × 42/43/44)
+  returned 0 and contain exactly 1500 finite, sequential metric rows.
+- Every run has six distinct expected modifier-token audit rows with positive
+  embedding deltas, checkpoint-1000, final K/V plus six token files, and
+  post-save reload evidence. Ordinary-vocabulary drift remains record-only
+  under literal official AdamW behavior.
+- Added a versioned complete-bundle held-out protocol: nine checkpoints × nine
+  complete subject/color prompts × seeds 42–61 = 1620 images (1080 seen, 540
+  held-out). Cyan remains the target label; `turquoise` remains only the
+  single-token initializer.
+- The generation adapter disables the previously confirmed false-positive
+  SafetyChecker only with paired acknowledgement, binds each row to parent
+  training/config/model/protocol hashes, and supports provenance-aware resume.
+- Nine successful generation runs must pass an immutable merge step before
+  human review or Qwen. The merge validates every 512×512 RGB/hash/status,
+  writes a randomized 1620-row human-review ledger and nine 180-image contact
+  sheets. Qwen is incremental/resumable and remains secondary to human review.
+- No held-out image, metric, disentanglement claim, factor-aware loss, or
+  natural multi-object run is claimed by this preparation update.

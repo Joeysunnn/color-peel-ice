@@ -26,11 +26,15 @@ STAGES = {
     "prepare": "src/methods/colorpeel_ice/prepare_clevr_3x3.py",
     "train": "src/train/train_colorpeel.py",
     "generate": "scripts/methods/colorpeel_ice/generate.py",
+    "generate_multiview": "scripts/methods/colorpeel_ice/generate_multiview_heldout.py",
+    "bundle_multiview": "src/methods/colorpeel_ice/bundle_multiview_evaluation.py",
     "segment": "scripts/methods/colorpeel_ice/segment_grounded_sam.py",
     "predict_qwen": "scripts/methods/colorpeel_ice/predict_qwen.py",
     "score_clevr": "scripts/methods/colorpeel_ice/score_clevr_predictions.py",
     "score_color": "scripts/methods/colorpeel_ice/evaluate_color_metrics.py",
+    "score_multiview": "scripts/methods/colorpeel_ice/score_multiview_heldout.py",
 }
+RESUMABLE_STAGES = {"generate_multiview", "predict_qwen"}
 MANAGED_ARGUMENTS = {
     "output_dir",
     "output-dir",
@@ -50,7 +54,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--dry-run", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true")
+    mode.add_argument("--resume", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -158,8 +164,10 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "data")}
     if stage == "train":
         return {"output_dir": str(run_dir / "checkpoints")}
-    if stage == "generate":
+    if stage in {"generate", "generate_multiview"}:
         return {"output-dir": str(run_dir / "inference")}
+    if stage == "bundle_multiview":
+        return {"output-dir": str(run_dir / "evaluation" / "campaign")}
     if stage == "segment":
         return {
             "mask-dir": str(run_dir / "evaluation" / "masks"),
@@ -174,6 +182,8 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         }
     if stage == "score_color":
         return {"output": str(run_dir / "evaluation" / "color_metrics.csv")}
+    if stage == "score_multiview":
+        return {"output-dir": str(run_dir / "evaluation" / "multiview_metrics")}
     raise AssertionError(stage)
 
 
@@ -203,8 +213,6 @@ def main(argv: list[str] | None = None) -> int:
     revision = git_info()
     run_dir = resolve_run_dir(cli.run_dir)
     validate_run_id(run_dir, config, revision["commit"])
-    if run_dir.exists():
-        raise FileExistsError(f"run directory already exists: {run_dir}")
 
     environment = os.environ.copy()
     for key, value in config.get("environment", {}).items():
@@ -213,6 +221,55 @@ def main(argv: list[str] | None = None) -> int:
         environment[key] = str(value)
     environment["COLORPEEL_RUN_DIR"] = str(run_dir)
     command = build_command(config, run_dir, environment)
+
+    manifest_path = run_dir / "manifest.json"
+    if cli.resume:
+        if config["stage"] not in RESUMABLE_STAGES:
+            raise ValueError(f"stage is not resumable: {config['stage']}")
+        if not run_dir.is_dir() or not manifest_path.is_file():
+            raise FileNotFoundError(f"resume run directory is incomplete: {run_dir}")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("status") not in {"running", "failed"}:
+            raise ValueError("only running or failed runs may be resumed")
+        if manifest.get("git") != revision:
+            raise ValueError("resume requires the exact original Git revision")
+        snapshot_config = read_config(run_dir / "config.yaml")
+        if snapshot_config != config:
+            raise ValueError("resume config does not match the immutable run snapshot")
+        if manifest.get("command") != command:
+            raise ValueError("resume command does not match the original command")
+        if config["stage"] == "generate_multiview":
+            if config["args"].get("skip-existing") is not True:
+                raise ValueError("multiview resume requires locked skip-existing=true")
+        else:
+            command = [*command, "--resume"]
+        manifest["status"] = "running"
+        manifest["resume_count"] = int(manifest.get("resume_count", 0)) + 1
+        manifest["resume_started_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        manifest.setdefault("resume_commands", []).append(command)
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        with (run_dir / "logs" / "stdout.log").open("a", encoding="utf-8") as log:
+            log.write(f"\n===== RESUME {manifest['resume_count']} =====\n")
+            log.flush()
+            result = subprocess.run(
+                command,
+                cwd=PROJECT_ROOT,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+        manifest["finished_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        manifest["returncode"] = result.returncode
+        manifest["status"] = "succeeded" if result.returncode == 0 else "failed"
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return result.returncode
+
+    if run_dir.exists():
+        raise FileExistsError(f"run directory already exists: {run_dir}")
 
     for name in ("logs", "checkpoints", "data", "inference", "evaluation", "figures"):
         (run_dir / name).mkdir(parents=True, exist_ok=True)
@@ -238,7 +295,6 @@ def main(argv: list[str] | None = None) -> int:
         "command": command,
         "managed_outputs": managed_output_args(config["stage"], run_dir),
     }
-    manifest_path = run_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if cli.dry_run:
         print(f"Dry run created: {run_dir}")

@@ -124,9 +124,9 @@ three configs locked to `cube+sphere+cylinder+red+turquoise+gray`.
 
 The 45-image contact sheet was visually inspected: all sampled objects were
 complete and correctly shaped/colored, backgrounds remained neutral, and the
-camera/light span showed no black or invalid images. The 180-row human-review
-CSV remains unfilled, and all nine derived configs are explicitly
-`pending_human_review`. No fold smoke, 1500-step training, held-out result, or
-disentanglement-success claim exists. The final local and server suites each
-passed 90 tests; every server code update was a clean GitHub `--ff-only`
-fast-forward.
+camera/light span showed no black or invalid images. The review gate was then
+accepted and all nine Fold configs completed 1500/1500 finite steps with
+checkpoint and six-token reload evidence. A versioned 1620-image complete-
+bundle evaluation protocol is prepared, but no held-out generation result,
+metric, or disentanglement-success claim exists yet. Every server code update
+remains GitHub-only via clean `git pull --ff-only`.

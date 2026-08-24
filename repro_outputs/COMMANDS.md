@@ -583,3 +583,33 @@ conda run -n colorpeel017 python scripts/launch/colorpeel_run.py \
 
 The detached queue is serial on GPU 3 and stops at the first failure. It uses
 no resume flag, scientific-parameter override, or concurrent Fold process.
+
+## Multiview complete-bundle held-out evaluation
+
+After all nine Fold runs succeed, validate them and derive nine immutable
+generation configs plus one bundle config:
+
+```bash
+conda run -n colorpeel017 python -m src.methods.colorpeel_ice.prepare_multiview_evaluation \
+  --training-root "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3" \
+  --training-commit 9cf1446704ebf0fbc141e0fa28657f81204c8ac0 \
+  --evaluation-protocol experiments/clevr_subject_color_3x3/manifests/clevr_multiview_heldout_eval_v1.json \
+  --output-dir "$PLAN_ROOT"
+```
+
+Launch the nine generated configs serially on GPU 3 with the standard launcher.
+Each run creates 180 complete-bundle images: nine cells × generation seeds
+42–61. If interrupted, use launcher `--resume` against the same run directory;
+the original commit, config, command, image hashes, model fingerprint, and
+protocol fingerprint must still match.
+
+```bash
+conda run -n colorpeel017 python scripts/launch/colorpeel_run.py \
+  --config "$PLAN_ROOT/generation_configs/fold_a_train42.json" \
+  --run-dir "$COLORPEEL_RUN_ROOT/clevr_subject_color_3x3/<immutable-run-id>"
+```
+
+Only after all nine runs succeed, execute the generated `bundle_config.json`
+through the launcher. The bundle must contain exactly 1620 valid rows and emits
+the randomized human ledger, nine contact sheets, and a gated Qwen config.
+Human review remains primary. Qwen/scoring must not run before that review gate.
