@@ -536,3 +536,15 @@ success.
   entanglement score exists.
 - This code update stops before training. A real Blender metal/rubber smoke,
   v2 metal hash match, full 360 render, and renderer human gate are required.
+
+## 2026-08-25 — renderer v3 paired smoke stopped at byte-hash gate
+
+- Server checkout `16ccdbe` passed 129 tests. SD1.4 locally cached tokenizer
+  confirmed `metal [4044]` and `rubber [11331]` as single tokens.
+- The paired real Blender smoke produced two valid CUDA/V100 images at seed
+  420000 with identical camera/light metadata and pixel-identical binary masks.
+- Byte SHA did not reproduce the accepted v2 image. A fresh unchanged-v2
+  control also differed from accepted v2 by 108 channel values of magnitude 1;
+  v3 metal differed by only 30 values of magnitude 1.
+- Per the locked plan, the 360-view render was not started and the validator
+  was not weakened. A protocol decision on pixel-level equivalence is required.
