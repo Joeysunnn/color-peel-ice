@@ -51,3 +51,19 @@ Verified tokenizer evidence from the server `colorpeel017` SD 1.4 cache:
 `cyan [1470, 550]`, `gray [7048]`, `aqua [18613]`, `teal [22821]`, and
 `turquoise [19899]`. The check used `AutoTokenizer` with
 `local_files_only=True`.
+
+## Single-object material extension
+
+| Change | Status | Scientific/comparability effect |
+|---|---|---|
+| Add independent `clevr_subject_color_material_3x3x2` stage | implemented locally; runtime pending renderer gate | Does not overwrite two-axis artifacts |
+| Add `<m1*>` metal and `<m2*>` rubber | implemented; tokenizer runtime preflight pending | Extends the learned bundle from six to eight tokens |
+| Add request-controlled native CLEVR material | implemented as renderer v3 | Sole renderer scientific change from v2; camera, lights, background, scale, pose and Cycles settings remain v2-identical |
+| Pair metal/rubber render seeds by shape-color-view | implemented/tested | Holds camera, lights and Cycles noise fixed across material interventions |
+| Extend unchanged CAA to three prompt tokens | code unchanged; formula regression documented | CAA 0.2 now weights the mean of subject-color, subject-material and color-material pairs |
+| Preserve literal official AdamW decay | unchanged | Ordinary vocabulary drift remains record-only |
+| Add three-axis held-out evaluation | implemented/tested; not run | Reports shape/color/material/joint and three intervention directions, with no composite entanglement score |
+| Add two human gates | implemented | Rendering review blocks all training; full-grid generation review blocks Fold training |
+
+The checkpoint-1000 accelerator state remains evidence only: the upstream
+training entry does not load resume state, so training recovery is not claimed.

@@ -239,3 +239,21 @@ outside Git.
 - Added a separate held-out scorer. The original baseline generator and scorer
   remain unchanged; no training math, loss, optimizer, mask boundary, checkpoint,
   or prompt template changed.
+
+## Three-attribute material extension
+
+- Added `multiview_render_v3_material` without modifying v1/v2 profile data or
+  request schemas. V3 request validation adds `shape_color_index` and
+  `material_token`; resume validates both.
+- V3 hashes both `MyMetal.blend` and `Rubber.blend`, records the selected asset
+  in scene metadata, and keeps material selection outside the RNG stream.
+- Added a separate material prepare/realize path. It rejects realization unless
+  paired camera/light/masks match and all v3 metal RGB/masks match the accepted
+  v2 reference.
+- Generalized only smoke artifact validation to derive modifier files from the
+  training config. Historical six-token constants and two-axis evaluation
+  adapters remain intact.
+- Tightened the training preflight to require equal, unique modifier/initializer
+  counts and newly added modifier tokens. Loss, optimizer, gradient masking,
+  update order, checkpoint format, and ordinary-vocabulary AdamW behavior are
+  unchanged.

@@ -130,3 +130,17 @@ checkpoint and six-token reload evidence. A versioned 1620-image complete-
 bundle evaluation protocol is prepared, but no held-out generation result,
 metric, or disentanglement-success claim exists yet. Every server code update
 remains GitHub-only via clean `git pull --ff-only`.
+
+## 3x3x2 material stage (implementation prepared)
+
+An independent `clevr_subject_color_material_3x3x2` stage now specifies 18
+shape/color/material cells and eight learned tokens. Renderer v3 reuses every
+accepted v2 camera, light, background, object, and Cycles setting; only the
+native CLEVR material becomes request-controlled. Metal/rubber counterparts
+share the same shape-color-view render seed. Realization requires exact hashes
+against all 180 accepted v2 metal RGB/mask outputs before staging 288 full-grid
+and 192 images per Fold.
+
+Training remains blocked by the new 360-view renderer human gate. No material
+training, generation, Qwen prediction, metric, or disentanglement claim is made
+by this implementation update.

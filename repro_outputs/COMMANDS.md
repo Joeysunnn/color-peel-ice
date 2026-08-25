@@ -613,3 +613,17 @@ Only after all nine runs succeed, execute the generated `bundle_config.json`
 through the launcher. The bundle must contain exactly 1620 valid rows and emits
 the randomized human ledger, nine contact sheets, and a gated Qwen config.
 Human review remains primary. Qwen/scoring must not run before that review gate.
+
+## Material renderer gate
+
+```bash
+conda run -n colorpeel017 python -m src.methods.colorpeel_ice.prepare_clevr_multiview_material plan \
+  --output-dir "$MATERIAL_PLAN" \
+  --renderer scripts/methods/colorpeel_ice/render_clevr_multiview.py
+```
+
+Run Blender with `--limit 2` first; request ordering guarantees the first two
+items are the paired metal/rubber view for cube-red at seed 420000. After that
+real smoke passes, render all 360 requests in a new output root. Realization
+requires the accepted v2 render root and manifest so all 180 metal RGB/mask
+hashes can be compared before staging or training is authorized.

@@ -58,6 +58,7 @@ REQUEST_FIELDS = (
     "color_token", "nominal_rgb", "view_index", "split", "render_seed",
     "renderer_profile_id", "renderer_profile_sha256",
 )
+MATERIAL_REQUEST_FIELDS = REQUEST_FIELDS + ("shape_color_index", "material_token")
 RENDERER_OWNED_FIELDS = (
     "camera", "light", "background", "scene_json", "image", "mask", "background_mask",
 )
@@ -159,19 +160,36 @@ def validate_requests(
     records: list[dict[str, Any]],
     profile: dict[str, Any] = EXPECTED_PROFILE,
 ) -> list[dict[str, Any]]:
-    require(len(records) == 180, f"Expected 180 render requests, got {len(records)}")
+    material_profile = profile["profile_id"] == "multiview_render_v3_material"
+    expected_count = 360 if material_profile else 180
+    required_fields = MATERIAL_REQUEST_FIELDS if material_profile else REQUEST_FIELDS
+    require(len(records) == expected_count,
+            f"Expected {expected_count} render requests, got {len(records)}")
     seen: set[tuple[str, int]] = set()
     for record in records:
-        require(all(field in record for field in REQUEST_FIELDS), "Render request is missing locked fields")
+        require(all(field in record for field in required_fields), "Render request is missing locked fields")
         key = (record["cell_id"], record["view_index"])
         require(key not in seen, f"Duplicate render request: {key}")
         seen.add(key)
-        require(record["cell_index"] in range(9), f"Invalid cell_index for {key}")
+        require(record["cell_index"] in range(18 if material_profile else 9),
+                f"Invalid cell_index for {key}")
         require(record["view_index"] in range(20), f"Invalid view_index for {key}")
-        require(record["material"] == "metal", f"Non-metal request: {key}")
+        if material_profile:
+            require(record["shape_color_index"] in range(9),
+                    f"Invalid shape_color_index for {key}")
+            require(record["material"] in {"metal", "rubber"}, f"Invalid material for {key}")
+            require(record["material_token"] in {"<m1*>", "<m2*>",},
+                    f"Invalid material token for {key}")
+            require(
+                record["material_token"] == {"metal": "<m1*>", "rubber": "<m2*>"}[record["material"]],
+                f"Material token does not match material for {key}",
+            )
+        else:
+            require(record["material"] == "metal", f"Non-metal request: {key}")
         require(record["split"] == ("train" if record["view_index"] < 16 else "audit"),
                 f"Invalid split for {key}")
-        expected_seed = 420000 + record["cell_index"] * 100 + record["view_index"]
+        seed_index = record["shape_color_index"] if material_profile else record["cell_index"]
+        expected_seed = 420000 + seed_index * 100 + record["view_index"]
         require(record["render_seed"] == expected_seed, f"Invalid render_seed for {key}")
         require(record["renderer_profile_id"] == profile["profile_id"],
                 f"Invalid renderer profile for {key}")
@@ -195,6 +213,7 @@ def collect_asset_hashes(
     base_scene_path: Path,
     shape_dir: Path,
     material_dir: Path,
+    profile: dict[str, Any] = EXPECTED_PROFILE,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     properties = load_json(properties_path)
     require(isinstance(properties, dict), "properties.json must be an object")
@@ -210,6 +229,9 @@ def collect_asset_hashes(
         assets[f"shape_{shape}"] = _asset_path(shape_dir, properties["shapes"][shape])
     require("metal" in properties["materials"], "properties.json is missing metal material")
     assets["material_metal"] = _asset_path(material_dir, properties["materials"]["metal"])
+    if profile["profile_id"] == "multiview_render_v3_material":
+        require("rubber" in properties["materials"], "properties.json is missing rubber material")
+        assets["material_rubber"] = _asset_path(material_dir, properties["materials"]["rubber"])
     return properties, {name: file_sha256(path) for name, path in assets.items()}
 
 
@@ -262,7 +284,12 @@ def verify_completed_record(
     expected: dict[str, Any],
     contract: dict[str, Any],
 ) -> None:
-    for field in REQUEST_FIELDS:
+    request_fields = (
+        MATERIAL_REQUEST_FIELDS
+        if contract["profile_id"] == "multiview_render_v3_material"
+        else REQUEST_FIELDS
+    )
+    for field in request_fields:
         require(record.get(field) == expected[field], f"Resume record changed {field}")
     require(record.get("renderer_profile_id") == contract["profile_id"], "Resume profile ID changed")
     require(record.get("render_contract_sha256") == canonical_sha256(contract), "Resume contract hash changed")
@@ -386,8 +413,9 @@ def append_shape(shape_dir: Path, object_name: str):
     return obj
 
 
-def create_asset_material(name: str, rgb: list[int], material_dir: Path, properties: dict[str, Any]):
-    source_name = properties["materials"]["metal"]
+def create_asset_material(name: str, rgb: list[int], material: str,
+                          material_dir: Path, properties: dict[str, Any]):
+    source_name = properties["materials"][material]
     blend_path = _asset_path(material_dir, source_name)
     bpy.ops.wm.append(directory=str(blend_path / "NodeTree") + os.sep, filename=source_name, link=False)
     node_group = bpy.data.node_groups.get(source_name)
@@ -413,11 +441,13 @@ def add_object(request: dict[str, Any], profile: dict[str, Any], properties: dic
     obj.location = (profile["object"]["position_xy"][0], profile["object"]["position_xy"][1], scale)
     obj.rotation_euler = (0.0, 0.0, math.radians(profile["object"]["rotation_z_degrees"]))
     obj.scale = (scale, scale, scale)
-    name = f"ColorPeel_{request['shape']}_{request['color']}_metal"
-    material = create_asset_material(name, request["nominal_rgb"], material_dir, properties)
+    name = f"ColorPeel_{request['shape']}_{request['color']}_{request['material']}"
+    material = create_asset_material(
+        name, request["nominal_rgb"], request["material"], material_dir, properties
+    )
     obj.data.materials.clear()
     obj.data.materials.append(material)
-    return obj, "clevr_asset_node_group"
+    return obj, "clevr_asset_node_group", properties["materials"][request["material"]]
 
 
 def apply_view_jitter(profile: dict[str, Any], render_seed: int) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -477,7 +507,8 @@ def apply_view_jitter(profile: dict[str, Any], render_seed: int) -> tuple[dict[s
 
 
 def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[dict[str, Any], dict[str, Any]]:
-    require(profile["profile_id"] == "multiview_render_v2", "Orbit camera requires multiview_render_v2")
+    require(profile["profile_id"] in {"multiview_render_v2", "multiview_render_v3_material"},
+            "Orbit camera requires multiview_render_v2 or multiview_render_v3_material")
     offsets = orbit_jitter_metadata(render_seed, profile)
     camera = bpy.data.objects.get(profile["camera"]["name"])
     require(camera is not None and camera.type == "CAMERA", "Base scene is missing Camera")
@@ -698,9 +729,13 @@ def render_one(
     clear_base_scene_geometry()
     if profile["profile_id"] == "multiview_render_v1":
         camera_metadata, light_metadata = apply_view_jitter(profile, request["render_seed"])
-        obj, material_backend = add_object(request, profile, properties, args.shape_dir, args.material_dir)
+        obj, material_backend, material_asset_name = add_object(
+            request, profile, properties, args.shape_dir, args.material_dir
+        )
     else:
-        obj, material_backend = add_object(request, profile, properties, args.shape_dir, args.material_dir)
+        obj, material_backend, material_asset_name = add_object(
+            request, profile, properties, args.shape_dir, args.material_dir
+        )
         bpy.context.view_layer.update()
         camera_metadata, light_metadata = apply_orbit_view(profile, request["render_seed"], obj)
 
@@ -746,6 +781,10 @@ def render_one(
             "pixel_coords": camera_pixel_coords(bpy.data.objects[profile["camera"]["name"]], obj),
         }],
     }
+    if profile["profile_id"] == "multiview_render_v3_material":
+        material_key = f"material_{request['material']}"
+        scene["objects"][0]["material_asset_name"] = material_asset_name
+        scene["objects"][0]["material_asset_sha256"] = contract["asset_sha256"][material_key]
     write_json(partial_dir / "scene.json", scene)
 
     final_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -786,10 +825,11 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     args.output_root = args.output_root.resolve()
     profile = validate_profile(load_json(args.profile.resolve()))
     requests = validate_requests(load_jsonl(args.requests.resolve()), profile)
-    require(args.limit is None or 1 <= args.limit <= len(requests), "--limit must be between 1 and 180")
+    require(args.limit is None or 1 <= args.limit <= len(requests),
+            f"--limit must be between 1 and {len(requests)}")
     properties, asset_hashes = collect_asset_hashes(
         args.properties_json.resolve(), args.base_scene_blendfile.resolve(),
-        args.shape_dir.resolve(), args.material_dir.resolve(),
+        args.shape_dir.resolve(), args.material_dir.resolve(), profile,
     )
     for request in requests:
         require(properties["colors"].get(request["color"]) == request["nominal_rgb"],
@@ -828,12 +868,12 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     partial_root = args.output_root / ".partial"
     if partial_root.is_dir() and not any(partial_root.iterdir()):
         partial_root.rmdir()
-    state = "succeeded" if args.limit is None and len(completed) == 180 else "partial_smoke"
+    state = "succeeded" if args.limit is None and len(completed) == len(requests) else "partial_smoke"
     result = {
         "status": state,
         "completed_count": len(completed),
         "selected_count": len(selected),
-        "request_count": 180,
+        "request_count": len(requests),
         "resume": args.resume,
         "limit": args.limit,
         "profile_id": profile["profile_id"],

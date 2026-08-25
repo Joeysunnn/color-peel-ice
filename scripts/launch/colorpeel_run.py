@@ -27,14 +27,21 @@ STAGES = {
     "train": "src/train/train_colorpeel.py",
     "generate": "scripts/methods/colorpeel_ice/generate.py",
     "generate_multiview": "scripts/methods/colorpeel_ice/generate_multiview_heldout.py",
+    "generate_material_multiview": "scripts/methods/colorpeel_ice/generate_material_multiview.py",
     "bundle_multiview": "src/methods/colorpeel_ice/bundle_multiview_evaluation.py",
+    "bundle_material_multiview": "src/methods/colorpeel_ice/bundle_material_evaluation.py",
+    "bundle_material_baseline": "src/methods/colorpeel_ice/bundle_material_baseline.py",
     "segment": "scripts/methods/colorpeel_ice/segment_grounded_sam.py",
     "predict_qwen": "scripts/methods/colorpeel_ice/predict_qwen.py",
+    "predict_qwen_material": "scripts/methods/colorpeel_ice/predict_qwen_material.py",
     "score_clevr": "scripts/methods/colorpeel_ice/score_clevr_predictions.py",
     "score_color": "scripts/methods/colorpeel_ice/evaluate_color_metrics.py",
     "score_multiview": "scripts/methods/colorpeel_ice/score_multiview_heldout.py",
+    "score_material_multiview": "scripts/methods/colorpeel_ice/score_material_multiview.py",
 }
-RESUMABLE_STAGES = {"generate_multiview", "predict_qwen"}
+RESUMABLE_STAGES = {
+    "generate_multiview", "generate_material_multiview", "predict_qwen", "predict_qwen_material",
+}
 MANAGED_ARGUMENTS = {
     "output_dir",
     "output-dir",
@@ -164,9 +171,11 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "data")}
     if stage == "train":
         return {"output_dir": str(run_dir / "checkpoints")}
-    if stage in {"generate", "generate_multiview"}:
+    if stage in {"generate", "generate_multiview", "generate_material_multiview"}:
         return {"output-dir": str(run_dir / "inference")}
     if stage == "bundle_multiview":
+        return {"output-dir": str(run_dir / "evaluation" / "campaign")}
+    if stage in {"bundle_material_multiview", "bundle_material_baseline"}:
         return {"output-dir": str(run_dir / "evaluation" / "campaign")}
     if stage == "segment":
         return {
@@ -174,6 +183,8 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
             "output": str(run_dir / "evaluation" / "segmentation_status.jsonl"),
         }
     if stage == "predict_qwen":
+        return {"output": str(run_dir / "evaluation" / "qwen_predictions.jsonl")}
+    if stage == "predict_qwen_material":
         return {"output": str(run_dir / "evaluation" / "qwen_predictions.jsonl")}
     if stage == "score_clevr":
         return {
@@ -184,6 +195,8 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output": str(run_dir / "evaluation" / "color_metrics.csv")}
     if stage == "score_multiview":
         return {"output-dir": str(run_dir / "evaluation" / "multiview_metrics")}
+    if stage == "score_material_multiview":
+        return {"output-dir": str(run_dir / "evaluation" / "material_multiview_metrics")}
     raise AssertionError(stage)
 
 
@@ -238,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("resume config does not match the immutable run snapshot")
         if manifest.get("command") != command:
             raise ValueError("resume command does not match the original command")
-        if config["stage"] == "generate_multiview":
+        if config["stage"] in {"generate_multiview", "generate_material_multiview"}:
             if config["args"].get("skip-existing") is not True:
                 raise ValueError("multiview resume requires locked skip-existing=true")
         else:

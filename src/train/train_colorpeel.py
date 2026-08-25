@@ -775,18 +775,20 @@ def main(args):
         args.modifier_token = args.modifier_token.split("+")
         args.initializer_token = args.initializer_token.split("+")
 
-        if len(args.modifier_token) > len(args.initializer_token):
-            raise ValueError("You must specify + separated initializer token for each modifier token.")
+        if len(args.modifier_token) != len(args.initializer_token):
+            raise ValueError("You must specify exactly one + separated initializer token for each modifier token.")
+        if len(set(args.modifier_token)) != len(args.modifier_token):
+            raise ValueError("Modifier tokens must be unique.")
         for modifier_token, initializer_token in zip(
-            args.modifier_token, args.initializer_token[: len(args.modifier_token)]
+            args.modifier_token, args.initializer_token
         ):
             # Add the placeholder token in tokenizer
             num_added_tokens = tokenizer.add_tokens(modifier_token)
-            # if num_added_tokens == 0:
-            #     raise ValueError(
-            #         f"The tokenizer already contains the token {modifier_token}. Please pass a different"
-            #         " `modifier_token` that is not already in the tokenizer."
-            #     )
+            if num_added_tokens != 1:
+                raise ValueError(
+                    f"The tokenizer already contains the token {modifier_token}. Please pass a different"
+                    " `modifier_token`."
+                )
 
             # Convert the initializer_token, placeholder_token to ids
             # token_ids = tokenizer.encode([initializer_token], add_special_tokens=False)

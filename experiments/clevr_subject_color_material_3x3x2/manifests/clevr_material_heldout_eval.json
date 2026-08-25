@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "protocol_id": "clevr_subject_color_material_3x3x2_heldout_bundle_v1",
+  "source_render_protocol_id": "clevr_subject_color_material_3x3x2_multiview_v3",
+  "training_seeds": [42, 43, 44],
+  "generation_seeds": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61],
+  "subjects": [
+    {"id": "s1", "token": "<s1*>", "label": "cube"},
+    {"id": "s2", "token": "<s2*>", "label": "sphere"},
+    {"id": "s3", "token": "<s3*>", "label": "cylinder"}
+  ],
+  "colors": [
+    {"id": "c1", "token": "<c1*>", "label": "red"},
+    {"id": "c2", "token": "<c2*>", "label": "cyan"},
+    {"id": "c3", "token": "<c3*>", "label": "gray"}
+  ],
+  "materials": [
+    {"id": "m1", "token": "<m1*>", "label": "metal"},
+    {"id": "m2", "token": "<m2*>", "label": "rubber"}
+  ],
+  "prompt_template": "a photo of {subject_token} shape in {color_token} color with {material_token} material",
+  "sampling": {
+    "num_inference_steps": 100,
+    "guidance_scale": 6.0,
+    "dtype": "float16",
+    "safety_checker_policy": "disabled_after_confirmed_false_positive_with_explicit_acknowledgement"
+  },
+  "folds": [
+    {"id": "A", "held_out": [["cube", "red", "metal"], ["sphere", "cyan", "metal"], ["cylinder", "gray", "metal"], ["cube", "cyan", "rubber"], ["sphere", "gray", "rubber"], ["cylinder", "red", "rubber"]]},
+    {"id": "B", "held_out": [["cube", "cyan", "metal"], ["sphere", "gray", "metal"], ["cylinder", "red", "metal"], ["cube", "gray", "rubber"], ["sphere", "red", "rubber"], ["cylinder", "cyan", "rubber"]]},
+    {"id": "C", "held_out": [["cube", "gray", "metal"], ["sphere", "red", "metal"], ["cylinder", "cyan", "metal"], ["cube", "red", "rubber"], ["sphere", "cyan", "rubber"], ["cylinder", "gray", "rubber"]]}
+  ],
+  "expected": {
+    "checkpoints": 9,
+    "prompts_per_checkpoint": 18,
+    "images_per_checkpoint": 360,
+    "seen_images_per_checkpoint": 240,
+    "held_out_images_per_checkpoint": 120,
+    "total_images": 3240,
+    "total_seen_images": 2160,
+    "total_held_out_images": 1080
+  }
+}

@@ -208,6 +208,11 @@ def validate_smoke_audit(config_path, run_dir):
                 errors.append(f"step {expected_step} field {field} is not finite: {value}")
 
     protocol = config.get("protocol", {})
+    modifier_tokens = tuple(config.get("args", {}).get("modifier_token", "").split("+"))
+    if not modifier_tokens or any(not token for token in modifier_tokens):
+        raise ValueError(f"modifier_token is missing from {config_path}")
+    if len(set(modifier_tokens)) != len(modifier_tokens):
+        raise ValueError(f"modifier_token contains duplicates in {config_path}")
     if "expected_exposure_counts" in protocol:
         expected_exposure = {
             str(token): int(count)
@@ -216,8 +221,7 @@ def validate_smoke_audit(config_path, run_dir):
     elif "expected_exposure_per_modifier_token" in protocol:
         count = int(protocol["expected_exposure_per_modifier_token"])
         expected_exposure = {
-            token: count
-            for token in ("<s1*>", "<s2*>", "<s3*>", "<c1*>", "<c2*>", "<c3*>")
+            token: count for token in modifier_tokens
         }
     else:
         raise ValueError(f"smoke exposure expectation is missing from {config_path}")
@@ -231,8 +235,17 @@ def validate_smoke_audit(config_path, run_dir):
             f"modifier token pair sequence: expected {expected_pairs}, got {actual_pairs}"
         )
 
+    if set(expected_exposure) != set(modifier_tokens):
+        raise ValueError(
+            f"smoke exposure tokens differ from modifier_token in {config_path}"
+        )
+
     checkpoint_artifacts = []
-    for name in CHECKPOINT_ARTIFACT_NAMES:
+    checkpoint_artifact_names = (
+        "pytorch_custom_diffusion_weights.bin",
+        *(f"{token}.bin" for token in modifier_tokens),
+    )
+    for name in checkpoint_artifact_names:
         path = evidence_dir / name
         size_bytes = _artifact_size(path)
         checkpoint_artifacts.append(
@@ -249,6 +262,10 @@ def validate_smoke_audit(config_path, run_dir):
     token_evidence = {
         item.get("token"): item for item in embedding_audit.get("modifier_tokens", [])
     }
+    if set(token_evidence) != set(modifier_tokens):
+        errors.append(
+            f"embedding audit tokens: expected {list(modifier_tokens)}, got {list(token_evidence)}"
+        )
     for token, expected_count in expected_exposure.items():
         evidence = token_evidence.get(token)
         if evidence is None:

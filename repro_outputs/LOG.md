@@ -522,3 +522,17 @@ success.
   sheets. Qwen is incremental/resumable and remains secondary to human review.
 - No held-out image, metric, disentanglement claim, factor-aware loss, or
   natural multi-object run is claimed by this preparation update.
+
+## 2026-08-25 — three-attribute implementation
+
+- Created an isolated 3x3x2 material protocol with paired metal/rubber orbit
+  views, 360 render requests, 288-image full-grid staging, and 192-image Fold
+  staging.
+- Added eight-token smoke auditing, strict initializer/token cardinality, and
+  preserved the literal official AdamW embedding decay behavior.
+- Added full-grid and held-out generation manifests, provenance-aware resume,
+  three-key Qwen parsing, per-axis/joint scoring, and three separate
+  intervention tables. Human review remains primary and no single
+  entanglement score exists.
+- This code update stops before training. A real Blender metal/rubber smoke,
+  v2 metal hash match, full 360 render, and renderer human gate are required.
