@@ -223,7 +223,7 @@
     "full_grid_training_images": 288,
     "fold_training_images": 192,
     "modifier_tokens": 8,
-    "renderer_human_gate": "blocked_before_360_render_by_nonreproducible_byte_sha_gate",
+    "renderer_human_gate": "decoded_pixel_gate_approved_patch_in_progress_before_360_render",
     "paired_smoke_status": "rendered_2_of_2_cuda_v100",
     "server_test_status": "129_passed",
     "tokenizer_preflight": {"metal": [4044], "rubber": [11331]},
@@ -235,13 +235,23 @@
       "decoded_mask_pixels_equal": true,
       "full_360_render_started": false
     },
+    "v2_metal_equivalence_gate": {
+      "id": "decoded_pixel_equivalence_v1",
+      "approval": "explicit_user_approval_2026-08-26",
+      "rgb_max_abs_difference": 1,
+      "rgb_mean_abs_difference": 0.001,
+      "mask_comparison": "decoded_pixel_exact",
+      "background_mask_comparison": "decoded_pixel_exact",
+      "raw_sha256_role": "record_only",
+      "renderer_profile_or_request_changed": false
+    },
     "training_status": "not_started_gate_enforced",
     "heldout_evaluation_status": "implemented_not_run",
     "heldout_campaign_images": 3240,
     "gt_masks_in_training": false,
     "ordinary_vocabulary_embedding_policy": "literal_official_adamw_decay_allowed"
   },
-  "next_safe_action": "obtain explicit approval to replace v2 byte-SHA equality with a locked decoded-pixel equivalence criterion, then patch/test/push before starting the 360-view render",
+  "next_safe_action": "patch_test_push_the_approved_decoded_pixel_gate_then_run_a_fresh_360_view_render_and_stop_at_human_review",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",

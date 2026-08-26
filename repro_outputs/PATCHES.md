@@ -248,8 +248,9 @@ outside Git.
 - V3 hashes both `MyMetal.blend` and `Rubber.blend`, records the selected asset
   in scene metadata, and keeps material selection outside the RNG stream.
 - Added a separate material prepare/realize path. It rejects realization unless
-  paired camera/light/masks match and all v3 metal RGB/masks match the accepted
-  v2 reference.
+  paired camera/light metadata and decoded masks match. Accepted-v2 metal RGB
+  uses the explicitly approved decoded-pixel gate (`max <= 1`, `mean <= 0.001`);
+  decoded masks remain exact and all raw hashes are retained as evidence.
 - Generalized only smoke artifact validation to derive modifier files from the
   training config. Historical six-token constants and two-axis evaluation
   adapters remain intact.

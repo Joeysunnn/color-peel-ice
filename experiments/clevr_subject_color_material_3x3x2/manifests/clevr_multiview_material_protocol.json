@@ -35,6 +35,17 @@
     "mask_mode": "L",
     "mask_values": [0, 255],
     "renderer_owned_fields": ["camera", "light", "background", "scene_json", "image", "mask", "background_mask"],
-    "empirical_rgb": {"space": "srgb_u8", "statistic": "masked_mean", "source": "realized_view_gt_mask"}
+    "empirical_rgb": {"space": "srgb_u8", "statistic": "masked_mean", "source": "realized_view_gt_mask"},
+    "v2_metal_reference_equivalence": {
+      "id": "decoded_pixel_equivalence_v1",
+      "rgb": {
+        "comparison": "decoded_rgb_u8",
+        "max_abs_difference": 1,
+        "mean_abs_difference": 0.001
+      },
+      "mask": {"comparison": "decoded_pixel_exact"},
+      "background_mask": {"comparison": "decoded_pixel_exact"},
+      "raw_sha256": "record_only"
+    }
   }
 }

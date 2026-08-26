@@ -14,7 +14,7 @@ import shutil
 import sys
 from typing import Any, Iterable
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageStat
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
@@ -54,6 +54,17 @@ TRAINING_SEEDS = (42, 43, 44)
 MODIFIER_TOKEN = "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>+<m1*>+<m2*>"
 INITIALIZER_TOKEN = "cube+sphere+cylinder+red+turquoise+gray+metal+rubber"
 RENDERER_FIELDS = ("camera", "light", "background", "scene_json", "image", "mask", "background_mask")
+V2_METAL_EQUIVALENCE = {
+    "id": "decoded_pixel_equivalence_v1",
+    "rgb": {
+        "comparison": "decoded_rgb_u8",
+        "max_abs_difference": 1,
+        "mean_abs_difference": 0.001,
+    },
+    "mask": {"comparison": "decoded_pixel_exact"},
+    "background_mask": {"comparison": "decoded_pixel_exact"},
+    "raw_sha256": "record_only",
+}
 EXPECTED_FOLDS = {
     "A": {
         ("cube", "red", "metal"), ("sphere", "cyan", "metal"),
@@ -160,6 +171,9 @@ def validate_protocol(manifest: dict[str, Any], protocol: dict[str, Any]) -> lis
         "background": EXPECTED_PROFILE_V3["background"],
     }
     _require(protocol.get("renderer_profile") == expected_renderer, "Renderer profile changed")
+    realization_contract = protocol.get("realization_contract", {})
+    _require(realization_contract.get("v2_metal_reference_equivalence") == V2_METAL_EQUIVALENCE,
+             "v2 metal reference equivalence gate changed")
     folds = {fold.get("id"): {tuple(cell) for cell in fold.get("held_out", [])}
              for fold in protocol.get("folds", [])}
     _require(folds == EXPECTED_FOLDS, "Material held-out folds changed")
@@ -383,15 +397,41 @@ def build_training_outputs(render_root: Path, realized: list[dict[str, Any]], ce
     return summaries
 
 
-def _reference_hashes(v2_root: Path, v2_manifest: Path) -> dict[tuple[str, str, int], dict[str, str]]:
+def _decoded_rgb_difference(candidate: Path, reference: Path) -> dict[str, Any]:
+    with Image.open(candidate) as candidate_image, Image.open(reference) as reference_image:
+        _require(candidate_image.mode == reference_image.mode == "RGB", "RGB comparison requires RGB inputs")
+        _require(candidate_image.size == reference_image.size, "RGB comparison dimensions differ")
+        difference = ImageChops.difference(candidate_image, reference_image)
+        max_abs = max(maximum for _, maximum in difference.getextrema())
+        mean_abs = sum(ImageStat.Stat(difference).mean) / 3.0
+        changed = sum(value != 0 for value in difference.tobytes())
+    return {
+        "max_abs_difference": max_abs,
+        "mean_abs_difference": mean_abs,
+        "changed_channel_values": changed,
+        "pixel_equivalent": (
+            max_abs <= V2_METAL_EQUIVALENCE["rgb"]["max_abs_difference"]
+            and mean_abs <= V2_METAL_EQUIVALENCE["rgb"]["mean_abs_difference"]
+        ),
+    }
+
+
+def _decoded_pixels_equal(candidate: Path, reference: Path) -> bool:
+    with Image.open(candidate) as candidate_image, Image.open(reference) as reference_image:
+        if candidate_image.mode != reference_image.mode or candidate_image.size != reference_image.size:
+            return False
+        return ImageChops.difference(candidate_image, reference_image).getbbox() is None
+
+
+def _reference_artifacts(v2_root: Path, v2_manifest: Path) -> dict[tuple[str, str, int], dict[str, Any]]:
     refs = {}
     for row in _read_jsonl(v2_manifest):
         key = (row.get("shape"), row.get("color"), row.get("view_index"))
         _require(key not in refs, f"Duplicate v2 reference: {key}")
-        refs[key] = {
-            field: _file_sha256(_resolved_under(v2_root, row[field], field))
-            for field in ("image", "mask", "background_mask")
-        }
+        refs[key] = {}
+        for field in ("image", "mask", "background_mask"):
+            path = _resolved_under(v2_root, row[field], field)
+            refs[key][field] = {"path": path, "sha256": _file_sha256(path)}
     _require(len(refs) == 180, "Accepted v2 reference must contain 180 views")
     return refs
 
@@ -413,7 +453,7 @@ def validate_realization(render_root: Path, records: list[dict[str, Any]], manif
     _require(set(contract.get("asset_sha256", {})) >= {"material_metal", "material_rubber"},
              "Both material asset hashes are required")
     contract_hash = canonical_sha256(contract)
-    v2_hashes = _reference_hashes(v2_root.resolve(), v2_manifest.resolve())
+    v2_artifacts = _reference_artifacts(v2_root.resolve(), v2_manifest.resolve())
     realized = []
     image_hashes = {cell["id"]: set() for cell in cells}
     pair_metadata: dict[tuple[str, str, int], dict[str, dict[str, Any]]] = {}
@@ -465,26 +505,51 @@ def validate_realization(render_root: Path, records: list[dict[str, Any]], manif
         pair_key = (row["shape"], row["color"], row["view_index"])
         pair_metadata.setdefault(pair_key, {})[row["material"]] = {
             "seed": row["render_seed"], "camera": row["camera"], "light": row["light"],
-            "mask": _file_sha256(paths["mask"]), "background_mask": _file_sha256(paths["background_mask"]),
+            "mask": paths["mask"], "background_mask": paths["background_mask"],
         }
+        equivalence = None
         if row["material"] == "metal":
-            reference = v2_hashes[pair_key]
-            _require(image_hash == reference["image"], f"v3 metal RGB differs from accepted v2 for {pair_key}")
-            _require(pair_metadata[pair_key]["metal"]["mask"] == reference["mask"],
-                     f"v3 metal mask differs from accepted v2 for {pair_key}")
-            _require(pair_metadata[pair_key]["metal"]["background_mask"] == reference["background_mask"],
-                     f"v3 metal background mask differs from accepted v2 for {pair_key}")
+            reference = v2_artifacts[pair_key]
+            rgb = _decoded_rgb_difference(paths["image"], reference["image"]["path"])
+            mask_equal = _decoded_pixels_equal(paths["mask"], reference["mask"]["path"])
+            background_mask_equal = _decoded_pixels_equal(
+                paths["background_mask"], reference["background_mask"]["path"]
+            )
+            _require(rgb["pixel_equivalent"], f"v3 metal RGB exceeds v2 pixel gate for {pair_key}: {rgb}")
+            _require(mask_equal, f"v3 metal mask pixels differ from accepted v2 for {pair_key}")
+            _require(background_mask_equal,
+                     f"v3 metal background mask pixels differ from accepted v2 for {pair_key}")
+            equivalence = {
+                "gate": V2_METAL_EQUIVALENCE,
+                "accepted_v2_raw_sha256": {
+                    field: reference[field]["sha256"] for field in ("image", "mask", "background_mask")
+                },
+                "v3_raw_sha256": {
+                    "image": image_hash,
+                    "mask": _file_sha256(paths["mask"]),
+                    "background_mask": _file_sha256(paths["background_mask"]),
+                },
+                "rgb": rgb,
+                "mask_pixel_equal": mask_equal,
+                "background_mask_pixel_equal": background_mask_equal,
+                "passed": True,
+            }
         merged = {**expected_row, **row}
         merged["empirical_rgb"] = {"value": mean, "space": "srgb_u8", "statistic": "masked_mean",
                                    "source": "realized_view_gt_mask", "foreground_pixels": foreground}
+        if equivalence is not None:
+            merged["v2_metal_reference_equivalence"] = equivalence
         realized.append(merged)
     for cell_id, hashes in image_hashes.items():
         _require(len(hashes) == 20, f"Cell {cell_id} must have 20 unique RGB images")
     for pair_key, pair in pair_metadata.items():
         _require(set(pair) == set(MATERIALS), f"Missing paired material for {pair_key}")
-        for field in ("seed", "camera", "light", "mask", "background_mask"):
+        for field in ("seed", "camera", "light"):
             _require(pair["metal"][field] == pair["rubber"][field],
                      f"Paired material {field} differs for {pair_key}")
+        for field in ("mask", "background_mask"):
+            _require(_decoded_pixels_equal(pair["metal"][field], pair["rubber"][field]),
+                     f"Paired material {field} pixels differ for {pair_key}")
     return realized
 
 
@@ -542,6 +607,15 @@ def realize_protocol(manifest: dict[str, Any], protocol: dict[str, Any], render_
                                     v2_render_root, v2_render_manifest)
     realized_path = output_dir / "realized_views.jsonl"
     _write_jsonl(realized_path, realized)
+    equivalence_records = [
+        {"cell_id": row["cell_id"], "shape": row["shape"], "color": row["color"],
+         "view_index": row["view_index"], "render_seed": row["render_seed"],
+         **row["v2_metal_reference_equivalence"]}
+        for row in realized if row["material"] == "metal"
+    ]
+    _require(len(equivalence_records) == 180, "Expected 180 v2 metal equivalence records")
+    equivalence_path = output_dir / "v2_metal_pixel_equivalence.jsonl"
+    _write_jsonl(equivalence_path, equivalence_records)
     folds = build_training_outputs(render_root.resolve(), realized, cells, protocol, output_dir, base_config)
     review, sheet, pair_sheets = write_review_outputs(render_root.resolve(), realized, cells, output_dir)
     gate = {"status": "pending_human_review", "training_authorized": False,
@@ -551,6 +625,21 @@ def realize_protocol(manifest: dict[str, Any], protocol: dict[str, Any], render_
     result = {"status": "validated_pending_human_review", "realized_view_count": 360,
               "full_grid_train_view_count": 288, "fold_train_view_count": 192,
               "training_uses_gt_masks": False, "realized_manifest": str(realized_path),
+              "v2_metal_equivalence": {
+                  "status": "passed_180_of_180",
+                  "gate": V2_METAL_EQUIVALENCE,
+                  "audit_manifest": str(equivalence_path),
+                  "maximum_observed_abs_difference": max(
+                      row["rgb"]["max_abs_difference"] for row in equivalence_records
+                  ),
+                  "maximum_observed_mean_abs_difference": max(
+                      row["rgb"]["mean_abs_difference"] for row in equivalence_records
+                  ),
+                  "raw_rgb_sha256_match_count": sum(
+                      row["accepted_v2_raw_sha256"]["image"] == row["v3_raw_sha256"]["image"]
+                      for row in equivalence_records
+                  ),
+              },
               "human_review_csv": str(review), "contact_sheet": str(sheet),
               "material_pair_sheets": [str(path) for path in pair_sheets], "folds": folds}
     _write_json(output_dir / "protocol_status.json", result)

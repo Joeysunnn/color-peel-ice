@@ -548,3 +548,15 @@ success.
   v3 metal differed by only 30 values of magnitude 1.
 - Per the locked plan, the 360-view render was not started and the validator
   was not weakened. A protocol decision on pixel-level equivalence is required.
+
+## 2026-08-26 — decoded-pixel equivalence gate approved
+
+- The user explicitly approved replacing cross-run byte equality with the
+  measured decoded-pixel gate. RGB must have maximum absolute channel
+  difference at most 1 and mean absolute channel difference at most 0.001;
+  object/background masks remain decoded-pixel exact.
+- Raw accepted-v2 and v3 SHA-256 values are retained in a 180-row audit and are
+  no longer treated as proof of cross-run pixel inequality.
+- Renderer v3 profile, 360 requests, seeds, camera, lights, materials,
+  background, Cycles settings, ColorPeel training and all historical v1/v2
+  fingerprints remain unchanged. No training is authorized by this decision.

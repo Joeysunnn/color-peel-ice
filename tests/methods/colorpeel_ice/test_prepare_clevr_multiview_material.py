@@ -4,6 +4,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from PIL import Image, PngImagePlugin
+
 from src.methods.colorpeel_ice.multiview_render_contract import (
     EXPECTED_PROFILE,
     EXPECTED_PROFILE_V2,
@@ -40,6 +42,8 @@ class MaterialProtocolTests(unittest.TestCase):
                          "4890b5a481b7f903f383beeee97607c7f8fd410708925eea923c54cab2b3ece8")
         self.assertEqual(canonical_sha256(EXPECTED_PROFILE_V3),
                          "0db0afe3f5697c7c7a41b12b4b463331ff3d0e4e6ea248096f3145795eab076a")
+        self.assertEqual(canonical_sha256(self.requests),
+                         "3e9364600aba103163325f19e87530744acaf50f5ca71567339e41bc91d341be")
         old_base, old_protocol = old_prepare.load_inputs(
             old_prepare.DEFAULT_BASE_MANIFEST,
             REPO_ROOT / "experiments" / "clevr_subject_color_3x3" / "manifests" /
@@ -134,6 +138,51 @@ class MaterialProtocolTests(unittest.TestCase):
             )
         self.assertIn("material_metal", hashes)
         self.assertIn("material_rubber", hashes)
+
+    def test_rgb_equivalence_gate_accepts_locked_rounding_noise(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reference, candidate = root / "reference.png", root / "candidate.png"
+            Image.new("RGB", (512, 512), (10, 20, 30)).save(reference)
+            changed = Image.new("RGB", (512, 512), (10, 20, 30))
+            changed.putpixel((0, 0), (11, 20, 30))
+            changed.save(candidate)
+            result = material_prepare._decoded_rgb_difference(candidate, reference)
+        self.assertTrue(result["pixel_equivalent"])
+        self.assertEqual(result["max_abs_difference"], 1)
+        self.assertEqual(result["changed_channel_values"], 1)
+        self.assertLessEqual(result["mean_abs_difference"], 0.001)
+
+    def test_rgb_equivalence_gate_rejects_excess_max_or_mean(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            reference = root / "reference.png"
+            Image.new("RGB", (512, 512), (10, 20, 30)).save(reference)
+            max_candidate = Image.new("RGB", (512, 512), (10, 20, 30))
+            max_candidate.putpixel((0, 0), (12, 20, 30))
+            max_path = root / "max.png"; max_candidate.save(max_path)
+            mean_candidate = Image.new("RGB", (512, 512), (10, 20, 30))
+            for index in range(1000):
+                mean_candidate.putpixel((index % 512, index // 512), (11, 20, 30))
+            mean_path = root / "mean.png"; mean_candidate.save(mean_path)
+            max_result = material_prepare._decoded_rgb_difference(max_path, reference)
+            mean_result = material_prepare._decoded_rgb_difference(mean_path, reference)
+        self.assertFalse(max_result["pixel_equivalent"])
+        self.assertFalse(mean_result["pixel_equivalent"])
+        self.assertGreater(mean_result["mean_abs_difference"], 0.001)
+
+    def test_mask_gate_uses_decoded_pixels_not_png_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            first, second = root / "first.png", root / "second.png"
+            mask = Image.new("L", (32, 32), 0); mask.putpixel((3, 4), 255)
+            mask.save(first, compress_level=0)
+            metadata = PngImagePlugin.PngInfo(); metadata.add_text("audit", "same decoded pixels")
+            mask.save(second, compress_level=9, pnginfo=metadata)
+            hashes_differ = material_prepare._file_sha256(first) != material_prepare._file_sha256(second)
+            pixels_equal = material_prepare._decoded_pixels_equal(first, second)
+        self.assertTrue(hashes_differ)
+        self.assertTrue(pixels_equal)
 
     @unittest.skipUnless(material_prepare.yaml is not None, "PyYAML is required for staging config tests")
     def test_training_staging_is_288_full_and_192_per_fold_image_only(self):
