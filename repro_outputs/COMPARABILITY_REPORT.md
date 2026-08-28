@@ -99,3 +99,16 @@ study changes data volume, view distribution, and split structure relative to
 the single-view baseline. A factor-aware loss would change the objective and
 requires a separate method comparison; natural multi-object evaluation changes
 the domain. Both remain conditional and have no result claim.
+
+## Single-object material stage
+
+The 3x3x2 stage changes the task by adding a learned metal/rubber axis and
+doubling each shape-color view into a paired native-CLEVR material render. It
+is therefore not a setting-only repeat of the two-axis Fold experiment.
+Renderer v3 otherwise retains the accepted v2 camera, lighting, background,
+geometry and seed protocol. Cross-run JPEG bytes are not stable, so the
+explicitly approved `decoded_pixel_equivalence_v2` checks mean RGB difference
+and changed-channel fraction while retaining maxima and raw hashes as audit
+fields; decoded masks remain exact. The completed realization establishes data
+and staging integrity only. It does not establish material-token learning,
+held-out compositional generalization, or resolved entanglement.

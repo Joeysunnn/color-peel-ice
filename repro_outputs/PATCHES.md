@@ -259,3 +259,8 @@ outside Git.
   counts and newly added modifier tokens. Loss, optimizer, gradient masking,
   update order, checkpoint format, and ordinary-vocabulary AdamW behavior are
   unchanged.
+- Commit `d1f4282` replaced the impossible cross-run byte gate with audited
+  decoded-pixel v1 after a real same-profile control exposed JPEG byte drift.
+- Commit `774241a` preserved v1 and added the explicitly approved robust v2
+  gate after the full 180-reference distribution was measured. It passed 133
+  server tests and changed no renderer request, profile or training behavior.

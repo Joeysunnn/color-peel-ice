@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-25T00:00:00+08:00",
+  "generated_at": "2026-08-28T15:27:15+08:00",
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
-  "target_commit": "16ccdbeabc85afa55dfee0722a99eb36bf03c799",
+  "target_commit": "774241ad80cace8bfc1547daeafa6262e1fe0ec4",
   "baseline_commit": "021f5c74cee6c231a03b8b49bb96750cadfc4e06",
   "readme_first": true,
   "selected_goal": "ColorPeel single-object 3x3x2 subject-color-material extension with eight shared tokens",
@@ -14,19 +14,19 @@
   "documented_command": "python scripts/launch/colorpeel_run.py --config experiments/clevr_subject_color_3x3/configs/baseline.yaml --run-dir <run-dir> --dry-run",
   "documented_command_kind": "training_dry_run",
   "patches_applied": true,
-  "patch_branch": "repro/2026-08-22-colorpeel-diagnostics",
+  "patch_branch": "repro/2026-08-25-colorpeel-material",
   "readme_fidelity": "adapted_protocol",
   "highest_patch_risk": "modifier-token gradient-mask boundary correction",
   "evidence_level": "mixed",
   "local_test_status": "success",
   "local_pytest": "90 passed with KMP_DUPLICATE_LIB_OK=TRUE for the local Anaconda PyTorch/NumPy OpenMP coexistence issue",
-  "github_push_status": "success_multiview_v2_full_run_evidence",
-  "server_checkout_status": "success_clean_code_at_f7bc52d_full_v2_realization",
+  "github_push_status": "success_material_pixel_gate_v2_code",
+  "server_checkout_status": "success_clean_code_at_774241a_material_realization",
   "server_checkout_path": "/home/r12user5/Documents/Jiawei/colorpeel",
-  "server_verified_commit": "16ccdbeabc85afa55dfee0722a99eb36bf03c799",
-  "current_worktree_status": "nine_multiview_fold_runs_validated_heldout_generation_prepared",
-  "server_pre_run_changes_status": "fast_forwarded_via_github_to_f7bc52d",
-  "current_changes_test_status": "success_json_parse_and_diff_check_docs_only_no_code_changes",
+  "server_verified_commit": "774241ad80cace8bfc1547daeafa6262e1fe0ec4",
+  "current_worktree_status": "material_360_realized_pending_human_review",
+  "server_pre_run_changes_status": "fast_forwarded_via_github_to_774241a",
+  "current_changes_test_status": "success_13_targeted_local_tests_133_server_tests",
   "diagnosis_first_github_status": "pushed_de279ca_multiview_renderer_validation_and_gate",
   "diagnosis_first_server_status": "multiview_180_validated_pending_human_review",
   "server_environment_status": "created_verified_and_frozen",
@@ -196,7 +196,7 @@
     "last-token gradient defect is corrected",
     "sampling and CLEVR evaluation adapters are added"
   ],
-  "human_decisions_required": [],
+  "human_decisions_required": ["material_renderer_human_review"],
   "renderer_preflight": {
     "compliant_renderer_available": true,
     "object_scale": 1.3,
@@ -223,9 +223,9 @@
     "full_grid_training_images": 288,
     "fold_training_images": 192,
     "modifier_tokens": 8,
-    "renderer_human_gate": "decoded_pixel_equivalence_v2_approved_realization_pending",
+    "renderer_human_gate": "validated_pending_human_review_training_not_authorized",
     "paired_smoke_status": "rendered_2_of_2_cuda_v100",
-    "server_test_status": "129_passed",
+    "server_test_status": "133_passed",
     "tokenizer_preflight": {"metal": [4044], "rubber": [11331]},
     "byte_hash_diagnostic": {
       "accepted_v2_vs_fresh_v2_changed_channel_values": 108,
@@ -247,13 +247,31 @@
       "raw_sha256_role": "record_only",
       "renderer_profile_or_request_changed": false
     },
-    "training_status": "not_started_gate_enforced",
+    "full_render": {
+      "run_root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260826-104500__clevr_subject_color_material_3x3x2__multiview-render-v3-material__d1f4282__420000",
+      "status": "succeeded_360_of_360_zero_failures",
+      "resume": false,
+      "limit": null,
+      "realization_output": "prepared_human_review_v2_gate",
+      "realized_views": 360,
+      "equivalence_rows_passed": 180,
+      "maximum_observed_mean_abs_difference": 0.0009307861328125,
+      "maximum_observed_changed_channel_fraction": 0.00083160400390625,
+      "maximum_observed_abs_difference_record_only": 5,
+      "raw_rgb_sha256_match_count": 0,
+      "object_mask_pixel_match_count": 180,
+      "background_mask_pixel_match_count": 180,
+      "contact_sheet_sha256": "88fe67a9c748392c6d3d404e8bc761baa2edf42f43e655eb0f7ef4a6ac4d3c75",
+      "human_review_rows": 360,
+      "material_pair_sheets": 9
+    },
+    "training_status": "not_started_pending_human_review",
     "heldout_evaluation_status": "implemented_not_run",
     "heldout_campaign_images": 3240,
     "gt_masks_in_training": false,
     "ordinary_vocabulary_embedding_policy": "literal_official_adamw_decay_allowed"
   },
-  "next_safe_action": "patch_test_push_decoded_pixel_equivalence_v2_then_realize_the_existing_360_views_into_a_new_output_directory_and_stop_at_human_review",
+  "next_safe_action": "human_review_material_contact_and_pair_sheets_before_any_smoke_or_training",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
@@ -271,7 +289,7 @@
       "turquoise": [19899]
     }
   },
-  "verified_commit_count": 19,
+  "verified_commit_count": 21,
   "outputs": {
     "summary": "repro_outputs/SUMMARY.md",
     "commands": "repro_outputs/COMMANDS.md",
@@ -297,6 +315,7 @@
     "The matched turquoise inference completed 900/900 with zero black or invalid files; the user reported broad qualitative improvement and authorized multiview held-out validation.",
     "The multiview renderer completed 180/180 views with zero failures; realization produced three 96-image folds and nine turquoise configs gated as pending_human_review.",
     "Final v1 multiview code de279ca was deployed only by server git pull --ff-only and passed all 90 server tests; no Fold training was run.",
-    "Versioned v2 orbit code passed real Blender smoke, then commit f7bc52d completed a fresh 180/180 realization with three 96-image folds and nine configs pending human review; no Fold training was run."
+    "Versioned v2 orbit code passed real Blender smoke, then commit f7bc52d completed a fresh 180/180 realization with three 96-image folds and nine configs pending human review; no Fold training was run.",
+    "Material renderer v3 completed 360/360 and decoded_pixel_equivalence_v2 passed 180/180 metal references; realization is pending human review and no material training has started."
   ]
 }

@@ -144,6 +144,13 @@ maximum difference is record-only, while object/background masks remain exact.
 Both raw hashes are retained. The completed 360-view renderer run is reused
 unchanged and this gate does not modify rendering or training.
 
+Server realization at commit `774241a` passed 180/180 reference comparisons
+and produced 360 realized rows, 288 full-grid JPEGs, 192 JPEGs per Fold, a
+360-row human-review ledger, one 18-cell contact sheet and nine paired sheets.
+There are no non-JPEG files in training staging. The material stage is stopped
+at `pending_human_review` with `training_authorized=false`; no material smoke,
+training, generation or evaluation result exists yet.
+
 Training remains blocked by the new 360-view renderer human gate. No material
 training, generation, Qwen prediction, metric, or disentanglement claim is made
 by this implementation update.

@@ -625,5 +625,19 @@ conda run -n colorpeel017 python -m src.methods.colorpeel_ice.prepare_clevr_mult
 Run Blender with `--limit 2` first; request ordering guarantees the first two
 items are the paired metal/rubber view for cube-red at seed 420000. After that
 real smoke passes, render all 360 requests in a new output root. Realization
-requires the accepted v2 render root and manifest so all 180 metal RGB/mask
-hashes can be compared before staging or training is authorized.
+requires the accepted v2 render root and manifest. The completed run was
+realized without rerendering using the approved decoded-pixel v2 gate:
+
+```bash
+RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260826-104500__clevr_subject_color_material_3x3x2__multiview-render-v3-material__d1f4282__420000
+V2_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_3x3/20260823-200500__clevr_subject_color_3x3__multiview-render-v2__f7bc52d__420000
+conda run -n colorpeel017 python -m src.methods.colorpeel_ice.prepare_clevr_multiview_material realize \
+  --render-root "$RUN_ROOT/rendered" \
+  --render-manifest "$RUN_ROOT/rendered/renderer_realization.jsonl" \
+  --v2-render-root "$V2_ROOT/rendered" \
+  --v2-render-manifest "$V2_ROOT/rendered/renderer_realization.jsonl" \
+  --output-dir "$RUN_ROOT/prepared_human_review_v2_gate"
+```
+
+This command generated review/staging artifacts only. No generated training
+config was executed.

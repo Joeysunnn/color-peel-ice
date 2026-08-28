@@ -576,3 +576,19 @@ success.
   fraction must each be <=0.001, maximum difference is recorded only, and mask
   equality remains strict. Existing 360 renderer artifacts will be reused; no
   renderer or training setting changes and no training is authorized.
+
+## 2026-08-28 — material realization completed at human gate
+
+- Commit `774241a` passed 133 server tests after a clean GitHub-only
+  fast-forward. The existing 360-view renderer output was reused without a
+  Blender invocation or resume.
+- All 180 metal references passed gate v2. Maximum mean was
+  `0.0009307861328125`, maximum changed-channel fraction was
+  `0.00083160400390625`, maximum single-channel difference was 5 (record-only),
+  and raw RGB SHA matches were 0/180. Both decoded masks matched 180/180.
+- Realization produced 360 rows, an 180-row equivalence audit, 288 full-grid
+  JPEGs and 192 JPEGs per Fold, with no non-JPEG staging files. It also wrote a
+  360-row review CSV, one 18-cell sheet and nine paired sheets.
+- `human_gate_decision.json` remains `pending_human_review` and
+  `training_authorized=false`. No two-step smoke, coverage smoke, 1500-step
+  training, generation or Qwen stage was started.
