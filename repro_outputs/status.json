@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-28T15:27:15+08:00",
+  "generated_at": "2026-08-28T15:35:00+08:00",
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
@@ -196,7 +196,7 @@
     "last-token gradient defect is corrected",
     "sampling and CLEVR evaluation adapters are added"
   ],
-  "human_decisions_required": ["material_renderer_human_review"],
+  "human_decisions_required": ["material_full_grid_generation_human_review_before_fold_training"],
   "renderer_preflight": {
     "compliant_renderer_available": true,
     "object_scale": 1.3,
@@ -223,7 +223,7 @@
     "full_grid_training_images": 288,
     "fold_training_images": 192,
     "modifier_tokens": 8,
-    "renderer_human_gate": "validated_pending_human_review_training_not_authorized",
+    "renderer_human_gate": "passed_manual_review_dual_smokes_authorized",
     "paired_smoke_status": "rendered_2_of_2_cuda_v100",
     "server_test_status": "133_passed",
     "tokenizer_preflight": {"metal": [4044], "rubber": [11331]},
@@ -265,13 +265,13 @@
       "human_review_rows": 360,
       "material_pair_sheets": 9
     },
-    "training_status": "not_started_pending_human_review",
+    "training_status": "dual_smokes_authorized_not_started",
     "heldout_evaluation_status": "implemented_not_run",
     "heldout_campaign_images": 3240,
     "gt_masks_in_training": false,
     "ordinary_vocabulary_embedding_policy": "literal_official_adamw_decay_allowed"
   },
-  "next_safe_action": "human_review_material_contact_and_pair_sheets_before_any_smoke_or_training",
+  "next_safe_action": "run_material_two_step_smoke_then_independent_eighteen_step_coverage_smoke_on_gpu3",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",
@@ -316,6 +316,6 @@
     "The multiview renderer completed 180/180 views with zero failures; realization produced three 96-image folds and nine turquoise configs gated as pending_human_review.",
     "Final v1 multiview code de279ca was deployed only by server git pull --ff-only and passed all 90 server tests; no Fold training was run.",
     "Versioned v2 orbit code passed real Blender smoke, then commit f7bc52d completed a fresh 180/180 realization with three 96-image folds and nine configs pending human review; no Fold training was run.",
-    "Material renderer v3 completed 360/360 and decoded_pixel_equivalence_v2 passed 180/180 metal references; realization is pending human review and no material training has started."
+    "Material renderer v3 completed 360/360 and decoded_pixel_equivalence_v2 passed 180/180 metal references; the user accepted the renderer gate and authorized the two locked material smokes."
   ]
 }

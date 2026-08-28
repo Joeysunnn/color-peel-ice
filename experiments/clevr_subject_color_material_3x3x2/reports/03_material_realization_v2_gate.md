@@ -26,3 +26,10 @@ Review output:
 
 18-cell contact-sheet SHA-256:
 `88fe67a9c748392c6d3d404e8bc761baa2edf42f43e655eb0f7ef4a6ac4d3c75`
+
+## Human decision
+
+On 2026-08-28 the user accepted the rendered material review packet and
+authorized the next protocol stage. This releases only the locked sequential
+2-step and 18-step eight-token training smokes before the full-grid baseline.
+It does not release Fold training or any claim about material disentanglement.

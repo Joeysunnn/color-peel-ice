@@ -592,3 +592,13 @@ success.
 - `human_gate_decision.json` remains `pending_human_review` and
   `training_authorized=false`. No two-step smoke, coverage smoke, 1500-step
   training, generation or Qwen stage was started.
+
+## 2026-08-28 — material renderer human gate accepted
+
+- The user manually accepted the material contact and paired sheets and asked
+  to enter the next stage.
+- The released action is the locked sequential two-step startup smoke followed
+  by the independent 18-step coverage smoke on GPU 3. Each run must pass its
+  own evidence validator before the full-grid baseline may start.
+- This decision does not authorize Fold training and does not establish any
+  material-token or disentanglement result.
