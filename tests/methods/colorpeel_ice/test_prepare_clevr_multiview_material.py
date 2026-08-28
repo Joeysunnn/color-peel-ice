@@ -139,37 +139,35 @@ class MaterialProtocolTests(unittest.TestCase):
         self.assertIn("material_metal", hashes)
         self.assertIn("material_rubber", hashes)
 
-    def test_rgb_equivalence_gate_accepts_locked_rounding_noise(self):
+    def test_rgb_equivalence_gate_accepts_sparse_max_five_rounding_noise(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             reference, candidate = root / "reference.png", root / "candidate.png"
             Image.new("RGB", (512, 512), (10, 20, 30)).save(reference)
             changed = Image.new("RGB", (512, 512), (10, 20, 30))
-            changed.putpixel((0, 0), (11, 20, 30))
+            changed.putpixel((0, 0), (15, 20, 30))
             changed.save(candidate)
             result = material_prepare._decoded_rgb_difference(candidate, reference)
         self.assertTrue(result["pixel_equivalent"])
-        self.assertEqual(result["max_abs_difference"], 1)
+        self.assertEqual(result["max_abs_difference"], 5)
         self.assertEqual(result["changed_channel_values"], 1)
+        self.assertEqual(result["total_channel_values"], 512 * 512 * 3)
+        self.assertLessEqual(result["changed_channel_fraction"], 0.001)
         self.assertLessEqual(result["mean_abs_difference"], 0.001)
 
-    def test_rgb_equivalence_gate_rejects_excess_max_or_mean(self):
+    def test_rgb_equivalence_gate_rejects_excess_mean_or_changed_fraction(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             reference = root / "reference.png"
             Image.new("RGB", (512, 512), (10, 20, 30)).save(reference)
-            max_candidate = Image.new("RGB", (512, 512), (10, 20, 30))
-            max_candidate.putpixel((0, 0), (12, 20, 30))
-            max_path = root / "max.png"; max_candidate.save(max_path)
             mean_candidate = Image.new("RGB", (512, 512), (10, 20, 30))
             for index in range(1000):
                 mean_candidate.putpixel((index % 512, index // 512), (11, 20, 30))
             mean_path = root / "mean.png"; mean_candidate.save(mean_path)
-            max_result = material_prepare._decoded_rgb_difference(max_path, reference)
             mean_result = material_prepare._decoded_rgb_difference(mean_path, reference)
-        self.assertFalse(max_result["pixel_equivalent"])
         self.assertFalse(mean_result["pixel_equivalent"])
         self.assertGreater(mean_result["mean_abs_difference"], 0.001)
+        self.assertGreater(mean_result["changed_channel_fraction"], 0.001)
 
     def test_mask_gate_uses_decoded_pixels_not_png_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -181,8 +179,23 @@ class MaterialProtocolTests(unittest.TestCase):
             mask.save(second, compress_level=9, pnginfo=metadata)
             hashes_differ = material_prepare._file_sha256(first) != material_prepare._file_sha256(second)
             pixels_equal = material_prepare._decoded_pixels_equal(first, second)
+            mask.putpixel((5, 6), 255); mask.save(second)
+            changed_pixels_equal = material_prepare._decoded_pixels_equal(first, second)
         self.assertTrue(hashes_differ)
         self.assertTrue(pixels_equal)
+        self.assertFalse(changed_pixels_equal)
+
+    def test_equivalence_gate_v1_is_preserved_but_protocol_requires_v2(self):
+        self.assertEqual(material_prepare.V2_METAL_EQUIVALENCE_V1["id"],
+                         "decoded_pixel_equivalence_v1")
+        self.assertEqual(material_prepare.V2_METAL_EQUIVALENCE["id"],
+                         "decoded_pixel_equivalence_v2")
+        changed = json.loads(json.dumps(self.protocol))
+        changed["realization_contract"]["v2_metal_reference_equivalence"] = (
+            material_prepare.V2_METAL_EQUIVALENCE_V1
+        )
+        with self.assertRaisesRegex(material_prepare.ProtocolError, "equivalence gate"):
+            material_prepare.validate_protocol(self.manifest, changed)
 
     @unittest.skipUnless(material_prepare.yaml is not None, "PyYAML is required for staging config tests")
     def test_training_staging_is_288_full_and_192_per_fold_image_only(self):

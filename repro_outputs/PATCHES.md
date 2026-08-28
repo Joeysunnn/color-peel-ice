@@ -249,8 +249,9 @@ outside Git.
   in scene metadata, and keeps material selection outside the RNG stream.
 - Added a separate material prepare/realize path. It rejects realization unless
   paired camera/light metadata and decoded masks match. Accepted-v2 metal RGB
-  uses the explicitly approved decoded-pixel gate (`max <= 1`, `mean <= 0.001`);
-  decoded masks remain exact and all raw hashes are retained as evidence.
+  uses versioned `decoded_pixel_equivalence_v2` (`mean <= 0.001`, changed-channel
+  fraction `<= 0.001`; max is record-only); decoded masks remain exact and all
+  raw hashes are retained as evidence. Historical v1 remains defined.
 - Generalized only smoke artifact validation to derive modifier files from the
   training config. Historical six-token constants and two-axis evaluation
   adapters remain intact.

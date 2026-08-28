@@ -54,12 +54,24 @@ TRAINING_SEEDS = (42, 43, 44)
 MODIFIER_TOKEN = "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>+<m1*>+<m2*>"
 INITIALIZER_TOKEN = "cube+sphere+cylinder+red+turquoise+gray+metal+rubber"
 RENDERER_FIELDS = ("camera", "light", "background", "scene_json", "image", "mask", "background_mask")
-V2_METAL_EQUIVALENCE = {
+V2_METAL_EQUIVALENCE_V1 = {
     "id": "decoded_pixel_equivalence_v1",
     "rgb": {
         "comparison": "decoded_rgb_u8",
         "max_abs_difference": 1,
         "mean_abs_difference": 0.001,
+    },
+    "mask": {"comparison": "decoded_pixel_exact"},
+    "background_mask": {"comparison": "decoded_pixel_exact"},
+    "raw_sha256": "record_only",
+}
+V2_METAL_EQUIVALENCE = {
+    "id": "decoded_pixel_equivalence_v2",
+    "rgb": {
+        "comparison": "decoded_rgb_u8",
+        "mean_abs_difference": 0.001,
+        "changed_channel_fraction": 0.001,
+        "max_abs_difference": "record_only",
     },
     "mask": {"comparison": "decoded_pixel_exact"},
     "background_mask": {"comparison": "decoded_pixel_exact"},
@@ -405,13 +417,17 @@ def _decoded_rgb_difference(candidate: Path, reference: Path) -> dict[str, Any]:
         max_abs = max(maximum for _, maximum in difference.getextrema())
         mean_abs = sum(ImageStat.Stat(difference).mean) / 3.0
         changed = sum(value != 0 for value in difference.tobytes())
+        total = candidate_image.width * candidate_image.height * 3
+        changed_fraction = changed / total
     return {
         "max_abs_difference": max_abs,
         "mean_abs_difference": mean_abs,
         "changed_channel_values": changed,
+        "total_channel_values": total,
+        "changed_channel_fraction": changed_fraction,
         "pixel_equivalent": (
-            max_abs <= V2_METAL_EQUIVALENCE["rgb"]["max_abs_difference"]
-            and mean_abs <= V2_METAL_EQUIVALENCE["rgb"]["mean_abs_difference"]
+            mean_abs <= V2_METAL_EQUIVALENCE["rgb"]["mean_abs_difference"]
+            and changed_fraction <= V2_METAL_EQUIVALENCE["rgb"]["changed_channel_fraction"]
         ),
     }
 
@@ -634,6 +650,9 @@ def realize_protocol(manifest: dict[str, Any], protocol: dict[str, Any], render_
                   ),
                   "maximum_observed_mean_abs_difference": max(
                       row["rgb"]["mean_abs_difference"] for row in equivalence_records
+                  ),
+                  "maximum_observed_changed_channel_fraction": max(
+                      row["rgb"]["changed_channel_fraction"] for row in equivalence_records
                   ),
                   "raw_rgb_sha256_match_count": sum(
                       row["accepted_v2_raw_sha256"]["image"] == row["v3_raw_sha256"]["image"]

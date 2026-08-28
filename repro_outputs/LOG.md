@@ -560,3 +560,19 @@ success.
 - Renderer v3 profile, 360 requests, seeds, camera, lights, materials,
   background, Cycles settings, ColorPeel training and all historical v1/v2
   fingerprints remain unchanged. No training is authorized by this decision.
+
+## 2026-08-28 — full-run gate v2 approved
+
+- The fresh renderer run completed 360/360 with no failures, `resume=false`
+  and `limit=null`. The v1 realization gate stopped before staging because 40
+  of 180 metal images had a sparse decoded-channel maximum above 1.
+- Full read-only audit found 23,093 changed values among 141,557,760 channels
+  (0.0163%). Per-image maximum changed fraction was 0.000831604; maximum mean
+  difference was 0.000930786; the observed maximum channel difference was 5.
+- All 180 accepted-v2 object/background masks and all 180 metal/rubber paired
+  seed, camera, light and decoded masks were exact. Every one of 18 cells had
+  20 unique RGB hashes.
+- The user approved `decoded_pixel_equivalence_v2`: mean and changed-channel
+  fraction must each be <=0.001, maximum difference is recorded only, and mask
+  equality remains strict. Existing 360 renderer artifacts will be reused; no
+  renderer or training setting changes and no training is authorized.

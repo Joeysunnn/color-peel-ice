@@ -32,5 +32,16 @@ SHA-256 values remain recorded for provenance but are not equality gates. This
 changes only realization acceptance; renderer v3, its requests, seeds and all
 scientific render parameters remain unchanged.
 
+## Full-run follow-up approved 2026-08-28
+
+The fresh 360-view run completed, but v1 rejected 40 of 180 metal references
+because a few decoded JPEG channels differed by 2--5. Across 141,557,760
+channels, only 23,093 changed (0.0163%); every image had mean difference below
+0.001 and changed-channel fraction below 0.001. All 180 object/background mask
+pairs and all paired camera/light/seed metadata were exact. The user therefore
+approved versioned `decoded_pixel_equivalence_v2`: mean and changed-channel
+fraction are pass/fail gates, maximum difference is record-only, and masks stay
+decoded-pixel exact. The completed renderer artifacts are reused unchanged.
+
 Server evidence root:
 `/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260825-093000__clevr_subject_color_material_3x3x2__multiview-render-v3-material__16ccdbe__420000`

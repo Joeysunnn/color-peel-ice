@@ -12,8 +12,9 @@ noise. All ColorPeel training math remains unchanged.
 Execution stops after the 360-view realization and human contact-sheet review.
 Training remains blocked until that review is explicitly accepted.
 
-Accepted v2 metal equivalence is checked on decoded pixels because a same-profile
-Blender control rerun showed one-level JPEG rounding differences. RGB requires
-`max_abs_difference <= 1` and `mean_abs_difference <= 0.001`; decoded object and
-background masks must match exactly. Raw SHA-256 values are retained in the
-equivalence audit and are not used as cross-run equality gates.
+Accepted v2 metal equivalence is checked on decoded pixels because repeated
+Blender runs showed sparse JPEG rounding differences. Versioned gate
+`decoded_pixel_equivalence_v2` requires `mean_abs_difference <= 0.001` and
+`changed_channel_fraction <= 0.001`; maximum difference is recorded but is not
+a pass/fail condition. Decoded object/background masks must match exactly. Raw
+SHA-256 values remain in the audit and are not cross-run equality gates.

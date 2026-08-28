@@ -137,11 +137,12 @@ An independent `clevr_subject_color_material_3x3x2` stage now specifies 18
 shape/color/material cells and eight learned tokens. Renderer v3 reuses every
 accepted v2 camera, light, background, object, and Cycles setting; only the
 native CLEVR material becomes request-controlled. Metal/rubber counterparts
-share the same shape-color-view render seed. Realization compares all 180 metal
-views with the accepted v2 decoded pixels: RGB maximum absolute difference must
-be at most 1 and mean absolute difference at most 0.001, while object/background
-masks remain exact. Both raw hashes are retained for audit. This approved gate
-reflects measured unchanged-v2 Blender repeatability and does not change rendering.
+share the same shape-color-view render seed. Versioned realization gate
+`decoded_pixel_equivalence_v2` compares all 180 metal views with accepted v2:
+RGB mean difference and changed-channel fraction must each be at most 0.001;
+maximum difference is record-only, while object/background masks remain exact.
+Both raw hashes are retained. The completed 360-view renderer run is reused
+unchanged and this gate does not modify rendering or training.
 
 Training remains blocked by the new 360-view renderer human gate. No material
 training, generation, Qwen prediction, metric, or disentanglement claim is made
