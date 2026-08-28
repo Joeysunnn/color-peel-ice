@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-08-28T15:35:00+08:00",
+  "generated_at": "2026-08-28T20:55:00+08:00",
   "user_language": "zh-CN",
   "target_repo": "https://github.com/Joeysunnn/color-peel-ice.git",
   "upstream_repo": "https://github.com/moatifbutt/color-peel.git",
@@ -265,13 +265,34 @@
       "human_review_rows": 360,
       "material_pair_sheets": 9
     },
-    "training_status": "dual_smokes_authorized_not_started",
+    "training_status": "dual_smokes_passed_full_grid_seed42_authorized",
+    "smoke_2step": {
+      "status": "passed",
+      "run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260828-205100__clevr_subject_color_material_3x3x2__smoke2-material-pair__6fdd889__42",
+      "completed_steps": 2,
+      "metrics_rows": 2,
+      "all_losses_finite": true,
+      "validator_errors": 0,
+      "reload_succeeded": true
+    },
+    "smoke_18step": {
+      "status": "passed",
+      "run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260828-205200__clevr_subject_color_material_3x3x2__smoke18-full-grid-coverage__6fdd889__42",
+      "completed_steps": 18,
+      "metrics_rows": 18,
+      "all_losses_finite": true,
+      "subject_color_exposure": 6,
+      "material_exposure": 9,
+      "all_eight_tokens_nonzero_gradient_and_positive_delta": true,
+      "validator_errors": 0,
+      "reload_succeeded": true
+    },
     "heldout_evaluation_status": "implemented_not_run",
     "heldout_campaign_images": 3240,
     "gt_masks_in_training": false,
     "ordinary_vocabulary_embedding_policy": "literal_official_adamw_decay_allowed"
   },
-  "next_safe_action": "run_material_two_step_smoke_then_independent_eighteen_step_coverage_smoke_on_gpu3",
+  "next_safe_action": "launch_locked_material_full_grid_seed42_1500_step_baseline_on_gpu3",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",

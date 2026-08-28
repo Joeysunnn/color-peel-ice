@@ -151,6 +151,13 @@ There are no non-JPEG files in training staging. The material stage is stopped
 at `pending_human_review` with `training_authorized=false`; no material smoke,
 training, generation or evaluation result exists yet.
 
+After the user accepted the renderer gate, the material 2-step and independent
+18-step coverage smokes both passed. The latter covered all 18 triples once;
+subject/color exposures were 6 each, material exposures 9 each, and all eight
+tokens received real gradients and positive updates. Artifacts reloaded and
+ordinary-vocabulary AdamW drift remained observation-only. This is operational
+evidence only; the full-grid seed-42 baseline is the next run.
+
 Training remains blocked by the new 360-view renderer human gate. No material
 training, generation, Qwen prediction, metric, or disentanglement claim is made
 by this implementation update.

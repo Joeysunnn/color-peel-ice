@@ -602,3 +602,16 @@ success.
   own evidence validator before the full-grid baseline may start.
 - This decision does not authorize Fold training and does not establish any
   material-token or disentanglement result.
+
+## 2026-08-28 — material dual smoke passed
+
+- Launcher dry-runs and real executions completed for the independent 2-step
+  paired-material and 18-step full-grid coverage configs at commit `6fdd889`.
+- Both manifests returned 0 and both `src.train.training_audit` results passed
+  with finite losses, exact expected prompt/token coverage, nonempty K/V and
+  eight-token artifacts, and successful reload.
+- The 18-step run observed subject/color exposure 6 and material exposure 9;
+  every token had real gradients on every exposure and positive delta.
+- Literal official AdamW drift affected all 49,408 ordinary rows at very small
+  magnitude and remained record-only. No optimizer or training semantics were
+  changed.
