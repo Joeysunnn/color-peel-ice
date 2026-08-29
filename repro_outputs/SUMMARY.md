@@ -156,8 +156,16 @@ After the user accepted the renderer gate, the material 2-step and independent
 subject/color exposures were 6 each, material exposures 9 each, and all eight
 tokens received real gradients and positive updates. Artifacts reloaded and
 ordinary-vocabulary AdamW drift remained observation-only. This is operational
-evidence only; the full-grid seed-42 baseline is the next run.
+evidence only.
 
-Training remains blocked by the new 360-view renderer human gate. No material
-training, generation, Qwen prediction, metric, or disentanglement claim is made
-by this implementation update.
+The full-grid seed-42 baseline subsequently completed 1500/1500 finite steps,
+checkpoint-1000, final K/V and eight token artifacts. Matched inference produced
+360/360 verified complete-bundle images. A connection reset after 76 images was
+recovered in place through validated status reconstruction and the locked
+resume path; no images or scientific settings were overwritten. The resulting
+human-review packet contains nine same-seed metal/rubber sheets, a randomized
+360-row ledger and a 40-row red-sphere regression ledger.
+
+The stage is now blocked only on the full-grid generated-image human gate.
+Held-out Fold training, Qwen prediction, material metrics and any
+disentanglement-success claim remain unstarted.

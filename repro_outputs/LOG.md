@@ -615,3 +615,25 @@ success.
 - Literal official AdamW drift affected all 49,408 ordinary rows at very small
   magnitude and remained record-only. No optimizer or training semantics were
   changed.
+
+## 2026-08-29 — material full-grid baseline reached human gate
+
+- The locked seed-42 full-grid run completed 1500/1500 finite metric rows,
+  checkpoint-1000, final Custom Diffusion weights, all eight token artifacts,
+  embedding audit, and successful reload/launcher exit.
+- All eight learned tokens had nonzero gradients on every exposure and positive
+  initial-to-final deltas. Literal official AdamW drift of ordinary vocabulary
+  rows remained record-only.
+- Full-bundle inference completed 360/360 valid 512x512 RGB images for 18
+  prompts and seeds 42-61. All generation status rows were `ok` and all image
+  hashes matched.
+- An SSH reset stopped the foreground generator after 76 files. Those files
+  passed manifest, RGB, model/protocol fingerprint and SHA-256 recovery checks;
+  the exact run then resumed under `nohup` and completed without overwriting
+  them. No scientific setting changed.
+- The first bundle attempt exposed a direct-script `src` import bug. Commit
+  `d48ffa8` fixed only the entrypoint path and added a regression test; the
+  server passed 134 tests before the replacement bundle succeeded.
+- The final bundle contains a 360-row randomized review CSV, a 40-row
+  red-sphere regression CSV and nine same-seed material pair sheets. Its gate
+  remains pending and Fold training is not authorized.
