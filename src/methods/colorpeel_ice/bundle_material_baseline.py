@@ -8,9 +8,14 @@ import hashlib
 import json
 from pathlib import Path
 import random
+import sys
 from typing import Any
 
 from PIL import Image, ImageDraw
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from src.methods.colorpeel_ice.material_evaluation_protocol import build_full_grid_manifest, read_protocol
 
