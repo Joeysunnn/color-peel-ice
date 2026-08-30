@@ -637,3 +637,16 @@ success.
 - The final bundle contains a 360-row randomized review CSV, a 40-row
   red-sphere regression CSV and nine same-seed material pair sheets. Its gate
   remains pending and Fold training is not authorized.
+
+## 2026-08-30 — material full-grid human gate accepted
+
+- Human review found metal and rubber stably distinguishable and confirmed that
+  material replacement preserves the requested shape and color.
+- Known appearance artifacts remain: some metal objects have a strong glossy
+  upper region and weakly glossy lower region, while some rubber objects show
+  noticeable highlights but remain recognizable as rubber.
+- The gate is recorded as `passed_with_known_material_appearance_artifacts`.
+  This releases only the locked nine-run Fold campaign on GPU 3; it does not
+  authorize a renderer, data, loss, optimizer, or prompt change.
+- Held-out review must track the two artifact classes separately. No claim of
+  illumination-invariant material learning or solved disentanglement is made.
