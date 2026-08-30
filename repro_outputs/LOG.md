@@ -650,3 +650,17 @@ success.
   authorize a renderer, data, loss, optimizer, or prompt change.
 - Held-out review must track the two artifact classes separately. No claim of
   illumination-invariant material learning or solved disentanglement is made.
+
+## 2026-08-30 — material held-out Fold training completed
+
+- The detached serial GPU-3 campaign completed all nine Fold/seed runs at
+  commit `dcb465c` and ended with `CAMPAIGN_SUCCESS`.
+- Independent aggregation verified 13,500/13,500 optimization steps, exactly
+  1500 sequential finite metric rows per run, checkpoint-1000, final Custom
+  Diffusion weights, all eight token files and successful final reload.
+- All eight tokens had nonzero gradients on every exposure and positive
+  initial-to-final deltas in every run. Ordinary-vocabulary AdamW drift remained
+  record-only.
+- Final artifacts are used per run; there is no metric-based model selection.
+  This completion releases the locked 3240-image generation campaign but does
+  not itself establish held-out generalization or disentanglement.
