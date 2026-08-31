@@ -32,3 +32,14 @@ startup failure without changing training mathematics.
   split, or protocol was read or changed by the failed attempt.
 - Resolution: retain the failed run and retry under a new run ID with the
   repository root explicitly supplied through `PYTHONPATH`.
+
+## 2026-08-31 material calibration reference-root failure
+
+- Failed run: `prepare_material_evaluator_calibration` at commit `a9f0ccc`.
+- Failure point: first reference-file existence check; Qwen was not started.
+- Error: `reference image missing or changed: reference-cube-cyan-metal-view-00`.
+- Cause: `realized_views.jsonl` is stored under the prepared-review directory,
+  while its image paths are relative to the immutable renderer output root.
+- Resolution: preserve the failed run and provide separate explicit variables
+  for the realized manifest and renderer image root in a fresh run.
+- Scientific impact: none; no image, model, label or metric was changed.

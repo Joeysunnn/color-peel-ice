@@ -92,8 +92,10 @@ class MaterialCalibrationTests(unittest.TestCase):
 
     def test_tracked_calibration_configs_lock_expected_stages(self):
         configs = ROOT / "experiments" / "clevr_subject_color_material_3x3x2" / "configs"
-        self.assertEqual(RUNNER.read_config(configs / "prepare_material_calibration.json")["stage"],
-                         "prepare_material_calibration")
+        prepare = RUNNER.read_config(configs / "prepare_material_calibration.json")
+        self.assertEqual(prepare["stage"], "prepare_material_calibration")
+        self.assertEqual(prepare["args"]["realized-views"], "$COLORPEEL_MATERIAL_REALIZED_MANIFEST")
+        self.assertEqual(prepare["args"]["reference-root"], "$COLORPEEL_MATERIAL_RENDER_ROOT")
         self.assertEqual(RUNNER.read_config(configs / "predict_qwen_material_reference.json")["stage"],
                          "predict_qwen_material_reference")
         self.assertEqual(RUNNER.read_config(configs / "score_material_reference.json")["stage"],

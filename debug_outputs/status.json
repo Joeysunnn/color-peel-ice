@@ -15,12 +15,12 @@
   },
   "latest_incident": {
     "date": "2026-08-31",
-    "stage": "bundle_material_multiview",
-    "status": "resolved_verified_by_bundle_retry",
-    "cause": "direct_script_import_path_missing_repo_root",
-    "failed_before_data_validation": true,
-    "repository_patch_required": false,
+    "stage": "prepare_material_calibration",
+    "status": "diagnosed_config_fix_prepared",
+    "cause": "realized_manifest_and_renderer_image_roots_were_conflated",
+    "failed_before_reference_file_validation_completed": true,
+    "repository_patch_required": "tracked_config_only",
     "scientific_semantics_changed": false,
-    "verification": "3240-image bundle completed under fresh run ID"
+    "verification": "pending fresh preparation run"
   }
 }

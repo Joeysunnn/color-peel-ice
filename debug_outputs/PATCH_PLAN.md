@@ -19,3 +19,10 @@ root in the runtime campaign, record the compatibility flag in the launcher
 environment, verify all three evaluation entry points import with `--help`, and
 retry the non-resumable bundle stage under a fresh run ID. Preserve the failed
 run as evidence.
+
+## Material calibration reference-root fix
+
+Keep the preparation code unchanged. Replace the overloaded reference-root
+configuration with two explicit inputs: the accepted realized manifest and the
+immutable renderer image root. Add a config regression assertion and retry the
+non-resumable preparation stage under a new run ID.
