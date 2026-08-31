@@ -131,7 +131,7 @@ bundle evaluation protocol is prepared, but no held-out generation result,
 metric, or disentanglement-success claim exists yet. Every server code update
 remains GitHub-only via clean `git pull --ff-only`.
 
-## 3x3x2 material stage (implementation prepared)
+## 3x3x2 material stage (held-out evaluation and calibration)
 
 An independent `clevr_subject_color_material_3x3x2` stage now specifies 18
 shape/color/material cells and eight learned tokens. Renderer v3 reuses every
@@ -147,9 +147,9 @@ unchanged and this gate does not modify rendering or training.
 Server realization at commit `774241a` passed 180/180 reference comparisons
 and produced 360 realized rows, 288 full-grid JPEGs, 192 JPEGs per Fold, a
 360-row human-review ledger, one 18-cell contact sheet and nine paired sheets.
-There are no non-JPEG files in training staging. The material stage is stopped
-at `pending_human_review` with `training_authorized=false`; no material smoke,
-training, generation or evaluation result exists yet.
+There are no non-JPEG files in training staging. The renderer review was
+accepted with two known appearance artifacts: partial metal gloss and excess
+rubber highlights.
 
 After the user accepted the renderer gate, the material 2-step and independent
 18-step coverage smokes both passed. The latter covered all 18 triples once;
@@ -166,6 +166,16 @@ resume path; no images or scientific settings were overwritten. The resulting
 human-review packet contains nine same-seed metal/rubber sheets, a randomized
 360-row ledger and a 40-row red-sphere regression ledger.
 
-The stage is now blocked only on the full-grid generated-image human gate.
-Held-out Fold training, Qwen prediction, material metrics and any
-disentanglement-success claim remain unstarted.
+After the full-grid human gate, all nine Fold/seed training runs completed
+1500/1500 steps and the held-out campaign generated 3240/3240 validated images.
+Human review found shape, color and material stable and discernible. Qwen shape
+and color accuracy were 99.60% and 99.66%, but material was 56.14% because it
+recognized only 199/1620 generated rubber images.
+
+The identical Qwen prompt was therefore calibrated on all 360 accepted v3
+renderer references. It achieved 100% shape, 97.78% color and 60.56% material:
+metal was 180/180, but rubber only 38/180, with the remaining 142 labeled
+`other`. This establishes a Qwen rubber-label limitation, not generated-rubber
+success. A balanced, blinded 162-pair relative-material review is prepared and
+is the current human gate. No two-object run or disentanglement-success claim
+has started.

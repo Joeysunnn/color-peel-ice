@@ -16,11 +16,11 @@
   "latest_incident": {
     "date": "2026-08-31",
     "stage": "prepare_material_calibration",
-    "status": "diagnosed_config_fix_prepared",
+    "status": "resolved_verified_by_fresh_preparation_run",
     "cause": "realized_manifest_and_renderer_image_roots_were_conflated",
     "failed_before_reference_file_validation_completed": true,
     "repository_patch_required": "tracked_config_only",
     "scientific_semantics_changed": false,
-    "verification": "pending fresh preparation run"
+    "verification": "360 references and 1620 generated pairs validated; 162 blinded pairs produced"
   }
 }

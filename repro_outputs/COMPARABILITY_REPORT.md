@@ -119,3 +119,10 @@ generated rubber images as rubber despite positive human review. The new stage
 uses accepted renderer references and blinded relative material pairs to audit
 that evaluator disagreement. Its results must remain secondary to human image
 semantics and cannot retroactively change the training campaign.
+
+The completed calibration confirms this limitation: Qwen labeled only 38/180
+accepted GT rubber renders as rubber, with all 142 remaining items labeled
+`other`, while metal was 180/180. Consequently the generated-image material
+accuracy is not treated as an official or reliable absolute material score.
+The blinded pair review is a separate relative-control diagnostic and remains
+pending human completion.

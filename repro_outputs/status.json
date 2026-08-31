@@ -345,17 +345,28 @@
       "human_review_is_primary": true
     },
     "material_evaluator_calibration": {
-      "status": "implemented_runtime_pending",
+      "status": "qwen_reference_succeeded_pending_human_pair_review",
       "reference_images": 360,
+      "qwen_rows": 360,
+      "qwen_failures": 0,
+      "shape_accuracy": 1.0,
+      "color_accuracy": 0.9777777777777777,
+      "material_accuracy": 0.6055555555555555,
+      "metal_correct": 180,
+      "rubber_correct": 38,
+      "rubber_predicted_other": 142,
       "human_pair_review_pairs": 162,
       "pair_generation_seeds": [42, 43],
       "random_seed": 42,
+      "prepare_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260831-111800__clevr_subject_color_material_3x3x2__prepare_material_evaluator_calibration__5fb5f31__42",
+      "qwen_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260831-112000__clevr_subject_color_material_3x3x2__predict_qwen_material_reference__5fb5f31__42",
+      "score_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/clevr_subject_color_material_3x3x2/20260831-112500__clevr_subject_color_material_3x3x2__score_qwen_material_reference__5fb5f31__42",
       "training_or_generation_semantics_changed": false
     },
     "gt_masks_in_training": false,
     "ordinary_vocabulary_embedding_policy": "literal_official_adamw_decay_allowed"
   },
-  "next_safe_action": "run_360_reference_qwen_calibration_and_stop_at_162_pair_human_review_gate",
+  "next_safe_action": "complete_162_pair_blinded_human_review_without_opening_pair_key_then_score_relative_material_control",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",

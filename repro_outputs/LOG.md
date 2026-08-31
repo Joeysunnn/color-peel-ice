@@ -679,3 +679,10 @@ success.
   subject/color compositionality failed.
 - Added a 360-image accepted-render reference calibration and a deterministic
   162-pair blinded relative-material review. No training setting changed.
+- The reference calibration completed 360/360 with zero Qwen failures. Shape,
+  color and material accuracy were 100%, 97.78% and 60.56%. Qwen labeled all
+  180 GT metal images correctly but recognized only 38/180 GT rubber images;
+  the other 142 were `other`.
+- Because the same rubber-label failure occurs on accepted renderer ground
+  truth, Qwen material accuracy is retained only as an evaluator diagnostic.
+  The campaign is stopped at the 162-pair blinded human gate.
