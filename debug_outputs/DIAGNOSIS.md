@@ -20,3 +20,15 @@ and the full 1500-step run all completed successfully. The two smokes and full
 run produced finite loss records, saved the Custom Diffusion weights and six
 token files, and reloaded all six textual-inversion embeddings. This closes the
 startup failure without changing training mathematics.
+
+## 2026-08-31 material evaluation bundle import failure
+
+- Failed run: `material_heldout_bundle` at commit `0c03e73`.
+- Failure point: module import, before generation-manifest or image validation.
+- Error: `ModuleNotFoundError: No module named 'src'`.
+- Cause: the launcher invoked the bundle entry point by file path, so its script
+  directory replaced the repository root at the front of Python's import path.
+- Scope: evaluation runtime compatibility only; no model, image, label, metric,
+  split, or protocol was read or changed by the failed attempt.
+- Resolution: retain the failed run and retry under a new run ID with the
+  repository root explicitly supplied through `PYTHONPATH`.

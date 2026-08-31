@@ -12,3 +12,10 @@ Verification:
 
 This is a compatibility fix, not a research contribution.
 
+## Material evaluation bundle runtime fix
+
+Do not patch the scientific code. Set `PYTHONPATH` to the immutable repository
+root in the runtime campaign, record the compatibility flag in the launcher
+environment, verify all three evaluation entry points import with `--help`, and
+retry the non-resumable bundle stage under a fresh run ID. Preserve the failed
+run as evidence.

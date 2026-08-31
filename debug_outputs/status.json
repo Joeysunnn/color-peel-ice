@@ -12,5 +12,15 @@
     "smoke_2step": "passed",
     "smoke_9step": "passed",
     "full_training_1500_steps": "passed"
+  },
+  "latest_incident": {
+    "date": "2026-08-31",
+    "stage": "bundle_material_multiview",
+    "status": "resolved_verified_by_bundle_retry",
+    "cause": "direct_script_import_path_missing_repo_root",
+    "failed_before_data_validation": true,
+    "repository_patch_required": false,
+    "scientific_semantics_changed": false,
+    "verification": "3240-image bundle completed under fresh run ID"
   }
 }
