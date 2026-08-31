@@ -112,3 +112,10 @@ and changed-channel fraction while retaining maxima and raw hashes as audit
 fields; decoded masks remain exact. The completed realization establishes data
 and staging integrity only. It does not establish material-token learning,
 held-out compositional generalization, or resolved entanglement.
+
+The material evaluator-calibration stage is not an official ColorPeel metric.
+It was added because Qwen agreed with shape/color but labeled only 199/1620
+generated rubber images as rubber despite positive human review. The new stage
+uses accepted renderer references and blinded relative material pairs to audit
+that evaluator disagreement. Its results must remain secondary to human image
+semantics and cannot retroactively change the training campaign.

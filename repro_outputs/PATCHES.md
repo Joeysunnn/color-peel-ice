@@ -264,3 +264,18 @@ outside Git.
 - Commit `774241a` preserved v1 and added the explicitly approved robust v2
   gate after the full 180-reference distribution was measured. It passed 133
   server tests and changed no renderer request, profile or training behavior.
+
+## Material evaluator calibration adapters
+
+- Added an independent 360-image Qwen reference-calibration stage using the
+  exact prompt/model/decoding settings from the 3240-image campaign.
+- Added strict validation for the accepted `3x3x2x20` renderer-reference grid,
+  512x512 RGB files and recorded SHA-256 values.
+- Added a deterministic 162-pair human review set: every Fold, training seed,
+  shape and color at generation seeds 42 and 43, with seed-42 review/A-B
+  randomization and a separately stored key.
+- Added reference scoring with coverage, per-axis/joint accuracy, material
+  confusion and per-cell tables. No pass threshold or automatic branch
+  decision was introduced.
+- Training, CAA, AdamW, token embeddings, checkpoints, generation images and
+  the original held-out scorer are unchanged.

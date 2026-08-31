@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "stage": "prepare_material_calibration",
+  "run": {
+    "study": "clevr_subject_color_material_3x3x2",
+    "variant": "prepare_material_evaluator_calibration",
+    "seed": 42
+  },
+  "environment": {
+    "PYTHONPATH": "/home/r12user5/Documents/Jiawei/colorpeel",
+    "COLORPEEL_RUNTIME_PYTHONPATH_COMPAT": "/home/r12user5/Documents/Jiawei/colorpeel"
+  },
+  "args": {
+    "realized-views": "$COLORPEEL_MATERIAL_REFERENCE_ROOT/realized_views.jsonl",
+    "reference-root": "$COLORPEEL_MATERIAL_REFERENCE_ROOT",
+    "generation-manifest": "$COLORPEEL_MATERIAL_BUNDLE_RUN/evaluation/campaign/campaign_generation_manifest.jsonl",
+    "generation-status": "$COLORPEEL_MATERIAL_BUNDLE_RUN/evaluation/campaign/campaign_generation_status.jsonl",
+    "evaluation-protocol": "/home/r12user5/Documents/Jiawei/colorpeel/experiments/clevr_subject_color_material_3x3x2/manifests/clevr_material_heldout_eval.json"
+  }
+}

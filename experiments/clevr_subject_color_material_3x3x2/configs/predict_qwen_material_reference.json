@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "stage": "predict_qwen_material_reference",
+  "run": {
+    "study": "clevr_subject_color_material_3x3x2",
+    "variant": "predict_qwen_material_reference",
+    "seed": 42
+  },
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "3",
+    "PYTHONPATH": "/home/r12user5/Documents/Jiawei/colorpeel",
+    "COLORPEEL_RUNTIME_PYTHONPATH_COMPAT": "/home/r12user5/Documents/Jiawei/colorpeel"
+  },
+  "args": {
+    "manifest": "$COLORPEEL_MATERIAL_CALIBRATION_PREP_RUN/evaluation/calibration/reference_manifest.jsonl",
+    "device": "cuda:0"
+  },
+  "protocol": {
+    "model": "Qwen/Qwen3-VL-8B-Instruct",
+    "local_files_only": true,
+    "torch_dtype": "float16",
+    "do_sample": false,
+    "max_new_tokens": 128,
+    "prompt_identity": "identical_to_3240_image_material_campaign",
+    "human_review_is_primary": true
+  }
+}

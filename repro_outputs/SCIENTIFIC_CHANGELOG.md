@@ -65,6 +65,8 @@ Verified tokenizer evidence from the server `colorpeel017` SD 1.4 cache:
 | Preserve literal official AdamW decay | unchanged | Ordinary vocabulary drift remains record-only |
 | Add three-axis held-out evaluation | implemented/tested; not run | Reports shape/color/material/joint and three intervention directions, with no composite entanglement score |
 | Add two human gates | implemented | Rendering review blocks all training; full-grid generation review blocks Fold training |
+| Calibrate Qwen material labels on accepted v3 references | implemented; runtime pending | Evaluation-only diagnostic using the identical frozen Qwen prompt; does not change training or generated images |
+| Add blinded same-seed metal/rubber pair review | implemented; human review pending | Relative-control diagnostic for evaluator disagreement; no automatic success threshold |
 
 The checkpoint-1000 accelerator state remains evidence only: the upstream
 training entry does not load resume state, so training recovery is not claimed.

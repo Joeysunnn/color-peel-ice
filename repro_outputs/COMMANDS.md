@@ -641,3 +641,29 @@ conda run -n colorpeel017 python -m src.methods.colorpeel_ice.prepare_clevr_mult
 
 This command generated review/staging artifacts only. No generated training
 config was executed.
+
+## Material evaluator calibration
+
+Set the accepted v3 realization and completed campaign bundle, then run the
+three immutable stages through the standard launcher:
+
+```bash
+export COLORPEEL_MATERIAL_REFERENCE_ROOT=<prepared_human_review_v2_gate>
+export COLORPEEL_MATERIAL_BUNDLE_RUN=<completed-3240-image-bundle-run>
+conda run -n colorpeel017 python scripts/launch/colorpeel_run.py \
+  --config experiments/clevr_subject_color_material_3x3x2/configs/prepare_material_calibration.json \
+  --run-dir <immutable-prepare-run>
+
+export COLORPEEL_MATERIAL_CALIBRATION_PREP_RUN=<immutable-prepare-run>
+conda run -n ice-vlm python scripts/launch/colorpeel_run.py \
+  --config experiments/clevr_subject_color_material_3x3x2/configs/predict_qwen_material_reference.json \
+  --run-dir <immutable-qwen-reference-run>
+
+export COLORPEEL_MATERIAL_REFERENCE_QWEN_RUN=<immutable-qwen-reference-run>
+conda run -n ice-vlm python scripts/launch/colorpeel_run.py \
+  --config experiments/clevr_subject_color_material_3x3x2/configs/score_material_reference.json \
+  --run-dir <immutable-reference-score-run>
+```
+
+The preparation stage also creates 162 blinded A/B pair images, a blank review
+CSV, a sealed key and nine contact sheets. Stop at the human pair-review gate.

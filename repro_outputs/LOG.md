@@ -664,3 +664,18 @@ success.
 - Final artifacts are used per run; there is no metric-based model selection.
   This completion releases the locked 3240-image generation campaign but does
   not itself establish held-out generalization or disentanglement.
+
+## 2026-08-31 — material held-out evaluation and calibration decision
+
+- The nine-checkpoint campaign produced and audited 3240/3240 images: 2160
+  seen, 1080 held-out, zero Qwen parse/load failures.
+- Qwen shape/color accuracy was 99.60%/99.66%; fixed shape/color remained
+  consistent above 99% under material replacement.
+- Qwen material accuracy was 56.14% overall (56.62% seen, 55.19% held-out).
+  It labeled 1620/1620 metal images as metal, but only 199/1620 rubber images
+  as rubber; 1108 were `other` and 313 were `metal`.
+- Human review still found both materials distinguishable. Therefore two-object
+  expansion is paused for evaluator calibration, not because held-out
+  subject/color compositionality failed.
+- Added a 360-image accepted-render reference calibration and a deterministic
+  162-pair blinded relative-material review. No training setting changed.

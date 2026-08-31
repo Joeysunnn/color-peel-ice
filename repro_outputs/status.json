@@ -328,12 +328,34 @@
       "stop_reason": "completed",
       "ordinary_vocabulary_embedding_policy": "literal_official_adamw_decay_allowed_record_only"
     },
-    "heldout_evaluation_status": "generation_ready_not_started",
+    "heldout_evaluation_status": "succeeded_3240_qwen_and_scoring_complete_evaluator_disagreement",
     "heldout_campaign_images": 3240,
+    "heldout_evaluation": {
+      "qwen_rows": 3240,
+      "qwen_failures": 0,
+      "shape_accuracy": 0.9959876543209877,
+      "color_accuracy": 0.9966049382716049,
+      "material_accuracy": 0.5614197530864198,
+      "seen_material_accuracy": 0.5662037037037037,
+      "heldout_material_accuracy": 0.5518518518518518,
+      "metal_correct": 1620,
+      "rubber_correct": 199,
+      "rubber_predicted_other": 1108,
+      "rubber_predicted_metal": 313,
+      "human_review_is_primary": true
+    },
+    "material_evaluator_calibration": {
+      "status": "implemented_runtime_pending",
+      "reference_images": 360,
+      "human_pair_review_pairs": 162,
+      "pair_generation_seeds": [42, 43],
+      "random_seed": 42,
+      "training_or_generation_semantics_changed": false
+    },
     "gt_masks_in_training": false,
     "ordinary_vocabulary_embedding_policy": "literal_official_adamw_decay_allowed"
   },
-  "next_safe_action": "launch_nine_locked_material_generation_runs_then_merge_and_stop_at_human_review",
+  "next_safe_action": "run_360_reference_qwen_calibration_and_stop_at_162_pair_human_review_gate",
   "artifact_provenance": [
     "README.md",
     "experiments/clevr_subject_color_3x3/configs/baseline.yaml",

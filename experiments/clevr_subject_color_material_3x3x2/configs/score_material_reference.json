@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "stage": "score_material_reference",
+  "run": {
+    "study": "clevr_subject_color_material_3x3x2",
+    "variant": "score_qwen_material_reference",
+    "seed": 42
+  },
+  "environment": {
+    "PYTHONPATH": "/home/r12user5/Documents/Jiawei/colorpeel",
+    "COLORPEEL_RUNTIME_PYTHONPATH_COMPAT": "/home/r12user5/Documents/Jiawei/colorpeel"
+  },
+  "args": {
+    "manifest": "$COLORPEEL_MATERIAL_CALIBRATION_PREP_RUN/evaluation/calibration/reference_manifest.jsonl",
+    "predictions": "$COLORPEEL_MATERIAL_REFERENCE_QWEN_RUN/evaluation/qwen_predictions.jsonl"
+  }
+}

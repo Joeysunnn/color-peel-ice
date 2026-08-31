@@ -31,16 +31,20 @@ STAGES = {
     "bundle_multiview": "src/methods/colorpeel_ice/bundle_multiview_evaluation.py",
     "bundle_material_multiview": "src/methods/colorpeel_ice/bundle_material_evaluation.py",
     "bundle_material_baseline": "src/methods/colorpeel_ice/bundle_material_baseline.py",
+    "prepare_material_calibration": "src/methods/colorpeel_ice/prepare_material_calibration.py",
     "segment": "scripts/methods/colorpeel_ice/segment_grounded_sam.py",
     "predict_qwen": "scripts/methods/colorpeel_ice/predict_qwen.py",
     "predict_qwen_material": "scripts/methods/colorpeel_ice/predict_qwen_material.py",
+    "predict_qwen_material_reference": "scripts/methods/colorpeel_ice/predict_qwen_material_reference.py",
     "score_clevr": "scripts/methods/colorpeel_ice/score_clevr_predictions.py",
     "score_color": "scripts/methods/colorpeel_ice/evaluate_color_metrics.py",
     "score_multiview": "scripts/methods/colorpeel_ice/score_multiview_heldout.py",
     "score_material_multiview": "scripts/methods/colorpeel_ice/score_material_multiview.py",
+    "score_material_reference": "scripts/methods/colorpeel_ice/score_material_reference.py",
 }
 RESUMABLE_STAGES = {
     "generate_multiview", "generate_material_multiview", "predict_qwen", "predict_qwen_material",
+    "predict_qwen_material_reference",
 }
 MANAGED_ARGUMENTS = {
     "output_dir",
@@ -177,6 +181,8 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "evaluation" / "campaign")}
     if stage in {"bundle_material_multiview", "bundle_material_baseline"}:
         return {"output-dir": str(run_dir / "evaluation" / "campaign")}
+    if stage == "prepare_material_calibration":
+        return {"output-dir": str(run_dir / "evaluation" / "calibration")}
     if stage == "segment":
         return {
             "mask-dir": str(run_dir / "evaluation" / "masks"),
@@ -185,6 +191,8 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
     if stage == "predict_qwen":
         return {"output": str(run_dir / "evaluation" / "qwen_predictions.jsonl")}
     if stage == "predict_qwen_material":
+        return {"output": str(run_dir / "evaluation" / "qwen_predictions.jsonl")}
+    if stage == "predict_qwen_material_reference":
         return {"output": str(run_dir / "evaluation" / "qwen_predictions.jsonl")}
     if stage == "score_clevr":
         return {
@@ -197,6 +205,8 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "evaluation" / "multiview_metrics")}
     if stage == "score_material_multiview":
         return {"output-dir": str(run_dir / "evaluation" / "material_multiview_metrics")}
+    if stage == "score_material_reference":
+        return {"output-dir": str(run_dir / "evaluation" / "material_reference_metrics")}
     raise AssertionError(stage)
 
 
