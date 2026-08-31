@@ -121,12 +121,34 @@ EXPECTED_PROFILE_V3 = {
     "rng": deepcopy(EXPECTED_PROFILE_V2["rng"]),
 }
 
+EXPECTED_PROFILE_V4 = {
+    "schema_version": 1,
+    "profile_id": "multiview_render_v4_two_object",
+    "blender": deepcopy(EXPECTED_PROFILE_V2["blender"]),
+    "objects": {
+        "count": 2,
+        "scale": 1.3,
+        "rotation_z_degrees": 0.0,
+        "positions_xy": {"left": [-1.6, 0.0], "right": [1.6, 0.0]},
+        "material_policy": "request_controlled",
+        "allowed_materials": ["metal", "rubber"],
+    },
+    "camera": {
+        **deepcopy(EXPECTED_PROFILE_V2["camera"]),
+        "sampling_model": "orbit_look_at_scene_midpoint",
+    },
+    "lights": deepcopy(EXPECTED_PROFILE_V2["lights"]),
+    "background": deepcopy(EXPECTED_PROFILE_V2["background"]),
+    "rng": deepcopy(EXPECTED_PROFILE_V2["rng"]),
+}
+
 # Backwards-compatible alias: v1 callers and its canonical fingerprint remain unchanged.
 EXPECTED_PROFILE = EXPECTED_PROFILE_V1
 EXPECTED_PROFILES = {
     EXPECTED_PROFILE_V1["profile_id"]: EXPECTED_PROFILE_V1,
     EXPECTED_PROFILE_V2["profile_id"]: EXPECTED_PROFILE_V2,
     EXPECTED_PROFILE_V3["profile_id"]: EXPECTED_PROFILE_V3,
+    EXPECTED_PROFILE_V4["profile_id"]: EXPECTED_PROFILE_V4,
 }
 
 
@@ -140,7 +162,7 @@ def validate_profile(profile: Any) -> dict[str, Any]:
         raise ValueError("Renderer profile must be an object")
     expected = EXPECTED_PROFILES.get(profile.get("profile_id"))
     if expected is None or profile != expected:
-        raise ValueError("Renderer profile differs from locked multiview_render_v1/v2/v3")
+        raise ValueError("Renderer profile differs from locked multiview_render_v1/v2/v3/v4")
     return profile
 
 

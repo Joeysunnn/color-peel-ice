@@ -12,6 +12,7 @@ import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
 from initializer_token_utils import single_token_initializer_id
+from instance_mask_utils import load_latent_instance_mask, pair_instance_images_and_masks
 from token_gradient_utils import modifier_rows_to_zero
 from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
 import numpy as np
@@ -229,9 +230,11 @@ class CustomDiffusionDataset(Dataset):
         self.class_images_path = []
         self.with_prior_preservation = with_prior_preservation
         for concept in concepts_list:
-            inst_img_path = [
-                (x, concept["instance_prompt"]) for x in Path(concept["instance_data_dir"]).iterdir() if x.is_file()
-            ]
+            mask_dir_value = concept.get("instance_mask_dir")
+            pairs = pair_instance_images_and_masks(
+                Path(concept["instance_data_dir"]), Path(mask_dir_value) if mask_dir_value else None
+            )
+            inst_img_path = [(image, concept["instance_prompt"], mask) for image, mask in pairs]
             self.instance_images_path.extend(inst_img_path)
 
         # random.shuffle(self.instance_images_path)
@@ -277,7 +280,7 @@ class CustomDiffusionDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        instance_image, instance_prompt = self.instance_images_path[index % self.num_instance_images]
+        instance_image, instance_prompt, instance_mask = self.instance_images_path[index % self.num_instance_images]
         instance_image = Image.open(instance_image)
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
@@ -285,6 +288,12 @@ class CustomDiffusionDataset(Dataset):
         # apply resize augmentation and create a valid image region mask
         random_scale = self.size
         instance_image, mask = self.preprocess(instance_image, random_scale, self.interpolation)
+
+        if instance_mask is not None:
+            instance_region = load_latent_instance_mask(instance_mask, self.size, self.mask_size)
+            mask = mask * instance_region
+            if mask.sum() <= 0:
+                raise ValueError(f"Instance mask has no valid latent pixels: {instance_mask}")
 
         example["instance_images"] = torch.from_numpy(instance_image).permute(2, 0, 1)
         example["mask"] = torch.from_numpy(mask)

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "study": "clevr_two_object_subject_color_material",
+  "prompt_template": "a photo of {subject_token} shape in {color_token} color with {material_token} material",
+  "shapes": [
+    {"name": "cube", "token": "<s1*>", "initializer": "cube"},
+    {"name": "sphere", "token": "<s2*>", "initializer": "sphere"},
+    {"name": "cylinder", "token": "<s3*>", "initializer": "cylinder"}
+  ],
+  "colors": [
+    {"name": "red", "token": "<c1*>", "initializer": "red", "rgb": [173, 35, 35]},
+    {"name": "cyan", "token": "<c2*>", "initializer": "turquoise", "rgb": [41, 208, 208]},
+    {"name": "gray", "token": "<c3*>", "initializer": "gray", "rgb": [87, 87, 87]}
+  ],
+  "materials": [
+    {"name": "metal", "token": "<m1*>", "initializer": "metal"},
+    {"name": "rubber", "token": "<m2*>", "initializer": "rubber"}
+  ]
+}

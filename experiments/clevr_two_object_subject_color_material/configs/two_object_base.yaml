@@ -1,0 +1,42 @@
+schema_version: 1
+status: pending_renderer_human_review
+stage: train
+run:
+  study: clevr_two_object_subject_color_material
+  variant: controlled_two_object_seed42
+  seed: 42
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+data_manifest: ${COLORPEEL_TWO_OBJECT_MANIFEST}
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_TWO_OBJECT_CONCEPTS_LIST}
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 1500
+  checkpointing_steps: 1000
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.2
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.01
+  adam_epsilon: 1.0e-8
+  hflip: true
+  modifier_token: "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>+<m1*>+<m2*>"
+  initializer_token: "cube+sphere+cylinder+red+turquoise+gray+metal+rubber"
+protocol:
+  multiview_protocol: clevr_two_object_subject_color_material_v1
+  sample_unit: one_object_bundle_from_two_object_rgb
+  gt_instance_masks_in_training: true
+  caa_scope: within_current_object_bundle
+  cross_object_caa: false
+  optimizer_changed: false
+  non_modifier_embedding_update_policy: literal_official_adamw_decay_allowed

@@ -279,3 +279,24 @@ outside Git.
   decision was introduced.
 - Training, CAA, AdamW, token embeddings, checkpoints, generation images and
   the original held-out scorer are unchanged.
+
+## Controlled two-object adapters
+
+- Added immutable `multiview_render_v4_two_object`; v1/v2/v3 profile and request
+  fingerprints remain protected by regression tests.
+- The renderer places two fixed objects, orbits around their realized midpoint,
+  and emits disjoint left/right instance masks plus the exact background
+  complement. Forward/swapped orientations share camera, lights, and Cycles
+  seed.
+- Added a separate planner/realizer with 9 complementary pairs, 18 oriented
+  scene cells, 360 RGB scenes, 576 object-level training records, image-only
+  RGB directories, separate mask directories, contact sheets, and a blocking
+  human gate.
+- Added optional `instance_mask_dir` support to `CustomDiffusionDataset`.
+  Concepts without it take the historical code path; concepts with it multiply
+  the existing 62x62-valid latent mask by the strict binary instance mask.
+- CAA, Custom Diffusion K/V, optimizer construction/update order, AdamW decay,
+  token gradient boundary, checkpoint format, and the eight-token vocabulary
+  are unchanged. The instance-masked reconstruction loss is an explicit new
+  method-stage semantic change and is not retroactively attributed to the
+  ColorPeel baseline.

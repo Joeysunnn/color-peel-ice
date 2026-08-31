@@ -105,3 +105,35 @@ The follow-up training config is
 It locks the reviewed choice `turquoise`. Only `<c2*>` initialization may
 change; running the other candidates as an undeclared sweep is outside the
 approved protocol. No ablation run is currently claimed.
+
+## Controlled two-object stage
+
+The versioned two-object protocol lives under
+`experiments/clevr_two_object_subject_color_material/`. It keeps the accepted
+eight shared subject/color/material tokens and creates two object-level
+training records from each two-object RGB scene. Each record has one complete
+token bundle and one matching GT instance mask; CAA itself is unchanged and
+never mixes tokens from the two objects.
+
+```bash
+python src/methods/colorpeel_ice/prepare_clevr_two_object.py plan \
+  --output-dir "$COLORPEEL_RUN_ROOT/two_object/plan" \
+  --renderer scripts/methods/colorpeel_ice/render_clevr_two_object.py
+
+blender --background --python-exit-code 1 \
+  --python scripts/methods/colorpeel_ice/render_clevr_two_object.py -- \
+  --cycles-device CUDA --cycles-print-stats \
+  --requests "$COLORPEEL_RUN_ROOT/two_object/plan/render_requests.jsonl" \
+  --profile experiments/clevr_two_object_subject_color_material/configs/multiview_render_v4_two_object.json \
+  --output-root "$COLORPEEL_RUN_ROOT/two_object/render_smoke" \
+  --properties-json "$CLEVR_ROOT/data/properties.json" \
+  --base-scene-blendfile "$CLEVR_ROOT/data/base_scene.blend" \
+  --shape-dir "$CLEVR_ROOT/data/shapes" \
+  --material-dir "$CLEVR_ROOT/data/materials" \
+  --limit 2
+```
+
+The two-image prefix is a real Blender smoke for the forward and swapped
+orientations of the first pair. A successful smoke does not authorize
+training: complete the 360-scene render, realization, contact sheets, and the
+tracked human gate first.

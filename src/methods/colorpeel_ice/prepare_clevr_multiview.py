@@ -408,7 +408,11 @@ def _validate_v2_camera(
 ) -> None:
     _require(camera.get("sampling_model") == profile["camera"]["sampling_model"],
              f"Camera sampling model disagrees for {key}")
-    _require(camera.get("target_policy") == "object_location", f"Camera target policy disagrees for {key}")
+    expected_target_policy = (
+        "scene_midpoint" if profile["profile_id"] == "multiview_render_v4_two_object"
+        else "object_location"
+    )
+    _require(camera.get("target_policy") == expected_target_policy, f"Camera target policy disagrees for {key}")
     _require(camera.get("rotation_policy") == profile["camera"]["rotation_policy"],
              f"Camera rotation policy disagrees for {key}")
     _require(camera.get("base_constraint_policy") == profile["camera"]["base_constraint_policy"],

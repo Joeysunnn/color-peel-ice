@@ -229,7 +229,7 @@ def collect_asset_hashes(
         assets[f"shape_{shape}"] = _asset_path(shape_dir, properties["shapes"][shape])
     require("metal" in properties["materials"], "properties.json is missing metal material")
     assets["material_metal"] = _asset_path(material_dir, properties["materials"]["metal"])
-    if profile["profile_id"] == "multiview_render_v3_material":
+    if profile["profile_id"] in {"multiview_render_v3_material", "multiview_render_v4_two_object"}:
         require("rubber" in properties["materials"], "properties.json is missing rubber material")
         assets["material_rubber"] = _asset_path(material_dir, properties["materials"]["rubber"])
     return properties, {name: file_sha256(path) for name, path in assets.items()}
@@ -507,8 +507,9 @@ def apply_view_jitter(profile: dict[str, Any], render_seed: int) -> tuple[dict[s
 
 
 def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[dict[str, Any], dict[str, Any]]:
-    require(profile["profile_id"] in {"multiview_render_v2", "multiview_render_v3_material"},
-            "Orbit camera requires multiview_render_v2 or multiview_render_v3_material")
+    require(profile["profile_id"] in {
+        "multiview_render_v2", "multiview_render_v3_material", "multiview_render_v4_two_object",
+    }, "Orbit camera requires a locked orbit renderer profile")
     offsets = orbit_jitter_metadata(render_seed, profile)
     camera = bpy.data.objects.get(profile["camera"]["name"])
     require(camera is not None and camera.type == "CAMERA", "Base scene is missing Camera")
@@ -574,7 +575,10 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
     camera_metadata = {
         "name": profile["camera"]["name"],
         "sampling_model": profile["camera"]["sampling_model"],
-        "target_policy": "object_location",
+        "target_policy": (
+            "scene_midpoint" if profile["profile_id"] == "multiview_render_v4_two_object"
+            else "object_location"
+        ),
         "look_at_target": target,
         "base_constraint_policy": profile["camera"]["base_constraint_policy"],
         "base_constraints": base_constraints,

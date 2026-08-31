@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "protocol_id": "clevr_two_object_subject_color_material_v1",
+  "base_manifest": "clevr_two_object_manifest.json",
+  "views_per_scene": 20,
+  "view_splits": {
+    "train": {"start": 0, "stop": 16},
+    "audit": {"start": 16, "stop": 20}
+  },
+  "render_seed": {
+    "base": 520000,
+    "pair_stride": 100,
+    "formula": "base + pair_index * pair_stride + view_index",
+    "paired_orientations": ["forward", "swapped"]
+  },
+  "pairing": {
+    "rule": "metal(s,c) paired with rubber((s+1)%3,(c+1)%3)",
+    "requirements": [
+      "each semantic state appears once on the left and once on the right",
+      "shape color and material differ within every scene"
+    ]
+  },
+  "renderer_profile": {
+    "id": "multiview_render_v4_two_object",
+    "config": "../configs/multiview_render_v4_two_object.json",
+    "background": {
+      "profile_id": "clevr_neutral_fixed_v2",
+      "varied": false,
+      "world_rgba": [0.05, 0.05, 0.05, 1.0],
+      "ground_rgba": [0.5, 0.5, 0.5, 1.0]
+    }
+  },
+  "training": {
+    "one_object_bundle_per_sample": true,
+    "shared_model": true,
+    "shared_modifier_tokens": 8,
+    "instance_mask_reconstruction_loss": true,
+    "cross_object_caa": false,
+    "train_object_records": 576
+  }
+}

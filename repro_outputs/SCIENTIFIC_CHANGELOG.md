@@ -70,3 +70,14 @@ Verified tokenizer evidence from the server `colorpeel017` SD 1.4 cache:
 
 The checkpoint-1000 accelerator state remains evidence only: the upstream
 training entry does not load resume state, so training recovery is not claimed.
+
+## Controlled two-object extension
+
+| Change | Status | Scientific/comparability effect |
+|---|---|---|
+| Add independent `clevr_two_object_subject_color_material` stage | implemented locally; real Blender gate pending | Does not overwrite the accepted single-object stages or checkpoints |
+| Render 9 complementary state pairs in both left/right orientations | implemented/tested | Balances all 18 semantic states across position; introduces the two-object scene distribution |
+| Use one complete token bundle and one GT instance mask per optimization sample | implemented/tested; training not authorized | Adds instance-masked reconstruction supervision while retaining one shared eight-token model |
+| Keep CAA unchanged and within the current bundle | confirmed by prompt contract | No cross-object token pair enters CAA; only subject-color-material pairs for the selected object are aligned |
+| Add `multiview_render_v4_two_object` | implemented/tested; runtime pending | Adds a second fixed object and two disjoint masks; v1/v2/v3 fingerprints remain unchanged |
+| Add joint binding evaluation | protocol direction recorded; not implemented or run in this renderer gate | Will separately report swaps, merges, missing objects, target changes and non-target preservation |
