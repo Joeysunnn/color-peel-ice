@@ -166,6 +166,54 @@ def validate_profile(profile: Any) -> dict[str, Any]:
     return profile
 
 
+def validate_two_object_render_requests(records: Any) -> list[dict[str, Any]]:
+    """Validate the v4 request contract without Blender or image dependencies."""
+    if not isinstance(records, list) or len(records) != 360:
+        raise ValueError(f"Expected 360 render requests, got {len(records) if isinstance(records, list) else 0}")
+    seen: set[tuple[str, int]] = set()
+    by_pair_view: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    renderer_fields = ("camera", "light", "background", "scene_json", "image", "masks", "background_mask")
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("Render requests must be objects")
+        key = (record.get("scene_id"), record.get("view_index"))
+        if key in seen:
+            raise ValueError(f"Duplicate render request: {key}")
+        seen.add(key)
+        view = record.get("view_index")
+        pair_index = record.get("pair_index")
+        if not isinstance(view, int) or not 0 <= view < 20:
+            raise ValueError(f"Invalid view index for {key}")
+        if not isinstance(pair_index, int) or not 0 <= pair_index < 9:
+            raise ValueError(f"Invalid pair index for {key}")
+        if record.get("render_seed") != 520000 + pair_index * 100 + view:
+            raise ValueError(f"Wrong seed for {key}")
+        if record.get("split") != ("train" if view < 16 else "audit"):
+            raise ValueError(f"Wrong split for {key}")
+        if record.get("renderer_profile_id") != EXPECTED_PROFILE_V4["profile_id"]:
+            raise ValueError(f"Wrong profile for {key}")
+        if record.get("renderer_profile_sha256") != canonical_sha256(EXPECTED_PROFILE_V4):
+            raise ValueError(f"Wrong profile hash for {key}")
+        objects = record.get("objects")
+        if not isinstance(objects, list) or len(objects) != 2:
+            raise ValueError(f"Expected two objects for {key}")
+        if [obj.get("side") for obj in objects] != ["left", "right"]:
+            raise ValueError(f"Object side order changed for {key}")
+        left, right = objects
+        for field in ("shape", "color", "material"):
+            if left.get(field) == right.get(field):
+                raise ValueError(f"Objects share {field} for {key}")
+        if not all(record.get(field) is None for field in renderer_fields):
+            raise ValueError(f"Request fabricates renderer output for {key}")
+        by_pair_view.setdefault((pair_index, view), []).append(record)
+    for key, paired in by_pair_view.items():
+        if len(paired) != 2 or {row.get("orientation") for row in paired} != {"forward", "swapped"}:
+            raise ValueError(f"Bad paired orientations for {key}")
+        if len({row["render_seed"] for row in paired}) != 1:
+            raise ValueError(f"Orientation seeds differ for {key}")
+    return records
+
+
 def official_jitter_metadata(render_seed: int, profile: dict[str, Any]) -> dict[str, Any]:
     rng = random.Random(render_seed)
 

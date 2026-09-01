@@ -20,9 +20,7 @@ from src.methods.colorpeel_ice.multiview_render_contract import (  # noqa: E402
     EXPECTED_PROFILE_V4,
     canonical_sha256,
     validate_profile as validate_locked_profile,
-)
-from src.methods.colorpeel_ice.prepare_clevr_two_object import (  # noqa: E402
-    validate_render_requests as validate_locked_requests,
+    validate_two_object_render_requests,
 )
 
 _BASE_PATH = Path(__file__).with_name("render_clevr_multiview.py")
@@ -71,7 +69,7 @@ def validate_profile(value: Any) -> dict[str, Any]:
 
 def validate_requests(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     try:
-        validate_locked_requests(records)
+        validate_two_object_render_requests(records)
     except Exception as exc:
         raise RendererError(str(exc)) from exc
     return records

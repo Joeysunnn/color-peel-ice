@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 from src.methods.colorpeel_ice.multiview_render_contract import (  # noqa: E402
     EXPECTED_PROFILE_V4,
     canonical_sha256,
+    validate_two_object_render_requests,
 )
 from src.methods.colorpeel_ice.prepare_clevr_multiview import (  # noqa: E402
     ProtocolError,
@@ -211,28 +212,10 @@ def build_render_requests(manifest: dict[str, Any], protocol: dict[str, Any]) ->
 
 
 def validate_render_requests(requests: list[dict[str, Any]]) -> None:
-    _require(len(requests) == 360, f"Expected 360 render requests, got {len(requests)}")
-    _require(len({(row.get("scene_id"), row.get("view_index")) for row in requests}) == 360,
-             "Each scene/view must be unique")
-    for row in requests:
-        view = row.get("view_index")
-        _require(isinstance(view, int) and 0 <= view < 20, "Invalid view index")
-        _require(row.get("render_seed") == 520000 + row.get("pair_index", -1) * 100 + view,
-                 f"Wrong seed for {row.get('scene_id')}")
-        _require(row.get("split") == ("train" if view < 16 else "audit"), "Wrong split")
-        _require(row.get("renderer_profile_id") == EXPECTED_PROFILE_V4["profile_id"], "Wrong profile")
-        _require(row.get("renderer_profile_sha256") == canonical_sha256(EXPECTED_PROFILE_V4),
-                 "Wrong profile hash")
-        _require(isinstance(row.get("objects"), list) and len(row["objects"]) == 2, "Expected two objects")
-        _require([obj.get("side") for obj in row["objects"]] == ["left", "right"], "Object side order changed")
-        _require(all(row.get(field) is None for field in RENDERER_FIELDS), "Request fabricates renderer output")
-    by_pair_view: dict[tuple[int, int], list[dict[str, Any]]] = {}
-    for row in requests:
-        by_pair_view.setdefault((row["pair_index"], row["view_index"]), []).append(row)
-    for key, rows in by_pair_view.items():
-        _require(len(rows) == 2, f"Missing paired orientation for {key}")
-        _require({row["orientation"] for row in rows} == {"forward", "swapped"}, f"Bad orientations for {key}")
-        _require(len({row["render_seed"] for row in rows}) == 1, f"Orientation seeds differ for {key}")
+    try:
+        validate_two_object_render_requests(requests)
+    except ValueError as exc:
+        raise ProtocolError(str(exc)) from exc
 
 
 def plan_protocol(manifest: dict[str, Any], protocol: dict[str, Any], output_dir: Path,
