@@ -16,3 +16,9 @@ realization, and human review. No training is authorized before that gate.
 The renderer gate passed on 2026-09-01. A small minority of medium-to-heavy
 occlusions was accepted as realistic multi-object variation. Training now uses
 the versioned 2-step and 18-step masked smokes before the seed-42 1500-step run.
+
+After training, evaluation uses explicit left/right prompts with two complete
+token bundles. It contains 360 images from the nine renderer-seen pairings and
+360 images from nine disjoint unseen pairings. Both groups include forward and
+swapped order at seeds 42--61. This follows ICE's prompt-level multi-object
+composition; training masks are not reused by the diffusion sampler.

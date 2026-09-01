@@ -115,6 +115,27 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertIn("predict_qwen.py", command[1])
         self.assertNotIn("--mask-dir", command)
 
+    def test_two_object_generation_and_bundle_manage_separate_outputs(self):
+        run_dir = Path("/runs/example")
+        generate = {
+            "stage": "generate_two_object",
+            "run": {"study": "study", "variant": "generate", "seed": 42},
+            "args": {"evaluation-protocol": "/data/protocol.json"},
+        }
+        bundle = {
+            "stage": "bundle_two_object",
+            "run": {"study": "study", "variant": "bundle", "seed": 42},
+            "args": {"generation-root": "/data/generation", "evaluation-protocol": "/data/protocol.json"},
+        }
+
+        generate_command = colorpeel_run.build_command(generate, run_dir, {})
+        bundle_command = colorpeel_run.build_command(bundle, run_dir, {})
+
+        self.assertIn("generate_two_object.py", generate_command[1])
+        self.assertIn(str(run_dir / "inference"), generate_command)
+        self.assertIn("bundle_two_object_evaluation.py", bundle_command[1])
+        self.assertIn(str(run_dir / "evaluation" / "human_review"), bundle_command)
+
     def test_evaluation_configs_build_with_explicit_upstream_paths(self):
         configs_dir = (
             REPOSITORY_ROOT

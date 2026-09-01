@@ -137,3 +137,9 @@ The two-image prefix is a real Blender smoke for the forward and swapped
 orientations of the first pair. A successful smoke does not authorize
 training: complete the 360-scene render, realization, contact sheets, and the
 tracked human gate first.
+
+After the authorized seed-42 training completes, `generate_two_object.py`
+loads the same eight-token checkpoint and evaluates explicit left/right bundle
+composition. The versioned protocol contains 360 seen-pair and 360 unseen-pair
+images. `bundle_two_object_evaluation.py` validates all artifacts and creates
+the human-review packet; it does not run Qwen or claim disentanglement.

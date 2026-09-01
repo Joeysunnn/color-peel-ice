@@ -1,0 +1,14 @@
+schema_version: 1
+status: ready_after_full_generation
+stage: bundle_two_object
+run:
+  study: clevr_two_object_subject_color_material
+  variant: two_object_generation_human_bundle
+  seed: 42
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+data_manifest: experiments/clevr_two_object_subject_color_material/manifests/two_object_evaluation.json
+args:
+  generation-root: ${COLORPEEL_TWO_OBJECT_GENERATION_RUN}/inference
+  evaluation-protocol: experiments/clevr_two_object_subject_color_material/manifests/two_object_evaluation.json
+

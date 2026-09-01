@@ -28,6 +28,8 @@ STAGES = {
     "generate": "scripts/methods/colorpeel_ice/generate.py",
     "generate_multiview": "scripts/methods/colorpeel_ice/generate_multiview_heldout.py",
     "generate_material_multiview": "scripts/methods/colorpeel_ice/generate_material_multiview.py",
+    "generate_two_object": "scripts/methods/colorpeel_ice/generate_two_object.py",
+    "bundle_two_object": "scripts/methods/colorpeel_ice/bundle_two_object_evaluation.py",
     "bundle_multiview": "src/methods/colorpeel_ice/bundle_multiview_evaluation.py",
     "bundle_material_multiview": "src/methods/colorpeel_ice/bundle_material_evaluation.py",
     "bundle_material_baseline": "src/methods/colorpeel_ice/bundle_material_baseline.py",
@@ -43,7 +45,7 @@ STAGES = {
     "score_material_reference": "scripts/methods/colorpeel_ice/score_material_reference.py",
 }
 RESUMABLE_STAGES = {
-    "generate_multiview", "generate_material_multiview", "predict_qwen", "predict_qwen_material",
+    "generate_multiview", "generate_material_multiview", "generate_two_object", "predict_qwen", "predict_qwen_material",
     "predict_qwen_material_reference",
 }
 MANAGED_ARGUMENTS = {
@@ -175,8 +177,10 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "data")}
     if stage == "train":
         return {"output_dir": str(run_dir / "checkpoints")}
-    if stage in {"generate", "generate_multiview", "generate_material_multiview"}:
+    if stage in {"generate", "generate_multiview", "generate_material_multiview", "generate_two_object"}:
         return {"output-dir": str(run_dir / "inference")}
+    if stage == "bundle_two_object":
+        return {"output-dir": str(run_dir / "evaluation" / "human_review")}
     if stage == "bundle_multiview":
         return {"output-dir": str(run_dir / "evaluation" / "campaign")}
     if stage in {"bundle_material_multiview", "bundle_material_baseline"}:
@@ -261,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("resume config does not match the immutable run snapshot")
         if manifest.get("command") != command:
             raise ValueError("resume command does not match the original command")
-        if config["stage"] in {"generate_multiview", "generate_material_multiview"}:
+        if config["stage"] in {"generate_multiview", "generate_material_multiview", "generate_two_object"}:
             if config["args"].get("skip-existing") is not True:
                 raise ValueError("multiview resume requires locked skip-existing=true")
         else:
