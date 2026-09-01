@@ -686,3 +686,21 @@ success.
 - Because the same rubber-label failure occurs on accepted renderer ground
   truth, Qwen material accuracy is retained only as an evaluator diagnostic.
   The campaign is stopped at the 162-pair blinded human gate.
+
+## 2026-09-01 — controlled two-object renderer and realization
+
+- Added and deployed the independent `multiview_render_v4_two_object` stage.
+  All 18 semantic states are balanced across left/right positions in 9 paired
+  forward/swapped scenes; the 360-request fingerprint is locked.
+- The first Blender start exposed an operational dependency leak: importing
+  the preparation module required Pillow inside Blender. Commit `1cce8e7`
+  moved pure request validation into the dependency-free contract; profile,
+  requests and scientific behavior remained byte-identical.
+- The repaired real smoke completed 2/2 on GPU 3 and passed RGB, strict binary
+  mask, disjointness, complement, frame-boundary, side-order, midpoint-camera,
+  asset-hash and paired-seed checks.
+- The fresh full run completed 360/360 with zero failures. Strict realization
+  produced 576 matched image/mask object records, 360 human-review rows, one
+  18-scene sheet and nine orientation-pair sheets.
+- Preliminary visual inspection found stable objects/attributes and no clipping
+  or merging. Training remains blocked at the explicit human gate.

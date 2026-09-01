@@ -300,3 +300,7 @@ outside Git.
   are unchanged. The instance-masked reconstruction loss is an explicit new
   method-stage semantic change and is not retroactively attributed to the
   ColorPeel baseline.
+- Blender's bundled Python lacks Pillow. Commit `1cce8e7` moved the pure v4
+  request validator from the Pillow-dependent preparation module into the
+  existing dependency-free contract module. Profile and request fingerprints
+  remained identical; this is an entry-point dependency fix only.
