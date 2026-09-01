@@ -46,6 +46,8 @@ EXPERIMENT_DIR = REPO_ROOT / "experiments" / "clevr_two_object_subject_color_mat
 DEFAULT_MANIFEST = EXPERIMENT_DIR / "manifests" / "clevr_two_object_manifest.json"
 DEFAULT_PROTOCOL = EXPERIMENT_DIR / "manifests" / "clevr_two_object_protocol.json"
 DEFAULT_CONFIG = EXPERIMENT_DIR / "configs" / "two_object_base.yaml"
+SMOKE_2STEP_CONFIG = EXPERIMENT_DIR / "configs" / "smoke_2step.yaml"
+SMOKE_18STEP_CONFIG = EXPERIMENT_DIR / "configs" / "smoke_18step.yaml"
 SHAPES = ("cube", "sphere", "cylinder")
 COLORS = ("red", "cyan", "gray")
 MATERIALS = ("metal", "rubber")
@@ -408,6 +410,95 @@ def build_training_outputs(render_root: Path, realized: list[dict[str, Any]], st
     return {"concepts": str(concepts_path), "config": str(config_path), "object_record_count": staged_count}
 
 
+def build_authorized_training_package(
+    prepared_root: Path,
+    output_dir: Path,
+    states: list[dict[str, Any]],
+    base_config_path: Path = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Create immutable smoke/full configs after the renderer human gate passes."""
+    _require(yaml is not None, "PyYAML is required")
+    prepared_root = prepared_root.resolve()
+    status = _read_json(prepared_root / "protocol_status.json")
+    _require(status.get("status") == "validated_pending_human_review", "Prepared renderer status changed")
+    _require(status.get("training_object_record_count") == 576, "Prepared object record count changed")
+    realized_manifest = prepared_root / "realized_scenes.jsonl"
+    _require(len(_read_jsonl(realized_manifest)) == 360, "Prepared scene manifest must contain 360 rows")
+    concepts_path = prepared_root / "training" / "concepts.json"
+    concepts = _read_json(concepts_path)
+    _require(isinstance(concepts, list) and len(concepts) == len(states), "Expected 18 prepared concepts")
+
+    verified = []
+    for state, concept in zip(states, concepts):
+        _require(concept.get("instance_prompt") == state["instance_prompt"],
+                 f"Prepared prompt changed for {state['state_id']}")
+        image_dir = Path(concept.get("instance_data_dir", "")).resolve()
+        mask_dir = Path(concept.get("instance_mask_dir", "")).resolve()
+        images = sorted(image_dir.glob("*.jpg"))
+        masks = sorted(mask_dir.glob("*.png"))
+        _require(len(images) == len(masks) == 32, f"Prepared count changed for {state['state_id']}")
+        _require([path.stem for path in images] == [path.stem for path in masks],
+                 f"Prepared image/mask stems differ for {state['state_id']}")
+        verified.append((state, images[0], masks[0]))
+
+    _require_empty_output_dir(output_dir)
+    generated_configs = {}
+    for smoke_name, selected, template_path in (
+        ("smoke_2step", verified[:2], SMOKE_2STEP_CONFIG),
+        ("smoke_18step", verified, SMOKE_18STEP_CONFIG),
+    ):
+        smoke_root = output_dir / "smokes" / smoke_name
+        smoke_concepts = []
+        for state, image, mask in selected:
+            image_dir = smoke_root / "train_assets" / state["state_id"]
+            mask_dir = smoke_root / "train_masks" / state["state_id"]
+            image_dir.mkdir(parents=True)
+            mask_dir.mkdir(parents=True)
+            _stage(image, image_dir / image.name)
+            _stage(mask, mask_dir / mask.name)
+            smoke_concepts.append({
+                "instance_prompt": state["instance_prompt"],
+                "instance_data_dir": str(image_dir.resolve()),
+                "instance_mask_dir": str(mask_dir.resolve()),
+            })
+        smoke_concepts_path = smoke_root / "concepts.json"
+        _write_json(smoke_concepts_path, smoke_concepts)
+        config = yaml.safe_load(template_path.read_text(encoding="utf-8"))
+        config["args"]["concepts_list"] = str(smoke_concepts_path.resolve())
+        config["data_manifest"] = str(realized_manifest.resolve())
+        config_path = smoke_root / "train_config.json"
+        _write_json(config_path, config)
+        generated_configs[smoke_name] = str(config_path)
+
+    full_config = yaml.safe_load(base_config_path.read_text(encoding="utf-8"))
+    full_config["args"]["concepts_list"] = str(concepts_path.resolve())
+    full_config["data_manifest"] = str(realized_manifest.resolve())
+    full_config_path = output_dir / "full_training" / "train_config_seed42.json"
+    full_config_path.parent.mkdir(parents=True)
+    _write_json(full_config_path, full_config)
+    decision = {
+        "status": "passed",
+        "training_authorized": True,
+        "authorized_at": "2026-09-01",
+        "human_observation": "A small minority of medium-to-heavy occlusions was accepted.",
+        "scope": "two_object_smokes_then_seed42_1500_steps",
+    }
+    _write_json(output_dir / "human_gate_decision.json", decision)
+    result = {
+        "status": "ready_for_training_smokes",
+        "prepared_root": str(prepared_root),
+        "realized_scene_count": 360,
+        "full_training_object_record_count": 576,
+        "shared_modifier_token_count": 8,
+        "training_uses_gt_instance_masks": True,
+        "smoke_configs": generated_configs,
+        "full_config": str(full_config_path),
+        "human_gate": decision,
+    }
+    _write_json(output_dir / "training_package_status.json", result)
+    return result
+
+
 def write_review_outputs(render_root: Path, realized: list[dict[str, Any]], output_dir: Path):
     review_path = output_dir / "two_object_render_human_review.csv"
     fields = ["generation_id", "scene_id", "pair_index", "orientation", "view_index", "split", "image",
@@ -484,13 +575,14 @@ def realize_protocol(manifest: dict[str, Any], protocol: dict[str, Any], render_
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("plan", "realize"))
+    parser.add_argument("command", choices=("plan", "realize", "authorize-training"))
     parser.add_argument("--base-manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--protocol", type=Path, default=DEFAULT_PROTOCOL)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--renderer", type=Path)
     parser.add_argument("--render-root", type=Path)
     parser.add_argument("--render-manifest", type=Path)
+    parser.add_argument("--prepared-root", type=Path)
     parser.add_argument("--base-config", type=Path, default=DEFAULT_CONFIG)
     return parser
 
@@ -500,11 +592,16 @@ def main(argv: Iterable[str] | None = None) -> dict[str, Any]:
     manifest, protocol, _, _ = load_inputs(args.base_manifest, args.protocol)
     if args.command == "plan":
         result = plan_protocol(manifest, protocol, args.output_dir.resolve(), args.renderer)
-    else:
+    elif args.command == "realize":
         _require(args.render_root is not None and args.render_manifest is not None,
                  "--render-root and --render-manifest are required for realize")
         result = realize_protocol(manifest, protocol, args.render_root, args.render_manifest,
                                   args.output_dir.resolve(), args.base_config)
+    else:
+        _require(args.prepared_root is not None, "--prepared-root is required for authorize-training")
+        result = build_authorized_training_package(
+            args.prepared_root, args.output_dir.resolve(), build_states(manifest), args.base_config
+        )
     print(json.dumps(result, indent=2, sort_keys=True))
     return result
 

@@ -189,6 +189,54 @@ class TwoObjectStagingTests(unittest.TestCase):
             self.assertTrue(all(path.suffix == ".jpg" for path in images))
             self.assertTrue(all(path.suffix == ".png" for path in masks))
 
+    @unittest.skipUnless(prepare.yaml is not None, "PyYAML is required")
+    def test_human_authorization_builds_masked_smokes_and_full_config(self):
+        manifest, protocol, states, _ = prepare.load_inputs(prepare.DEFAULT_MANIFEST, prepare.DEFAULT_PROTOCOL)
+        requests = prepare.build_render_requests(manifest, protocol)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            render_root, prepared, authorized = root / "render", root / "prepared", root / "authorized"
+            realized = []
+            for row in requests:
+                view_dir = render_root / row["scene_id"] / f"view_{row['view_index']:02d}"
+                view_dir.mkdir(parents=True)
+                (view_dir / "img.jpg").write_bytes(f"{row['scene_id']}:{row['view_index']}".encode())
+                (view_dir / "mask_left.png").write_bytes(b"left")
+                (view_dir / "mask_right.png").write_bytes(b"right")
+                realized.append({
+                    **row,
+                    "image": (view_dir / "img.jpg").relative_to(render_root).as_posix(),
+                    "masks": {
+                        side: (view_dir / f"mask_{side}.png").relative_to(render_root).as_posix()
+                        for side in ("left", "right")
+                    },
+                })
+            prepared.mkdir()
+            prepare.build_training_outputs(render_root, realized, states, prepared, prepare.DEFAULT_CONFIG)
+            prepare._write_jsonl(prepared / "realized_scenes.jsonl", realized)
+            prepare._write_json(prepared / "protocol_status.json", {
+                "status": "validated_pending_human_review",
+                "training_object_record_count": 576,
+            })
+
+            result = prepare.build_authorized_training_package(prepared, authorized, states)
+
+            self.assertEqual(result["status"], "ready_for_training_smokes")
+            self.assertTrue(result["human_gate"]["training_authorized"])
+            smoke2 = json.loads(Path(result["smoke_configs"]["smoke_2step"]).read_text(encoding="utf-8"))
+            smoke18 = json.loads(Path(result["smoke_configs"]["smoke_18step"]).read_text(encoding="utf-8"))
+            self.assertEqual(smoke2["args"]["max_train_steps"], 2)
+            self.assertEqual(smoke18["args"]["max_train_steps"], 18)
+            self.assertTrue(smoke2["protocol"]["gt_instance_masks_in_training"])
+            self.assertTrue(smoke18["protocol"]["gt_instance_masks_in_training"])
+            self.assertEqual(len(json.loads(Path(smoke2["args"]["concepts_list"]).read_text())), 2)
+            self.assertEqual(len(json.loads(Path(smoke18["args"]["concepts_list"]).read_text())), 18)
+            for smoke_name, count in (("smoke_2step", 2), ("smoke_18step", 18)):
+                images = list((authorized / "smokes" / smoke_name / "train_assets").glob("*/*.jpg"))
+                masks = list((authorized / "smokes" / smoke_name / "train_masks").glob("*/*.png"))
+                self.assertEqual(len(images), count)
+                self.assertEqual([path.stem for path in images], [path.stem for path in masks])
+
 
 class TwoObjectRendererResumeTests(unittest.TestCase):
     @classmethod
