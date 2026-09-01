@@ -704,3 +704,16 @@ success.
   18-scene sheet and nine orientation-pair sheets.
 - Preliminary visual inspection found stable objects/attributes and no clipping
   or merging. Training remains blocked at the explicit human gate.
+
+## 2026-09-01 — controlled two-object training
+
+- The user accepted the renderer gate; rare medium-to-heavy occlusions were
+  retained as a minority of realistic multi-object examples.
+- Commit `0446729` added only the authorization package and masked 2/18-step
+  smoke configs. Server checkout was clean, GPU 3 was idle, and `150 passed`.
+- Both smokes passed strict loss, exposure, gradient, artifact and reload
+  audits. The full seed-42 run then completed 1500/1500 finite steps with
+  checkpoint-1000, final K/V, eight token files and successful reload.
+- Sequential non-shuffled loading plus a partial third epoch produced unequal
+  subject exposure (`576/540/384`); this official ordering consequence is
+  recorded and not post-hoc corrected. Generation has not started.

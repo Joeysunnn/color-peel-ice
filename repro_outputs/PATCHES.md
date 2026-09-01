@@ -304,3 +304,6 @@ outside Git.
   request validator from the Pillow-dependent preparation module into the
   existing dependency-free contract module. Profile and request fingerprints
   remained identical; this is an entry-point dependency fix only.
+- Commit `0446729` records the human renderer authorization and adds immutable
+  2-step/18-step masked smoke packages. It changes no training mathematics,
+  renderer profile, token initializer, optimizer, CAA, or full-run parameter.

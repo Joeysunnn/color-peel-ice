@@ -177,5 +177,13 @@ renderer references. It achieved 100% shape, 97.78% color and 60.56% material:
 metal was 180/180, but rubber only 38/180, with the remaining 142 labeled
 `other`. This establishes a Qwen rubber-label limitation, not generated-rubber
 success. A balanced, blinded 162-pair relative-material review is prepared and
-is the current human gate. No two-object run or disentanglement-success claim
-has started.
+was the next gate at that stage. No disentanglement-success claim was made.
+
+## Controlled two-object training
+
+The two-object renderer gate passed with rare accepted occlusions. Both masked
+training smokes and the seed-42 1500-step run completed at commit `0446729`.
+All 1500 metric rows were finite, checkpoint-1000 and final K/V plus eight token
+files exist, every token received nonzero gradients and a positive update, and
+the final pipeline reload succeeded. This establishes training execution only;
+two-object generation and human semantic evaluation remain pending.
