@@ -60,7 +60,8 @@ def validate_model_dir(model_dir: Path) -> None:
 
 
 def model_provenance(model_dir: Path, training_run: Path, fold_id: str | None,
-                     training_seed: int, mode: str = "heldout") -> dict:
+                     training_seed: int, mode: str = "heldout",
+                     checkpoint_kind: str = "material-baseline") -> dict:
     model_dir, training_run = model_dir.resolve(), training_run.resolve()
     if model_dir != training_run / "checkpoints":
         raise ValueError("model-dir must be PARENT_TRAINING_RUN/checkpoints")
@@ -68,10 +69,13 @@ def model_provenance(model_dir: Path, training_run: Path, fold_id: str | None,
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("status") != "succeeded" or manifest.get("returncode") != 0:
         raise ValueError("parent training run is not successful")
-    expected_variant = (
-        "full_grid_seed42" if mode == "full-grid"
-        else f"material_fold_{fold_id.lower()}_seed{training_seed}"
-    )
+    if checkpoint_kind == "joint-binding":
+        expected_variant = "joint_binding_seed42"
+    else:
+        expected_variant = (
+            "full_grid_seed42" if mode == "full-grid"
+            else f"material_fold_{fold_id.lower()}_seed{training_seed}"
+        )
     if manifest.get("run", {}).get("variant") != expected_variant:
         raise ValueError("fold/training seed do not match parent training variant")
     validate_model_dir(model_dir)
@@ -81,6 +85,7 @@ def model_provenance(model_dir: Path, training_run: Path, fold_id: str | None,
     ).encode()).hexdigest()
     return {"evaluation_protocol_id": PROTOCOL_ID, "parent_training_run": str(training_run),
             "parent_training_variant": expected_variant, "parent_training_seed": training_seed,
+            "checkpoint_kind": checkpoint_kind,
             "parent_training_git": manifest["git"], "training_manifest_sha256": sha256_file(manifest_path),
             "training_config_sha256": sha256_file(training_run / "config.yaml"), "model_dir": str(model_dir),
             "model_artifact_sha256": hashes, "model_fingerprint_sha256": aggregate}
@@ -160,6 +165,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--evaluation-protocol", type=Path, required=True)
     parser.add_argument("--mode", choices=("full-grid", "heldout"), default="heldout")
+    parser.add_argument(
+        "--checkpoint-kind",
+        choices=("material-baseline", "joint-binding"),
+        default="material-baseline",
+    )
     parser.add_argument("--fold-id", choices=("A", "B", "C"))
     parser.add_argument("--training-seed", type=int, choices=(42, 43, 44), default=42)
     parser.add_argument("--manifest-path", type=Path)
@@ -171,6 +181,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--disable-safety-checker", action="store_true")
     parser.add_argument("--acknowledge-safety-risk", action="store_true")
     parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument("--smoke", action="store_true", help="Generate the 18 complete bundles at seed 42 only.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     if args.disable_safety_checker != args.acknowledge_safety_risk:
@@ -181,6 +192,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--fold-id is required in heldout mode")
     if args.mode == "full-grid" and (args.fold_id is not None or args.training_seed != 42):
         parser.error("full-grid mode is locked to training seed 42 and has no fold")
+    if args.checkpoint_kind == "joint-binding" and args.mode != "full-grid":
+        parser.error("joint-binding checkpoint diagnostics require full-grid mode")
     args.manifest_path = args.manifest_path or args.output_dir / "generation_manifest.jsonl"
     args.status_path = args.status_path or args.output_dir / "generation_status.jsonl"
     args.provenance_path = args.provenance_path or args.output_dir / "generation_provenance.json"
@@ -191,9 +204,14 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     protocol = read_protocol(args.evaluation_protocol)
     protocol_rows = (
-        build_full_grid_manifest(protocol)
+        build_full_grid_manifest(protocol, generation_seeds=[42] if args.smoke else None)
         if args.mode == "full-grid"
-        else build_manifest(protocol, fold_id=args.fold_id, training_seed=args.training_seed)
+        else build_manifest(
+            protocol,
+            fold_id=args.fold_id,
+            training_seed=args.training_seed,
+            generation_seeds=[42] if args.smoke else None,
+        )
     )
     rows = [{**row, "dtype": args.dtype, "safety_checker_disabled": args.disable_safety_checker,
              "safety_risk_acknowledged": args.acknowledge_safety_risk,
@@ -202,7 +220,12 @@ def main(argv: list[str] | None = None) -> None:
     provenance = None
     if args.model_dir is not None:
         provenance = model_provenance(
-            args.model_dir, args.parent_training_run, args.fold_id, args.training_seed, args.mode
+            args.model_dir,
+            args.parent_training_run,
+            args.fold_id,
+            args.training_seed,
+            args.mode,
+            args.checkpoint_kind,
         )
         rows = [{**row, "parent_training_run": provenance["parent_training_run"],
                  "parent_training_variant": provenance["parent_training_variant"],

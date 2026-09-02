@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "status": "authorized_diagnostic",
+  "stage": "generate_material_multiview",
+  "run": {
+    "study": "clevr_two_object_joint_binding_v2",
+    "variant": "single_object_bundle_smoke_joint_seed42",
+    "seed": 42
+  },
+  "environment": {"CUDA_VISIBLE_DEVICES": "3"},
+  "data_manifest": "experiments/clevr_subject_color_material_3x3x2/manifests/clevr_material_heldout_eval.json",
+  "args": {
+    "model-dir": "${COLORPEEL_JOINT_TRAIN_RUN}/checkpoints",
+    "parent-training-run": "${COLORPEEL_JOINT_TRAIN_RUN}",
+    "evaluation-protocol": "experiments/clevr_subject_color_material_3x3x2/manifests/clevr_material_heldout_eval.json",
+    "mode": "full-grid",
+    "checkpoint-kind": "joint-binding",
+    "training-seed": 42,
+    "device": "cuda:0",
+    "dtype": "float16",
+    "disable-safety-checker": true,
+    "acknowledge-safety-risk": true,
+    "skip-existing": true,
+    "smoke": true
+  }
+}

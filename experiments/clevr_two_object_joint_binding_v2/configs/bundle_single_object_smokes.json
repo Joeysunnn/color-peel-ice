@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "status": "run_after_both_smokes",
+  "stage": "bundle_single_object_comparison",
+  "run": {
+    "study": "clevr_two_object_joint_binding_v2",
+    "variant": "single_object_checkpoint_comparison",
+    "seed": 42
+  },
+  "environment": {},
+  "data_manifest": "experiments/clevr_subject_color_material_3x3x2/manifests/clevr_material_heldout_eval.json",
+  "args": {
+    "baseline-root": "${COLORPEEL_SINGLE_OBJECT_REFERENCE_SMOKE}/inference",
+    "joint-root": "${COLORPEEL_SINGLE_OBJECT_JOINT_SMOKE}/inference",
+    "evaluation-protocol": "experiments/clevr_subject_color_material_3x3x2/manifests/clevr_material_heldout_eval.json"
+  }
+}

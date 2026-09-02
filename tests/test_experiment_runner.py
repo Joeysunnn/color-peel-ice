@@ -109,6 +109,14 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertIn("prepare_joint_two_object.py", command[1])
         self.assertIn(str(run_dir / "data"), command)
 
+    def test_single_object_comparison_stage_manages_output(self):
+        run_dir = Path("/runs/example")
+        outputs = colorpeel_run.managed_output_args("bundle_single_object_comparison", run_dir)
+        self.assertEqual(
+            outputs,
+            {"output-dir": str(run_dir / "evaluation" / "single_object_comparison")},
+        )
+
     def test_qwen_stage_manages_prediction_jsonl(self):
         run_dir = Path("/runs/example")
         outputs = colorpeel_run.managed_output_args("predict_qwen", run_dir)
