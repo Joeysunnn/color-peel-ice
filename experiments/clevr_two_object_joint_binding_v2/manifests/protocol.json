@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "protocol_id": "clevr_two_object_joint_binding_v2",
+  "parent_protocol": "clevr_two_object_subject_color_material_v1",
+  "training_sample": "one full two-object RGB with two instance masks and both token bundles",
+  "prompt_template": "a photo of {left_bundle} on the left and {right_bundle} on the right",
+  "reconstruction": "mean of independently mask-normalized left and right diffusion losses",
+  "caa": "ColorPeel pairwise cosine attention alignment within each three-token object bundle, averaged over objects",
+  "instance_attention": {
+    "source": "ICE Stage Two mask-to-attention Wasserstein guidance",
+    "weight": 0.00001,
+    "sinkhorn_regularization": 0.001,
+    "sinkhorn_iterations": 200,
+    "bundle_attention": "mean subject/color/material attention per object"
+  },
+  "shared_modifier_tokens": 8,
+  "new_slot_tokens": 0,
+  "historical_checkpoints_modified": false
+}

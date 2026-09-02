@@ -98,6 +98,17 @@ class ExperimentRunnerTests(unittest.TestCase):
         self.assertIn("segment_grounded_sam.py", command[1])
         self.assertIn("--mask-dir", command)
 
+    def test_joint_prepare_stage_manages_data_output(self):
+        run_dir = Path("/runs/example")
+        config = {
+            "stage": "prepare_joint_two_object",
+            "run": {"study": "study", "variant": "prepare", "seed": 42},
+            "args": {"prepared-root": "/data/prepared"},
+        }
+        command = colorpeel_run.build_command(config, run_dir, {})
+        self.assertIn("prepare_joint_two_object.py", command[1])
+        self.assertIn(str(run_dir / "data"), command)
+
     def test_qwen_stage_manages_prediction_jsonl(self):
         run_dir = Path("/runs/example")
         outputs = colorpeel_run.managed_output_args("predict_qwen", run_dir)

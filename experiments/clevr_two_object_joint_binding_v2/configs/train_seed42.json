@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "status": "authorized_after_smokes",
+  "stage": "train",
+  "run": {
+    "study": "clevr_two_object_joint_binding_v2",
+    "variant": "joint_binding_seed42",
+    "seed": 42
+  },
+  "environment": {"CUDA_VISIBLE_DEVICES": "3"},
+  "data_manifest": "${COLORPEEL_JOINT_TRAINING_MANIFEST}",
+  "args": {
+    "pretrained_model_name_or_path": "CompVis/stable-diffusion-v1-4",
+    "concepts_list": "${COLORPEEL_JOINT_CONCEPTS_LIST}",
+    "resolution": 512,
+    "train_batch_size": 1,
+    "learning_rate": 0.00001,
+    "scale_lr": true,
+    "lr_scheduler": "constant",
+    "lr_warmup_steps": 0,
+    "max_train_steps": 1500,
+    "checkpointing_steps": 1000,
+    "seed": 42,
+    "mixed_precision": "no",
+    "cos_weight": 0.2,
+    "joint_two_object_binding": true,
+    "lambda_attention": 0.00001,
+    "gradient_accumulation_steps": 1,
+    "max_grad_norm": 1.0,
+    "dataloader_num_workers": 2,
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_weight_decay": 0.01,
+    "adam_epsilon": 1e-8,
+    "hflip": true,
+    "modifier_token": "<s1*>+<s2*>+<s3*>+<c1*>+<c2*>+<c3*>+<m1*>+<m2*>",
+    "initializer_token": "cube+sphere+cylinder+red+turquoise+gray+metal+rubber"
+  },
+  "protocol": {
+    "protocol_id": "clevr_two_object_joint_binding_v2",
+    "sample_unit": "full_two_object_rgb_with_two_masks_and_two_bundles",
+    "optimizer_changed": false,
+    "official_adamw_decay_preserved": true
+  }
+}

@@ -24,6 +24,7 @@ except ImportError:  # JSON-formatted YAML remains supported without PyYAML.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STAGES = {
     "prepare": "src/methods/colorpeel_ice/prepare_clevr_3x3.py",
+    "prepare_joint_two_object": "src/methods/colorpeel_ice/prepare_joint_two_object.py",
     "train": "src/train/train_colorpeel.py",
     "generate": "scripts/methods/colorpeel_ice/generate.py",
     "generate_multiview": "scripts/methods/colorpeel_ice/generate_multiview_heldout.py",
@@ -174,6 +175,8 @@ def argument_tokens(arguments: dict[str, Any], environment: dict[str, str]) -> l
 
 def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
     if stage == "prepare":
+        return {"output-dir": str(run_dir / "data")}
+    if stage == "prepare_joint_two_object":
         return {"output-dir": str(run_dir / "data")}
     if stage == "train":
         return {"output_dir": str(run_dir / "checkpoints")}

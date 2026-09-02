@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "blocked_until_generation_smoke_human_gate",
+  "stage": "generate_two_object",
+  "run": {
+    "study": "clevr_two_object_joint_binding_v2",
+    "variant": "joint_binding_generate_seed42",
+    "seed": 42
+  },
+  "environment": {"CUDA_VISIBLE_DEVICES": "3"},
+  "data_manifest": "experiments/clevr_two_object_subject_color_material/manifests/two_object_evaluation.json",
+  "args": {
+    "model-dir": "${COLORPEEL_JOINT_TRAIN_RUN}/checkpoints",
+    "parent-training-run": "${COLORPEEL_JOINT_TRAIN_RUN}",
+    "evaluation-protocol": "experiments/clevr_two_object_subject_color_material/manifests/two_object_evaluation.json",
+    "device": "cuda:0",
+    "dtype": "float16",
+    "disable-safety-checker": true,
+    "acknowledge-safety-risk": true,
+    "skip-existing": true
+  }
+}

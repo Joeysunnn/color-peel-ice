@@ -12,7 +12,19 @@ import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
 from initializer_token_utils import single_token_initializer_id
-from instance_mask_utils import load_latent_instance_mask, pair_instance_images_and_masks
+from instance_mask_utils import (
+    load_latent_instance_mask,
+    pair_instance_images_and_masks,
+    pair_joint_instance_images_and_masks,
+)
+from joint_binding_utils import (
+    ICE_ATTENTION_WEIGHT,
+    balanced_instance_masked_mse,
+    cross_object_attention_mass,
+    grouped_caa_loss,
+    ice_wasserstein_attention_loss,
+    modifier_group_positions,
+)
 from token_gradient_utils import modifier_rows_to_zero
 from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
 import numpy as np
@@ -179,7 +191,14 @@ def collate_fn(examples, with_prior_preservation):
     pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
     mask = mask.to(memory_format=torch.contiguous_format).float()
 
-    batch = {"input_ids": input_ids, "pixel_values": pixel_values, "mask": mask.unsqueeze(1)}
+    if mask.ndim == 3:
+        mask = mask.unsqueeze(1)
+    batch = {"input_ids": input_ids, "pixel_values": pixel_values, "mask": mask}
+    token_groups = [example.get("modifier_token_groups") for example in examples]
+    if any(groups is not None for groups in token_groups):
+        if not all(groups is not None for groups in token_groups):
+            raise ValueError("cannot mix legacy and joint-binding samples in one batch")
+        batch["modifier_token_groups"] = token_groups
     return batch
 
 
@@ -230,11 +249,38 @@ class CustomDiffusionDataset(Dataset):
         self.class_images_path = []
         self.with_prior_preservation = with_prior_preservation
         for concept in concepts_list:
-            mask_dir_value = concept.get("instance_mask_dir")
-            pairs = pair_instance_images_and_masks(
-                Path(concept["instance_data_dir"]), Path(mask_dir_value) if mask_dir_value else None
-            )
-            inst_img_path = [(image, concept["instance_prompt"], mask) for image, mask in pairs]
+            joint_mask_dirs = concept.get("instance_mask_dirs")
+            token_groups = concept.get("modifier_token_groups")
+            if joint_mask_dirs is not None or token_groups is not None:
+                if not isinstance(joint_mask_dirs, dict) or set(joint_mask_dirs) != {"left", "right"}:
+                    raise ValueError("joint binding requires exactly left/right instance_mask_dirs")
+                if not isinstance(token_groups, list) or len(token_groups) != 2:
+                    raise ValueError("joint binding requires two modifier_token_groups")
+                token_id_groups = []
+                for group in token_groups:
+                    if not isinstance(group, list) or len(group) != 3:
+                        raise ValueError("each joint modifier group must contain subject/color/material tokens")
+                    ids = [self.tokenizer.convert_tokens_to_ids(token) for token in group]
+                    if any(token_id == self.tokenizer.unk_token_id for token_id in ids):
+                        raise ValueError(f"unknown joint modifier token in group: {group}")
+                    token_id_groups.append(ids)
+                pairs = pair_joint_instance_images_and_masks(
+                    Path(concept["instance_data_dir"]),
+                    Path(joint_mask_dirs["left"]),
+                    Path(joint_mask_dirs["right"]),
+                )
+                inst_img_path = [
+                    (image, concept["instance_prompt"], (left, right), token_id_groups)
+                    for image, left, right in pairs
+                ]
+            else:
+                mask_dir_value = concept.get("instance_mask_dir")
+                pairs = pair_instance_images_and_masks(
+                    Path(concept["instance_data_dir"]), Path(mask_dir_value) if mask_dir_value else None
+                )
+                inst_img_path = [
+                    (image, concept["instance_prompt"], mask, None) for image, mask in pairs
+                ]
             self.instance_images_path.extend(inst_img_path)
 
         # random.shuffle(self.instance_images_path)
@@ -280,7 +326,9 @@ class CustomDiffusionDataset(Dataset):
 
     def __getitem__(self, index):
         example = {}
-        instance_image, instance_prompt, instance_mask = self.instance_images_path[index % self.num_instance_images]
+        instance_image, instance_prompt, instance_mask, token_groups = self.instance_images_path[
+            index % self.num_instance_images
+        ]
         instance_image = Image.open(instance_image)
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
@@ -289,7 +337,18 @@ class CustomDiffusionDataset(Dataset):
         random_scale = self.size
         instance_image, mask = self.preprocess(instance_image, random_scale, self.interpolation)
 
-        if instance_mask is not None:
+        if isinstance(instance_mask, tuple):
+            instance_regions = [
+                load_latent_instance_mask(path, self.size, self.mask_size)
+                for path in instance_mask
+            ]
+            if np.any(np.stack(instance_regions).sum(axis=0) > 1):
+                raise ValueError(f"Joint instance masks overlap: {instance_mask}")
+            mask = np.stack([mask * region for region in instance_regions])
+            if np.any(mask.sum(axis=(1, 2)) <= 0):
+                raise ValueError(f"Joint instance mask has no valid latent pixels: {instance_mask}")
+            example["modifier_token_groups"] = token_groups
+        elif instance_mask is not None:
             instance_region = load_latent_instance_mask(instance_mask, self.size, self.mask_size)
             mask = mask * instance_region
             if mask.sum() <= 0:
@@ -402,6 +461,17 @@ def parse_args(input_args=None):
         help="real images as prior.",
     )
     parser.add_argument("--cos_weight", type=float, help="Weight assigned to Cosine Similarity Loss")
+    parser.add_argument(
+        "--joint_two_object_binding",
+        action="store_true",
+        help="Use two instance masks, within-object CAA, and ICE spatial attention guidance.",
+    )
+    parser.add_argument(
+        "--lambda_attention",
+        type=float,
+        default=0.0,
+        help="Weight for ICE-style mask-to-attention Wasserstein guidance.",
+    )
     parser.add_argument("--prior_loss_weight", type=float, default=1.0, help="The weight of prior preservation loss.")
     parser.add_argument(
         "--num_class_images",
@@ -758,6 +828,21 @@ def main(args):
     else:
         with open(args.concepts_list, "r") as f:
             args.concepts_list = json.load(f)
+    if args.joint_two_object_binding:
+        if args.train_batch_size != 1:
+            raise ValueError("joint_two_object_binding is locked to train_batch_size=1")
+        if args.lambda_attention != ICE_ATTENTION_WEIGHT:
+            raise ValueError(
+                f"joint_two_object_binding requires ICE lambda_attention={ICE_ATTENTION_WEIGHT}"
+            )
+        if not all(
+            isinstance(concept.get("instance_mask_dirs"), dict)
+            and concept.get("modifier_token_groups")
+            for concept in args.concepts_list
+        ):
+            raise ValueError("joint_two_object_binding requires joint masks and token groups for every concept")
+    elif args.lambda_attention != 0:
+        raise ValueError("lambda_attention is only supported by joint_two_object_binding")
 
     # Handle the repository creation
     if accelerator.is_main_process:
@@ -1116,24 +1201,36 @@ def main(args):
             
                 mask = batch["mask"]
 
-                # Reconstruction loss
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
-                loss = ((loss * mask).sum([1, 2, 3]) / mask.sum([1, 2, 3])).mean()
-                
-                present_ids = []
-                indices = []
-
-                for id in modifier_ids:
-                    matching_indices = (batch["input_ids"][0] == id).nonzero().squeeze()
-                    if matching_indices.numel() > 0:
-                        present_ids.append(id)
-                        indices.append(matching_indices.item())
-
-                if(len(indices) == 1):
-                    indices.append(indices[0]+1)
-
-                ### NOTE: cosine loss
-                cos = _compute_cosine(attention_maps, indices)
+                # Reconstruction loss. Historical paths retain the official
+                # single-mask calculation exactly; joint binding balances the
+                # two object masks independently.
+                per_pixel_loss = F.mse_loss(model_pred.float(), target.float(), reduction="none")
+                if args.joint_two_object_binding:
+                    loss = balanced_instance_masked_mse(per_pixel_loss, mask)
+                    position_groups = modifier_group_positions(
+                        batch["input_ids"][0], batch["modifier_token_groups"][0]
+                    )
+                    cos = grouped_caa_loss(attention_maps, position_groups)
+                    raw_attention_loss = ice_wasserstein_attention_loss(
+                        attention_maps, position_groups, mask[0]
+                    )
+                    weighted_attention_loss = raw_attention_loss * args.lambda_attention
+                    leakage_mass = cross_object_attention_mass(
+                        attention_maps.detach(), position_groups, mask[0]
+                    )
+                else:
+                    loss = ((per_pixel_loss * mask).sum([1, 2, 3]) / mask.sum([1, 2, 3])).mean()
+                    indices = []
+                    for id in modifier_ids:
+                        matching_indices = (batch["input_ids"][0] == id).nonzero().squeeze()
+                        if matching_indices.numel() > 0:
+                            indices.append(matching_indices.item())
+                    if len(indices) == 1:
+                        indices.append(indices[0] + 1)
+                    cos = _compute_cosine(attention_maps, indices)
+                    raw_attention_loss = torch.zeros((), device=loss.device)
+                    weighted_attention_loss = raw_attention_loss
+                    leakage_mass = torch.zeros((), device=loss.device)
                 pil_imgs, split_imgs = show_cross_attention_blackwhite(prompts, attention_maps.detach().cpu(), display_image=False,)
                 
                 if(epoch%50 == 0):
@@ -1146,8 +1243,11 @@ def main(args):
                 reconstruction_loss_value = loss.detach().float().item()
                 caa_loss_value = cos.detach().float().item()
                 loss += cos * args.cos_weight
+                loss += weighted_attention_loss
+                attention_loss_value = raw_attention_loss.detach().float().item()
+                attention_weighted_loss_value = weighted_attention_loss.detach().float().item()
+                cross_object_leakage_value = leakage_mass.detach().float().item()
                 total_loss_value = loss.detach().float().item()
-                indices = []
                 accelerator.backward(loss)
 
                 # Zero out the gradients for all token embeddings except the newly added
@@ -1209,6 +1309,11 @@ def main(args):
                         total_loss=total_loss_value,
                         learning_rate=logs["lr"],
                         present_modifier_tokens=present_modifier_tokens_value,
+                        attention_loss=attention_loss_value if args.joint_two_object_binding else None,
+                        attention_weight=args.lambda_attention if args.joint_two_object_binding else None,
+                        cross_object_attention_mass=(
+                            cross_object_leakage_value if args.joint_two_object_binding else None
+                        ),
                     ),
                 )
 

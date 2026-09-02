@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "authorized",
+  "stage": "prepare_joint_two_object",
+  "run": {
+    "study": "clevr_two_object_joint_binding_v2",
+    "variant": "prepare_joint_training_package",
+    "seed": 42
+  },
+  "environment": {},
+  "data_manifest": "${COLORPEEL_TWO_OBJECT_PREPARED_ROOT}/realized_scenes.jsonl",
+  "args": {
+    "prepared-root": "${COLORPEEL_TWO_OBJECT_PREPARED_ROOT}"
+  }
+}

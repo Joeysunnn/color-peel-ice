@@ -37,12 +37,15 @@ def build_training_metric(
     total_loss,
     learning_rate,
     present_modifier_tokens=(),
+    attention_loss=None,
+    attention_weight=None,
+    cross_object_attention_mass=None,
 ):
     """Build one JSON-serializable observation of the existing training loss."""
     reconstruction_loss = float(reconstruction_loss)
     caa_loss = float(caa_loss)
     total_loss = float(total_loss)
-    return {
+    result = {
         "step": int(step),
         "reconstruction_loss": reconstruction_loss,
         "caa_loss": caa_loss,
@@ -61,6 +64,29 @@ def build_training_metric(
             ),
         },
     }
+    if attention_loss is not None:
+        attention_loss = float(attention_loss)
+        attention_weight = float(attention_weight)
+        attention_weighted_loss = attention_loss * attention_weight
+        leakage = float(cross_object_attention_mass)
+        result.update(
+            {
+                "instance_attention_loss": attention_loss,
+                "instance_attention_weight": attention_weight,
+                "instance_attention_weighted_loss": attention_weighted_loss,
+                "cross_object_attention_mass": leakage,
+            }
+        )
+        result["losses_finite"].update(
+            {
+                "instance_attention": math.isfinite(attention_loss),
+                "cross_object_attention_mass": math.isfinite(leakage),
+            }
+        )
+        result["losses_finite"]["all"] = result["losses_finite"]["all"] and all(
+            math.isfinite(value) for value in (attention_loss, attention_weighted_loss, leakage)
+        )
+    return result
 
 
 def append_jsonl(path, record):
@@ -206,6 +232,15 @@ def validate_smoke_audit(config_path, run_dir):
             value = metric.get(field)
             if not isinstance(value, (int, float)) or not math.isfinite(value):
                 errors.append(f"step {expected_step} field {field} is not finite: {value}")
+        if config.get("args", {}).get("joint_two_object_binding"):
+            for field in (
+                "instance_attention_loss",
+                "instance_attention_weighted_loss",
+                "cross_object_attention_mass",
+            ):
+                value = metric.get(field)
+                if not isinstance(value, (int, float)) or not math.isfinite(value):
+                    errors.append(f"step {expected_step} field {field} is not finite: {value}")
 
     protocol = config.get("protocol", {})
     modifier_tokens = tuple(config.get("args", {}).get("modifier_token", "").split("+"))
