@@ -24,6 +24,10 @@ from src.methods.colorpeel_ice.two_object_evaluation_protocol import (  # noqa: 
 TOKENS = ("<s1*>", "<s2*>", "<s3*>", "<c1*>", "<c2*>", "<c3*>", "<m1*>", "<m2*>")
 CUSTOM_DIFFUSION_WEIGHTS = "pytorch_custom_diffusion_weights.bin"
 MODEL_ARTIFACTS = (CUSTOM_DIFFUSION_WEIGHTS, *(f"{token}.bin" for token in TOKENS))
+ALLOWED_TRAINING_VARIANTS = {
+    "controlled_two_object_seed42",
+    "joint_binding_seed42",
+}
 
 
 def write_jsonl(rows: list[dict], path: Path) -> None:
@@ -68,8 +72,9 @@ def model_provenance(model_dir: Path, training_run: Path) -> dict:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("status") != "succeeded" or manifest.get("returncode") != 0:
         raise ValueError("parent training run is not successful")
-    if manifest.get("run", {}).get("variant") != "controlled_two_object_seed42":
-        raise ValueError("parent training variant is not the locked two-object seed-42 run")
+    training_variant = manifest.get("run", {}).get("variant")
+    if training_variant not in ALLOWED_TRAINING_VARIANTS:
+        raise ValueError("parent training variant is not an approved two-object seed-42 run")
     validate_model_dir(model_dir)
     hashes = {name: file_sha256(model_dir / name) for name in MODEL_ARTIFACTS}
     aggregate = hashlib.sha256("".join(
@@ -78,7 +83,7 @@ def model_provenance(model_dir: Path, training_run: Path) -> dict:
     return {
         "evaluation_protocol_id": PROTOCOL_ID,
         "parent_training_run": str(training_run),
-        "parent_training_variant": "controlled_two_object_seed42",
+        "parent_training_variant": training_variant,
         "parent_training_git": manifest["git"],
         "training_manifest_sha256": file_sha256(manifest_path),
         "training_config_sha256": file_sha256(training_run / "config.yaml"),

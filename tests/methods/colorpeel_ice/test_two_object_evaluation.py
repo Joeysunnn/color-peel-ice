@@ -100,6 +100,28 @@ class TwoObjectEvaluationProtocolTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "fingerprint"):
                 GENERATION.pending_rows(rows, args)
 
+    def test_model_provenance_accepts_versioned_joint_binding_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            run = Path(temporary) / "training"
+            model = run / "checkpoints"
+            model.mkdir(parents=True)
+            (run / "manifest.json").write_text(json.dumps({
+                "status": "succeeded",
+                "returncode": 0,
+                "run": {"variant": "joint_binding_seed42"},
+                "git": {"commit": "a" * 40, "branch": "test"},
+            }), encoding="utf-8")
+            (run / "config.yaml").write_text("stage: train\n", encoding="utf-8")
+            for name in GENERATION.MODEL_ARTIFACTS:
+                (model / name).write_bytes(name.encode())
+            provenance = GENERATION.model_provenance(model, run)
+            self.assertEqual(provenance["parent_training_variant"], "joint_binding_seed42")
+            manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
+            manifest["run"]["variant"] = "unapproved"
+            (run / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "approved two-object"):
+                GENERATION.model_provenance(model, run)
+
 
 class TwoObjectEvaluationBundleTests(unittest.TestCase):
     def test_full_synthetic_ledgers_validate_and_detect_hash_tamper(self):
