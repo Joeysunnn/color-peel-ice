@@ -179,6 +179,31 @@ class NaturalImageMaskDerivationTests(unittest.TestCase):
         self.assertEqual(status, "REVIEW")
         self.assertEqual(flags, ["REVIEW: alpha_min_width_override"])
 
+    def test_canonical_alpha_png_validator_accepts_portable_pillow_integer_decode(self):
+        alpha = np.array(
+            [
+                [0, 1, 65535],
+                [1024, 32768, 50000],
+            ],
+            dtype=np.uint16,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "alpha_u16.png"
+            masks.save_alpha_u16(path, alpha)
+
+            ihdr = prepare.read_png_ihdr(path)
+            self.assertEqual(ihdr["bit_depth"], 16)
+            self.assertEqual(ihdr["color_type"], 0)
+            metadata, decoded = prepare.validate_canonical_alpha_png(path)
+
+        self.assertEqual(metadata["storage_dtype"], "uint16")
+        self.assertEqual(metadata["storage_bit_depth"], 16)
+        self.assertEqual(metadata["storage_color_type"], 0)
+        self.assertTrue(decoded.dtype == np.uint16 or np.issubdtype(decoded.dtype, np.signedinteger))
+        self.assertGreaterEqual(int(decoded.min()), 0)
+        self.assertLessEqual(int(decoded.max()), 65535)
+        np.testing.assert_array_equal(decoded.astype(np.uint16), alpha)
+
 
 if __name__ == "__main__":
     unittest.main()

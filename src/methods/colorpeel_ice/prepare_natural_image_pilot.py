@@ -65,6 +65,9 @@ LOCKED_SELECTION = [
     {"group": "reserve", "rank": 18, "stable_id": "D1GT:1/8.png"},
 ]
 
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+CANONICAL_ALPHA_MODES = {"I", "I;16", "I;16L", "I;16B"}
+
 
 def input_identity(image_root: Path, mask_root: Path, image_layout: str) -> dict[str, Any]:
     return {
@@ -135,6 +138,50 @@ def _image_metadata(path: Path) -> dict[str, Any]:
         if image.mode == "L":
             metadata["values"] = sorted(int(value) for value in np.unique(array))
         return metadata
+
+
+def read_png_ihdr(path: Path) -> dict[str, int]:
+    with path.open("rb") as handle:
+        signature = handle.read(8)
+        require(signature == PNG_SIGNATURE, f"PNG signature mismatch: {path}")
+        length = int.from_bytes(handle.read(4), "big")
+        chunk_type = handle.read(4)
+        require(length == 13 and chunk_type == b"IHDR", f"PNG IHDR chunk missing or invalid: {path}")
+        payload = handle.read(length)
+        require(len(payload) == 13, f"PNG IHDR payload is truncated: {path}")
+    return {
+        "width": int.from_bytes(payload[0:4], "big"),
+        "height": int.from_bytes(payload[4:8], "big"),
+        "bit_depth": payload[8],
+        "color_type": payload[9],
+    }
+
+
+def validate_canonical_alpha_png(path: Path) -> tuple[dict[str, Any], np.ndarray]:
+    ihdr = read_png_ihdr(path)
+    require(ihdr["bit_depth"] == 16, f"canonical alpha PNG must have bit depth 16: {path}")
+    require(ihdr["color_type"] == 0, f"canonical alpha PNG must be grayscale color type 0: {path}")
+    metadata = _image_metadata(path)
+    require(metadata["mode"] in CANONICAL_ALPHA_MODES, f"canonical alpha decoded mode is not 16-bit grayscale: {path}")
+    with Image.open(path) as image:
+        image.load()
+        array = np.asarray(image).copy()
+    require(array.ndim == 2, f"canonical alpha must decode to a 2D array: {path}")
+    decoded_is_allowed = array.dtype == np.uint16 or np.issubdtype(array.dtype, np.signedinteger)
+    require(decoded_is_allowed, f"canonical alpha decoded dtype is not portable 16-bit-compatible integer: {path}")
+    require(array.size == 0 or (int(array.min()) >= 0 and int(array.max()) <= 65535),
+            f"canonical alpha decoded values must stay within [0,65535]: {path}")
+    metadata.update({
+        "storage_dtype": "uint16",
+        "storage_bit_depth": ihdr["bit_depth"],
+        "storage_color_type": ihdr["color_type"],
+    })
+    return metadata, array
+
+
+def _canonical_alpha_metadata(path: Path) -> dict[str, Any]:
+    metadata, _ = validate_canonical_alpha_png(path)
+    return metadata
 
 
 def _write_mask(path: Path, mask: np.ndarray) -> None:
@@ -297,17 +344,13 @@ def derive_one(
             "raw_image": _image_metadata(raw_image_out),
             "raw_mask": _image_metadata(raw_mask_out),
             "color_mask": _image_metadata(color_mask_out),
-            "alpha_canonical": {**_image_metadata(alpha_out), "dtype": "uint16", "range": [0, 65535]},
+            "alpha_canonical": _canonical_alpha_metadata(alpha_out),
             "alpha_preview": {**_image_metadata(alpha_preview_out), "dtype": "uint8", "range": [0, 255]},
             "crops": {
                 "raw_image": _image_metadata(crop_dir / "img_crop.jpg"),
                 "raw_mask": _image_metadata(crop_dir / "raw_mask_crop.png"),
                 "color_mask": _image_metadata(crop_dir / "color_mask_crop.png"),
-                "alpha_canonical": {
-                    **_image_metadata(crop_dir / "alpha_u16_crop.png"),
-                    "dtype": "uint16",
-                    "range": [0, 65535],
-                },
+                "alpha_canonical": _canonical_alpha_metadata(crop_dir / "alpha_u16_crop.png"),
             },
             "sample_qc": _image_metadata(qc_out),
         },
@@ -408,17 +451,17 @@ def verify_outputs(manifest: dict[str, Any], output_dir: Path) -> dict[str, Any]
         raw_item = decoded.get("raw_mask")
         alpha_item = decoded.get("alpha_canonical")
         preview_item = decoded.get("alpha_preview")
+        alpha_arr = None
         if alpha_item:
-            alpha_arr = alpha_item[1]
-            if alpha_arr.dtype != np.uint16:
-                add_error(stable_id, "alpha_canonical", f"expected uint16, observed {alpha_arr.dtype}")
-            elif alpha_arr.size and (int(alpha_arr.min()) < 0 or int(alpha_arr.max()) > 65535):
-                add_error(stable_id, "alpha_canonical", "expected range within [0,65535]")
+            try:
+                _, alpha_arr = validate_canonical_alpha_png(output_dir / record["outputs"]["alpha_canonical"])
+            except (NaturalImageMaskError, OSError, ValueError) as exc:
+                add_error(stable_id, "alpha_canonical", str(exc))
             if raw_item:
                 raw_arr = raw_item[1] == 255
-                if int(np.count_nonzero(alpha_arr[~raw_arr])) != 0:
+                if alpha_arr is not None and int(np.count_nonzero(alpha_arr[~raw_arr])) != 0:
                     add_error(stable_id, "alpha_canonical", "raw exterior contains nonzero alpha")
-            if preview_item and alpha_arr.dtype == np.uint16:
+            if preview_item and alpha_arr is not None:
                 expected_preview = np.rint(alpha_arr.astype(np.float64) / 65535.0 * 255.0).astype(np.uint8)
                 if not np.array_equal(preview_item[1], expected_preview):
                     add_error(stable_id, "alpha_preview", "does not match uint8 mapping from canonical alpha")
@@ -435,6 +478,11 @@ def verify_outputs(manifest: dict[str, Any], output_dir: Path) -> dict[str, Any]
             "color_mask": decoded.get("color_mask"),
             "alpha_canonical": decoded.get("alpha_canonical"),
         }
+        if decoded.get("crop.alpha_canonical"):
+            try:
+                validate_canonical_alpha_png(output_dir / record["outputs"]["crops"]["alpha_canonical"])
+            except (NaturalImageMaskError, OSError, ValueError) as exc:
+                add_error(stable_id, "crop.alpha_canonical", str(exc))
         for crop_name, full_item in crop_sources.items():
             crop_item = decoded.get(f"crop.{crop_name}")
             if crop_item and crop_item[0]["size"] != crop_size:
