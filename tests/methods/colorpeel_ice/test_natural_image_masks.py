@@ -1,9 +1,11 @@
+import json
 import math
 from pathlib import Path
 import tempfile
 import unittest
 
 import numpy as np
+from PIL import Image
 
 from src.methods.colorpeel_ice import natural_image_masks as masks
 from src.methods.colorpeel_ice import prepare_natural_image_pilot as prepare
@@ -203,6 +205,128 @@ class NaturalImageMaskDerivationTests(unittest.TestCase):
         self.assertGreaterEqual(int(decoded.min()), 0)
         self.assertLessEqual(int(decoded.max()), 65535)
         np.testing.assert_array_equal(decoded.astype(np.uint16), alpha)
+
+
+class SelectionJsonTests(unittest.TestCase):
+    selection_path = (
+        prepare.REPO_ROOT
+        / "experiments"
+        / "natural_image_subject_color_pilot"
+        / "configs"
+        / "d1_replacement_selection_3_plus_3.json"
+    )
+
+    def load_payload(self) -> dict:
+        return json.loads(self.selection_path.read_text(encoding="utf-8"))
+
+    def test_default_locked_selection_preserves_the_12_plus_6_order(self):
+        prepare.validate_selection(prepare.LOCKED_SELECTION)
+
+        self.assertEqual(len(prepare.LOCKED_SELECTION), 18)
+        self.assertEqual([row["rank"] for row in prepare.LOCKED_SELECTION], list(range(1, 19)))
+        self.assertEqual([row["group"] for row in prepare.LOCKED_SELECTION[:12]], ["pilot"] * 12)
+        self.assertEqual([row["group"] for row in prepare.LOCKED_SELECTION[12:]], ["reserve"] * 6)
+
+    def test_default_report_and_readme_keep_the_historical_12_plus_6_wording(self):
+        manifest = {
+            "selection": {
+                "locked_count": 18,
+                "pilot_count": 12,
+                "reserve_count": 6,
+                "stable_id_order_sha256": "test",
+            },
+            "summary": {"PASS": 18, "REVIEW": 0, "FAIL": 0},
+            "contact_sheet": "qc/production_edt_contact_sheet.png",
+            "samples": [],
+            "verification": {"passed": True},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            output_dir = Path(temporary)
+            prepare.write_readme(output_dir, manifest)
+            prepare.write_report(output_dir, manifest)
+            readme = (output_dir / "README.md").read_text()
+            report = (output_dir / "reports" / "01_mask_derivation_batch.md").read_text()
+
+        self.assertIn("D1 pilot/reserve mask derivation batch. The locked\ninput list", readme)
+        self.assertIn("- 12 pilot samples and 6 reserve samples.", readme)
+        self.assertIn("fixed 12 pilot plus 6 reserve samples", report)
+
+    def test_replacement_selection_json_is_valid_and_records_required_provenance(self):
+        selection, metadata = prepare.load_selection_json(self.selection_path)
+
+        self.assertEqual([row["stable_id"] for row in selection], [
+            "D1GT:13/30.png",
+            "D1GT:11/180.png",
+            "D1GT:9/205.png",
+            "D1GT:2/62.png",
+            "D1GT:5/101.png",
+            "D1GT:24/198.png",
+        ])
+        self.assertEqual(metadata["selection_source_repo_relative_path"],
+                         "experiments/natural_image_subject_color_pilot/configs/d1_replacement_selection_3_plus_3.json")
+        self.assertEqual(metadata["selection_file_sha256"], masks.file_sha256(self.selection_path))
+        self.assertEqual(metadata["group_counts"], {"replacement": 3, "reserve": 3})
+        self.assertEqual(len(metadata["human_selection_reasons"]), 6)
+
+    def test_selection_json_rejects_duplicate_overlap_mismatch_and_bad_groups(self):
+        cases = {
+            "duplicate_sample": lambda payload: payload["samples"].__setitem__(1, {
+                **payload["samples"][1], "sample_id": "13", "mask_name": "180.png", "stable_id": "D1GT:13/180.png",
+            }),
+            "locked_overlap": lambda payload: payload["samples"].__setitem__(0, {
+                **payload["samples"][0], "sample_id": "3", "mask_name": "30.png", "stable_id": "D1GT:3/30.png",
+            }),
+            "stable_id_mismatch": lambda payload: payload["samples"][0].__setitem__("sample_id", "999"),
+            "bad_groups": lambda payload: payload["samples"][2].__setitem__("group", "reserve"),
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "selection.json"
+            for name, mutate in cases.items():
+                with self.subTest(name=name):
+                    payload = self.load_payload()
+                    mutate(payload)
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    with self.assertRaises(masks.NaturalImageMaskError):
+                        prepare.load_selection_json(path)
+
+    def test_external_selection_builds_a_3_plus_3_manifest_and_report_in_tempdirs(self):
+        selection, metadata = prepare.load_selection_json(self.selection_path)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            image_root = root / "images"
+            mask_root = root / "masks"
+            output_dir = root / "output"
+            image_root.mkdir()
+            mask_root.mkdir()
+            for index, row in enumerate(selection):
+                image = np.full((512, 512, 3), 32 + index * 20, dtype=np.uint8)
+                Image.fromarray(image, mode="RGB").save(image_root / f"{row['sample_id']}.jpg", "JPEG")
+                mask = np.zeros((512, 512), dtype=np.uint8)
+                mask[128:384, 128:384] = 255
+                sample_mask_root = mask_root / row["sample_id"]
+                sample_mask_root.mkdir()
+                Image.fromarray(mask, mode="L").save(sample_mask_root / row["mask_name"])
+
+            manifest = prepare.build_manifest(
+                image_root,
+                mask_root,
+                "flat",
+                output_dir,
+                selection,
+                metadata,
+            )
+            prepare.write_readme(output_dir, manifest)
+            prepare.write_report(output_dir, manifest)
+
+            self.assertEqual(manifest["selection"], metadata)
+            self.assertEqual([row["group"] for row in manifest["samples"]],
+                             ["replacement"] * 3 + ["reserve"] * 3)
+            self.assertTrue(all(row["reconstruction_mask"] is None for row in manifest["samples"]))
+            self.assertTrue((output_dir / manifest["contact_sheet"]).is_file())
+            self.assertIn("3 replacement samples and 3 reserve samples", (output_dir / "README.md").read_text())
+            report = (output_dir / "reports" / "01_mask_derivation_batch.md").read_text()
+            self.assertIn("fixed 3 replacement plus 3 reserve samples", report)
+            self.assertNotIn("12 pilot plus 6 reserve", report)
 
 
 if __name__ == "__main__":

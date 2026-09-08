@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "selection_provenance": "Manual visual review of D1GT candidates for replacement and reserve use; no model-generated segmentation or target-color extraction was used.",
+  "selection_description": "Three replacement candidates with simple, closed, non-border-touching subjects and three reserve candidates retained for stated appearance risks.",
+  "samples": [
+    {
+      "rank": 1,
+      "group": "replacement",
+      "sample_id": "13",
+      "mask_name": "30.png",
+      "stable_id": "D1GT:13/30.png",
+      "selection_reason": "完整蓝色猩猩雕塑，非触边，主体大且闭合，主表面近似单色，预计 erosion/alpha 稳定。"
+    },
+    {
+      "rank": 2,
+      "group": "replacement",
+      "sample_id": "11",
+      "mask_name": "180.png",
+      "stable_id": "D1GT:11/180.png",
+      "selection_reason": "完整深绿色或黑色街边垃圾箱，非触边，轮廓简单闭合，近似单色，合成风险低。"
+    },
+    {
+      "rank": 3,
+      "group": "replacement",
+      "sample_id": "9",
+      "mask_name": "205.png",
+      "stable_id": "D1GT:9/205.png",
+      "selection_reason": "完整灰白古典头像或胸像，非触边，面积大且主表面有代表性；细节与明暗变化需人工复核。"
+    },
+    {
+      "rank": 4,
+      "group": "reserve",
+      "sample_id": "2",
+      "mask_name": "62.png",
+      "stable_id": "D1GT:2/62.png",
+      "selection_reason": "完整绿色毛绒主体，非触边，mask 干净；毛绒纹理与少量浅色次要区域，故 reserve。"
+    },
+    {
+      "rank": 5,
+      "group": "reserve",
+      "sample_id": "5",
+      "mask_name": "101.png",
+      "stable_id": "D1GT:5/101.png",
+      "selection_reason": "完整胡萝卜玩具，非触边、轮廓简单；橙色主体有绿色顶部，故 reserve。"
+    },
+    {
+      "rank": 6,
+      "group": "reserve",
+      "sample_id": "24",
+      "mask_name": "198.png",
+      "stable_id": "D1GT:24/198.png",
+      "selection_reason": "完整金色人形机器人，非触边、面积足够；金属高光或反射存在风险，故 reserve。"
+    }
+  ]
+}

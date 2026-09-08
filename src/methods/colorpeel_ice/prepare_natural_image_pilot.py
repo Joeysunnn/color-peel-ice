@@ -65,6 +65,21 @@ LOCKED_SELECTION = [
     {"group": "reserve", "rank": 18, "stable_id": "D1GT:1/8.png"},
 ]
 
+EXTERNAL_SELECTION_KEYS = {
+    "schema_version",
+    "selection_provenance",
+    "selection_description",
+    "samples",
+}
+EXTERNAL_SELECTION_ROW_KEYS = {
+    "rank",
+    "group",
+    "sample_id",
+    "mask_name",
+    "stable_id",
+    "selection_reason",
+}
+
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 CANONICAL_ALPHA_MODES = {"I", "I;16", "I;16L", "I;16B"}
 
@@ -117,6 +132,79 @@ def validate_selection(selection: list[dict[str, Any]]) -> None:
     require([row["rank"] for row in selection] == list(range(1, 19)), "Ranks must stay in locked order")
     require([row["group"] for row in selection[:12]] == ["pilot"] * 12, "Ranks 1-12 must be pilot")
     require([row["group"] for row in selection[12:]] == ["reserve"] * 6, "Ranks 13-18 must be reserve")
+
+
+def validate_external_selection(selection: Any) -> list[dict[str, Any]]:
+    """Fail closed for the separately reviewed three-replacement selection."""
+    require(isinstance(selection, list), "selection JSON samples must be a list")
+    require(len(selection) == 6, "External selection must contain exactly 6 samples")
+    for row in selection:
+        require(isinstance(row, dict), "Each external selection row must be an object")
+        require(set(row) == EXTERNAL_SELECTION_ROW_KEYS, "External selection row has an invalid schema")
+        require(type(row["rank"]) is int, "External selection rank must be an integer")
+        require(isinstance(row["group"], str), "External selection group must be a string")
+        require(isinstance(row["sample_id"], str) and row["sample_id"], "External selection sample_id must be nonempty")
+        require(isinstance(row["mask_name"], str) and row["mask_name"], "External selection mask_name must be nonempty")
+        require(isinstance(row["stable_id"], str), "External selection stable_id must be a string")
+        require(isinstance(row["selection_reason"], str) and row["selection_reason"],
+                "External selection selection_reason must be nonempty")
+        sample_id, mask_name = parse_stable_id(row["stable_id"])
+        require(sample_id == row["sample_id"] and mask_name == row["mask_name"],
+                f"stable_id must match sample_id and mask_name: {row['stable_id']}")
+
+    stable_ids = [row["stable_id"] for row in selection]
+    sample_ids = [row["sample_id"] for row in selection]
+    require(len(set(stable_ids)) == len(stable_ids), "External stable IDs must be unique")
+    require(len(set(sample_ids)) == len(sample_ids), "External sample IDs must be unique")
+    require([row["rank"] for row in selection] == list(range(1, 7)),
+            "External ranks must be continuous from 1 through 6")
+    require([row["group"] for row in selection] == ["replacement"] * 3 + ["reserve"] * 3,
+            "External selection must be 3 replacement rows followed by 3 reserve rows")
+    locked_sample_ids = {parse_stable_id(row["stable_id"])[0] for row in LOCKED_SELECTION}
+    require(not locked_sample_ids.intersection(sample_ids),
+            "External selection sample IDs must not overlap the locked 18")
+    return selection
+
+
+def _repo_relative_or_none(path: Path) -> str | None:
+    try:
+        return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return None
+
+
+def load_selection_json(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Load a reviewed external selection without retaining a machine-local path."""
+    resolved = path.resolve()
+    require(resolved.is_file(), f"Selection JSON does not exist: {resolved}")
+    try:
+        value = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise NaturalImageMaskError(f"Could not parse selection JSON: {resolved}: {exc}") from exc
+    require(isinstance(value, dict) and set(value) == EXTERNAL_SELECTION_KEYS,
+            "Selection JSON has an invalid schema")
+    require(value["schema_version"] == 1, "Unsupported selection JSON schema_version")
+    require(isinstance(value["selection_provenance"], str) and value["selection_provenance"],
+            "selection_provenance must be nonempty")
+    require(isinstance(value["selection_description"], str) and value["selection_description"],
+            "selection_description must be nonempty")
+    selection = validate_external_selection(value["samples"])
+    return selection, {
+        "selection_source_repo_relative_path": _repo_relative_or_none(resolved),
+        "selection_file_sha256": file_sha256(resolved),
+        "selection_provenance": value["selection_provenance"],
+        "selection_description": value["selection_description"],
+        "selected_count": len(selection),
+        "group_counts": {
+            "replacement": sum(row["group"] == "replacement" for row in selection),
+            "reserve": sum(row["group"] == "reserve" for row in selection),
+        },
+        "stable_id_order_sha256": canonical_sha256([row["stable_id"] for row in selection]),
+        "human_selection_reasons": [
+            {"stable_id": row["stable_id"], "selection_reason": row["selection_reason"]}
+            for row in selection
+        ],
+    }
 
 
 def _relative_to_output(path: Path, output_dir: Path) -> str:
@@ -280,7 +368,7 @@ def derive_one(
         },
         "sample_qc": _relative_to_output(qc_out, output_dir),
     }
-    return {
+    record = {
         "rank": row["rank"],
         "group": row["group"],
         "stable_id": stable_id,
@@ -361,6 +449,9 @@ def derive_one(
         },
         "reconstruction_mask": None,
     }
+    if "selection_reason" in row:
+        record["selection_reason"] = row["selection_reason"]
+    return record
 
 
 def write_contact_sheet(records: list[dict[str, Any]], output_dir: Path) -> str:
@@ -502,12 +593,31 @@ def verify_outputs(manifest: dict[str, Any], output_dir: Path) -> dict[str, Any]
     }
 
 
-def build_manifest(image_root: Path, mask_root: Path, image_layout: str, output_dir: Path) -> dict[str, Any]:
-    validate_selection(LOCKED_SELECTION)
+def build_manifest(
+    image_root: Path,
+    mask_root: Path,
+    image_layout: str,
+    output_dir: Path,
+    selection: list[dict[str, Any]] | None = None,
+    selection_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if selection is None:
+        selection = LOCKED_SELECTION
+        validate_selection(selection)
+        manifest_selection = {
+            "locked_count": 18,
+            "pilot_count": 12,
+            "reserve_count": 6,
+            "stable_id_order_sha256": canonical_sha256([row["stable_id"] for row in selection]),
+        }
+    else:
+        validate_external_selection(selection)
+        require(selection_metadata is not None, "External selection metadata is required")
+        manifest_selection = selection_metadata
     output_dir = reject_repo_output_dir(output_dir)
     require(image_root.is_dir(), f"Image root does not exist: {image_root}")
     require(mask_root.is_dir(), f"Mask root does not exist: {mask_root}")
-    records = [derive_one(row, image_root, mask_root, image_layout, output_dir) for row in LOCKED_SELECTION]
+    records = [derive_one(row, image_root, mask_root, image_layout, output_dir) for row in selection]
     contact_sheet = write_contact_sheet(records, output_dir)
     summary = {
         "PASS": sum(1 for row in records if row["status"] == "PASS"),
@@ -534,12 +644,7 @@ def build_manifest(image_root: Path, mask_root: Path, image_layout: str, output_
             "alpha_threshold_semantics": ALPHA_THRESHOLD_SEMANTICS,
         },
         "inputs": input_identity(image_root, mask_root, image_layout),
-        "selection": {
-            "locked_count": 18,
-            "pilot_count": 12,
-            "reserve_count": 6,
-            "stable_id_order_sha256": canonical_sha256([row["stable_id"] for row in LOCKED_SELECTION]),
-        },
+        "selection": manifest_selection,
         "summary": summary,
         "contact_sheet": contact_sheet,
         "samples": records,
@@ -551,14 +656,22 @@ def build_manifest(image_root: Path, mask_root: Path, image_layout: str, output_
 
 
 def write_readme(output_dir: Path, manifest: dict[str, Any]) -> None:
+    is_default_selection = "locked_count" in manifest["selection"]
+    selection_scope = "12 pilot samples and 6 reserve samples" if is_default_selection else "3 replacement samples and 3 reserve samples"
+    introduction = (
+        "This directory contains the D1 pilot/reserve mask derivation batch. The locked\n"
+        "input list is embedded in `src/methods/colorpeel_ice/prepare_natural_image_pilot.py`."
+        if is_default_selection
+        else "This directory contains the D1 mask derivation batch. Selection provenance and\n"
+             "individual human selection reasons are recorded in the manifest."
+    )
     readme = f"""# Natural Image Subject-Color Pilot
 
-This directory contains the D1 pilot/reserve mask derivation batch. The locked
-input list is embedded in `src/methods/colorpeel_ice/prepare_natural_image_pilot.py`.
+{introduction}
 
 Scope:
 
-- 12 pilot samples and 6 reserve samples.
+- {selection_scope}.
 - Raw numbered masks are copied byte-for-byte from the provided mask root.
 - Color masks and soft alpha masks are derived from exact Euclidean distance transforms.
 - `combined_mask.png`, target color extraction, recoloring, training, and model evaluation are not used.
@@ -574,6 +687,8 @@ Downstream batches should consume only records with `status == "PASS"`.
 
 
 def write_report(output_dir: Path, manifest: dict[str, Any]) -> None:
+    is_default_selection = "locked_count" in manifest["selection"]
+    selection_scope = "fixed 12 pilot plus 6 reserve samples" if is_default_selection else "fixed 3 replacement plus 3 reserve samples"
     review_or_fail = [
         row["stable_id"]
         for row in manifest["samples"]
@@ -586,7 +701,7 @@ def write_report(output_dir: Path, manifest: dict[str, Any]) -> None:
         "",
         "## Scope",
         "",
-        "- observed: Derived raw mask byte copies, color masks, canonical uint16 soft-alpha masks, tight crops, manifest, and QC sheets for the fixed 12 pilot plus 6 reserve samples.",
+        f"- observed: Derived raw mask byte copies, color masks, canonical uint16 soft-alpha masks, tight crops, manifest, and QC sheets for the {selection_scope}.",
         "- observed: Did not use `combined_mask.png`; did not run target color extraction, recoloring, training, model evaluation, segmentation, or GPU jobs.",
         "- observed: Mask lineage is recorded only as `user_provided_unknown_in_repo`.",
         "",
@@ -621,13 +736,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mask-root", type=Path, required=True)
     parser.add_argument("--image-layout", choices=("ice", "flat"), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--selection-json", type=Path)
     return parser
 
 
 def main(argv: Iterable[str] | None = None) -> dict[str, Any]:
     args = build_parser().parse_args(argv)
     output_dir = reject_repo_output_dir(args.output_dir)
-    manifest = build_manifest(args.image_root.resolve(), args.mask_root.resolve(), args.image_layout, output_dir)
+    selection = None
+    selection_metadata = None
+    if args.selection_json is not None:
+        selection, selection_metadata = load_selection_json(args.selection_json)
+    manifest = build_manifest(
+        args.image_root.resolve(),
+        args.mask_root.resolve(),
+        args.image_layout,
+        output_dir,
+        selection,
+        selection_metadata,
+    )
     manifest_path = output_dir / "manifests" / "pilot_mask_manifest.json"
     write_json(manifest_path, manifest)
     write_readme(output_dir, manifest)
