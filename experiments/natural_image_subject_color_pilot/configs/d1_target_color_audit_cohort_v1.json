@@ -1,0 +1,65 @@
+{
+  "schema": "natural_image_target_color_audit_cohort/v1",
+  "cohort_id": "d1_target_color_audit_cohort_v1",
+  "study": "natural_image_subject_color_pilot",
+  "source_runs": {
+    "initial_d3263a6": {
+      "manifest_relpath": "manifests/pilot_mask_manifest.json",
+      "manifest_sha256": "073bc48cfd9120c230f9fe03b2c654f27421ab09cf4b968b103331c6060c558c",
+      "record_count": 18,
+      "verification": {"passed": true, "checked_samples": 18, "errors": []},
+      "stable_id_order_sha256": "a2e910c08e327343c5247fffb5d4b469efc202457bac4626db4d00e1123a9d8b"
+    },
+    "replacements_71e40c1": {
+      "manifest_relpath": "manifests/pilot_mask_manifest.json",
+      "manifest_sha256": "f792d7372ffae85132d87c52735295c52b829a99f08e4f7dcc427bf761654e4c",
+      "record_count": 6,
+      "verification": {"passed": true, "checked_samples": 6, "errors": []},
+      "stable_id_order_sha256": "6beb65d94720f18dcac8d1a6750fced2578c92a43f92fe5e07f53721c32ef95f"
+    }
+  },
+  "measurement_roles": ["primary", "reserve"],
+  "downstream_roles": ["primary"],
+  "expected_counts": {"active": 21, "primary": 18, "reserve": 3, "excluded": 3},
+  "expected_source_group_role_counts": {
+    "initial_d3263a6:pilot:primary": 10,
+    "initial_d3263a6:reserve:primary": 5,
+    "replacements_71e40c1:replacement:primary": 3,
+    "replacements_71e40c1:reserve:reserve": 3
+  },
+  "active_stable_id_order_sha256": "cd7840f5003462b7a22c49180ffe3d70d3bbdc3f1046a878b964ff0cd5c0634a",
+  "human_review_provenance": {
+    "source_manifest_field": "samples[].human_review",
+    "source_manifest_requirement": "Every selected source sample retained an earlier human_review.overall PASS.",
+    "audit_verdict_precedence": "The recorded target-color audit verdict controls cohort eligibility and does not modify a source manifest.",
+    "audit_scope": "Cohort eligibility records prior human visual mask/object-suitability review; this TC-1 freezing step does not rerun pixel processing or target-color clustering."
+  },
+  "active_records": [
+    {"cohort_rank": 1, "role": "primary", "stable_id": "D1GT:3/207.png", "sample_id": "3", "mask_name": "207.png", "source_alias": "initial_d3263a6", "source_rank": 1, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 2, "role": "primary", "stable_id": "D1GT:7/116.png", "sample_id": "7", "mask_name": "116.png", "source_alias": "initial_d3263a6", "source_rank": 2, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 3, "role": "primary", "stable_id": "D1GT:86/139.png", "sample_id": "86", "mask_name": "139.png", "source_alias": "initial_d3263a6", "source_rank": 3, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 4, "role": "primary", "stable_id": "D1GT:76/120.png", "sample_id": "76", "mask_name": "120.png", "source_alias": "initial_d3263a6", "source_rank": 4, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 5, "role": "primary", "stable_id": "D1GT:13/30.png", "sample_id": "13", "mask_name": "30.png", "source_alias": "replacements_71e40c1", "source_rank": 1, "source_group": "replacement", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS replacement for excluded D1GT:0/158.png."},
+    {"cohort_rank": 6, "role": "primary", "stable_id": "D1GT:19/31.png", "sample_id": "19", "mask_name": "31.png", "source_alias": "initial_d3263a6", "source_rank": 6, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 7, "role": "primary", "stable_id": "D1GT:46/97.png", "sample_id": "46", "mask_name": "97.png", "source_alias": "initial_d3263a6", "source_rank": 7, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 8, "role": "primary", "stable_id": "D1GT:11/180.png", "sample_id": "11", "mask_name": "180.png", "source_alias": "replacements_71e40c1", "source_rank": 2, "source_group": "replacement", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS replacement for excluded D1GT:6/42.png."},
+    {"cohort_rank": 9, "role": "primary", "stable_id": "D1GT:77/53.png", "sample_id": "77", "mask_name": "53.png", "source_alias": "initial_d3263a6", "source_rank": 9, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 10, "role": "primary", "stable_id": "D1GT:81/130.png", "sample_id": "81", "mask_name": "130.png", "source_alias": "initial_d3263a6", "source_rank": 10, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 11, "role": "primary", "stable_id": "D1GT:74/104.png", "sample_id": "74", "mask_name": "104.png", "source_alias": "initial_d3263a6", "source_rank": 11, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 12, "role": "primary", "stable_id": "D1GT:53/196.png", "sample_id": "53", "mask_name": "196.png", "source_alias": "initial_d3263a6", "source_rank": 12, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Retained as the initial primary pilot record."},
+    {"cohort_rank": 13, "role": "primary", "stable_id": "D1GT:5/101.png", "sample_id": "5", "mask_name": "101.png", "source_alias": "replacements_71e40c1", "source_rank": 3, "source_group": "replacement", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS replacement for excluded D1GT:88/184.png."},
+    {"cohort_rank": 14, "role": "primary", "stable_id": "D1GT:43/156.png", "sample_id": "43", "mask_name": "156.png", "source_alias": "initial_d3263a6", "source_rank": 14, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS initial reserve retained as a primary audit record."},
+    {"cohort_rank": 15, "role": "primary", "stable_id": "D1GT:10/91.png", "sample_id": "10", "mask_name": "91.png", "source_alias": "initial_d3263a6", "source_rank": 15, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS initial reserve retained as a primary audit record."},
+    {"cohort_rank": 16, "role": "primary", "stable_id": "D1GT:71/152.png", "sample_id": "71", "mask_name": "152.png", "source_alias": "initial_d3263a6", "source_rank": 16, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS initial reserve retained as a primary audit record."},
+    {"cohort_rank": 17, "role": "primary", "stable_id": "D1GT:31/98.png", "sample_id": "31", "mask_name": "98.png", "source_alias": "initial_d3263a6", "source_rank": 17, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS initial reserve retained as a primary audit record."},
+    {"cohort_rank": 18, "role": "primary", "stable_id": "D1GT:1/8.png", "sample_id": "1", "mask_name": "8.png", "source_alias": "initial_d3263a6", "source_rank": 18, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS initial reserve retained as a primary audit record."},
+    {"cohort_rank": 19, "role": "reserve", "stable_id": "D1GT:2/62.png", "sample_id": "2", "mask_name": "62.png", "source_alias": "replacements_71e40c1", "source_rank": 4, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS replacement reserve; measurement only, not downstream primary."},
+    {"cohort_rank": 20, "role": "reserve", "stable_id": "D1GT:24/198.png", "sample_id": "24", "mask_name": "198.png", "source_alias": "replacements_71e40c1", "source_rank": 5, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS replacement reserve; measurement only, not downstream primary."},
+    {"cohort_rank": 21, "role": "reserve", "stable_id": "D1GT:17/74.png", "sample_id": "17", "mask_name": "74.png", "source_alias": "replacements_71e40c1", "source_rank": 6, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "PASS", "decision_reason": "Human-PASS replacement reserve; measurement only, not downstream primary."}
+  ],
+  "excluded_records": [
+    {"cohort_rank": 5, "role": "primary", "stable_id": "D1GT:0/158.png", "sample_id": "0", "mask_name": "158.png", "source_alias": "initial_d3263a6", "source_rank": 5, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "FAIL", "decision_reason": "Boundary-truncated and semantically ambiguous/partial structure; retain only for future robustness work."},
+    {"cohort_rank": 8, "role": "primary", "stable_id": "D1GT:6/42.png", "sample_id": "6", "mask_name": "42.png", "source_alias": "initial_d3263a6", "source_rank": 8, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "FAIL", "decision_reason": "Scene-dependent platform/base spanning the lower boundary, not a clean standalone subject."},
+    {"cohort_rank": 13, "role": "primary", "stable_id": "D1GT:88/184.png", "sample_id": "88", "mask_name": "184.png", "source_alias": "initial_d3263a6", "source_rank": 13, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}, "human_verdict": "FAIL", "decision_reason": "Multiple shell instances with obvious texture/color variation; violates the single-object approximately monochrome requirement."}
+  ]
+}
