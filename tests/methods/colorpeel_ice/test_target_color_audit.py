@@ -33,7 +33,8 @@ class TargetColorMathTests(unittest.TestCase):
     def test_breakpoint_and_lch_quadrants(self):
         values = np.array([0.04045 - 1e-9, 0.04045, 0.04045 + 1e-9, 10 / 255, 11 / 255])
         expected = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in values]
-        np.testing.assert_array_equal(audit.srgb_to_linear(values), expected)
+        # Scalar and vector exponentiation can differ by a few float64 ULPs.
+        np.testing.assert_allclose(audit.srgb_to_linear(values), expected, rtol=4 * np.finfo(np.float64).eps, atol=0)
         for ab, hue in [((1, 1), 45), ((-1, 1), 135), ((-1, -1), 225), ((1, -1), 315)]:
             self.assertEqual(audit.ab_to_lch(*ab)["h_degrees"], hue)
         self.assertIsNone(audit.ab_to_lch(0, 0)["h_degrees"])
