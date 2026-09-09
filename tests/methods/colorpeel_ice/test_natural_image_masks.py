@@ -257,11 +257,13 @@ class SelectionJsonTests(unittest.TestCase):
         self.assertEqual([row["stable_id"] for row in selection], [
             "D1GT:13/30.png",
             "D1GT:11/180.png",
-            "D1GT:9/205.png",
-            "D1GT:2/62.png",
             "D1GT:5/101.png",
+            "D1GT:2/62.png",
             "D1GT:24/198.png",
+            "D1GT:17/74.png",
         ])
+        self.assertEqual(selection[-1]["sample_id"], "17")
+        self.assertEqual(selection[-1]["mask_name"], "74.png")
         self.assertEqual(metadata["selection_source_repo_relative_path"],
                          "experiments/natural_image_subject_color_pilot/configs/d1_replacement_selection_3_plus_3.json")
         self.assertEqual(metadata["selection_file_sha256"], masks.file_sha256(self.selection_path))
