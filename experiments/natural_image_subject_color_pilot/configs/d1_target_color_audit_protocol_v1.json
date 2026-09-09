@@ -1,0 +1,65 @@
+{
+  "schema": "natural_image_target_color_audit_protocol/v1",
+  "protocol_id": "d1_target_color_audit_protocol_v1",
+  "study": "natural_image_subject_color_pilot",
+  "cohort": {
+    "repo_relative_path": "experiments/natural_image_subject_color_pilot/configs/d1_target_color_audit_cohort_v1.json",
+    "sha256": "3e54ab3451e6525b5b14e202a7efa0b4494f2160c3bfc9c9ebd0ccfe8eb38280"
+  },
+  "color": {
+    "space": "sRGB IEC 61966-2-1 nonlinear uint8 -> linear sRGB -> XYZ D65 -> CIELAB",
+    "dtype": "float64",
+    "white_point": [0.95047, 1.0, 1.08883],
+    "xyz_matrix": [[0.4124564, 0.3575761, 0.1804375], [0.2126729, 0.7151522, 0.0721750], [0.0193339, 0.1191920, 0.9503041]],
+    "srgb_breakpoint": 0.04045,
+    "epsilon": "216/24389",
+    "kappa": "24389/27",
+    "lab_range": "L* nominally [0,100]; signed a*,b* unscaled and unclipped; matrix rounding may exceed nominal L* bounds",
+    "achromatic_chroma_epsilon": 1e-8
+  },
+  "filter": {
+    "exclude_dark_l_le": 5.0,
+    "exclude_light_l_ge": 95.0,
+    "ratio_denominator": "all color-mask pixels",
+    "l_percentiles": [1, 5, 50, 95, 99]
+  },
+  "clustering": {
+    "k": 3,
+    "max_iterations": 100,
+    "assignment_metric": "squared Euclidean in a*,b*",
+    "initializer": "sort (a,b,y,x) lexicographically; first center is lower median sorted point; subsequent centers maximize minimum squared distance to selected centers; ties choose lexicographically first",
+    "assignment_ties": "lowest original cluster index",
+    "update": "arithmetic mean in lexicographic pixel order using all eligible pixels",
+    "convergence": "labels unchanged from previous iteration",
+    "degenerate": "eligible count < 3 or distinct (a,b) count < 3 => REVIEW/cluster_degenerate",
+    "empty_cluster": "REVIEW/empty_cluster; no random restart or replacement",
+    "nonconvergence": "REVIEW/nonconvergence; no target",
+    "canonical_labels": "sort final centers by (mean a,mean b,original index)",
+    "dominant": "largest eligible population; ties choose lowest canonical index",
+    "compactness": "Euclidean a,b distance to cluster mean: RMS, median, P90; numpy linear percentiles"
+  },
+  "target": {
+    "definition": "dominant component-wise median a*,b*; C=hypot(a,b); h=atan2(b,a) modulo 360; h=null when C<=achromatic_chroma_epsilon",
+    "lightness": "dominant median observed L* only; not a fixed target-token lightness",
+    "dominant_ratio_gate": null,
+    "compactness_gate": null,
+    "valid_ratio_gate": null,
+    "success_status": "MEASURED",
+    "qc_decision": "PENDING_HUMAN",
+    "approved_for_downstream": false,
+    "downstream_roles": ["primary"],
+    "notice": "Provisional measurements only; not approved downstream targets; no scientific PASS gate"
+  },
+  "qc": {
+    "panel_size": [256, 256],
+    "panels": ["raw RGB", "color mask overlay", "eligible pixels", "dominant pixels", "a,b scatter", "text metrics"],
+    "layout": "3 columns by 2 rows; panel labels above images",
+    "scatter_a_range": [-128, 128],
+    "scatter_b_range": [-128, 128],
+    "scatter_max_points": 4096,
+    "scatter_sampling": "lexicographic (a,b,y,x) order, evenly spaced integer indices; display only; all eligible pixels used for computation",
+    "contact_columns": 3,
+    "contact_tile_size": [384, 336],
+    "contact_order": "cohort_rank ascending, all 21 active"
+  }
+}
