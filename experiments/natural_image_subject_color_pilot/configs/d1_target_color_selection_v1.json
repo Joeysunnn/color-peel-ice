@@ -1,0 +1,122 @@
+{
+  "schema": "natural_image_target_color_selection/v1",
+  "selection_id": "d1_target_color_selection_v1",
+  "study": "natural_image_subject_color_pilot",
+  "source_audit": {
+    "schema": "natural_image_target_color_audit/v1",
+    "manifest_sha256": "24eff6caf66dc6c938e888e5acc6a738ec9ff2a8ddd5c1da6cc602120861fc5a",
+    "git_commit": "dbd4281c9926e2dd5fce523ebe3b9820fa1c6fdf",
+    "protocol_sha256": "11c159706e64d41c224627fce1ce38c89ad31e1596da6225a5aecc1a000aa798",
+    "cohort_sha256": "3e54ab3451e6525b5b14e202a7efa0b4494f2160c3bfc9c9ebd0ccfe8eb38280",
+    "record_count": 21,
+    "summary": {
+      "measurement_count": 21,
+      "downstream_primary_count": 18,
+      "measured_count": 21,
+      "review_count": 0,
+      "pending_human_count": 21,
+      "approved_count": 0
+    },
+    "qc_decision": "PENDING_HUMAN",
+    "approved_for_downstream": false,
+    "source_stable_id_order_sha256": "cd7840f5003462b7a22c49180ffe3d70d3bbdc3f1046a878b964ff0cd5c0634a",
+    "source_run_manifest_sha256": {
+      "initial_d3263a6": "073bc48cfd9120c230f9fe03b2c654f27421ab09cf4b968b103331c6060c558c",
+      "replacements_71e40c1": "f792d7372ffae85132d87c52735295c52b829a99f08e4f7dcc427bf761654e4c"
+    }
+  },
+  "selection_policy": {
+    "no_replacements": true,
+    "automatic_threshold_gate": null,
+    "target_color_qc_approved_scope": "selection_layer_only",
+    "all_selected_remain_downstream_eligible": true,
+    "not_diffusion_train_test_split": true,
+    "held_out_condition": "Within each selected sample, original <S*> + <C*> must not appear during training.",
+    "failure_reason_source": "No per-sample failure reasons were supplied; failure_reason is null for all human FAIL rows.",
+    "recoloring_approved": false,
+    "training_approved": false
+  },
+  "expected_counts": {
+    "source_records": 21,
+    "human_pass": 11,
+    "human_fail": 10,
+    "selected": 11,
+    "downstream_eligible": 11,
+    "pipeline_development": 6,
+    "protocol_confirmation": 3,
+    "stress_test": 2
+  },
+  "selected_stable_ids": [
+    "D1GT:86/139.png",
+    "D1GT:76/120.png",
+    "D1GT:13/30.png",
+    "D1GT:19/31.png",
+    "D1GT:77/53.png",
+    "D1GT:81/130.png",
+    "D1GT:5/101.png",
+    "D1GT:43/156.png",
+    "D1GT:71/152.png",
+    "D1GT:31/98.png",
+    "D1GT:2/62.png"
+  ],
+  "failed_stable_ids": [
+    "D1GT:3/207.png",
+    "D1GT:7/116.png",
+    "D1GT:46/97.png",
+    "D1GT:11/180.png",
+    "D1GT:74/104.png",
+    "D1GT:53/196.png",
+    "D1GT:10/91.png",
+    "D1GT:1/8.png",
+    "D1GT:24/198.png",
+    "D1GT:17/74.png"
+  ],
+  "pipeline_roles": {
+    "pipeline_development": [
+      "D1GT:86/139.png",
+      "D1GT:13/30.png",
+      "D1GT:19/31.png",
+      "D1GT:77/53.png",
+      "D1GT:81/130.png",
+      "D1GT:2/62.png"
+    ],
+    "protocol_confirmation": [
+      "D1GT:43/156.png",
+      "D1GT:71/152.png",
+      "D1GT:31/98.png"
+    ],
+    "stress_test": [
+      "D1GT:76/120.png",
+      "D1GT:5/101.png"
+    ]
+  },
+  "canonical_hashes": {
+    "selected_stable_id_order_sha256": "0fcacd0759a34bb5979663a746d28e8f3e50d12f949e1d1f5242a06a63a4c67f",
+    "pipeline_assignment_sha256": "2c4efac08e969f80509e25fa81570058e0069c3f6684763d22e9cd5af0078a90",
+    "human_verdict_order_sha256": "76b5c99d69bdf2742f4e8be09f26d14b562689467796854434b81beb1a114f6a",
+    "source_stable_id_order_sha256": "cd7840f5003462b7a22c49180ffe3d70d3bbdc3f1046a878b964ff0cd5c0634a"
+  },
+  "records": [
+    {"source": {"cohort_rank": 1, "role": "primary", "stable_id": "D1GT:3/207.png", "sample_id": "3", "mask_name": "207.png", "source_alias": "initial_d3263a6", "source_rank": 1, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 2, "role": "primary", "stable_id": "D1GT:7/116.png", "sample_id": "7", "mask_name": "116.png", "source_alias": "initial_d3263a6", "source_rank": 2, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 3, "role": "primary", "stable_id": "D1GT:86/139.png", "sample_id": "86", "mask_name": "139.png", "source_alias": "initial_d3263a6", "source_rank": 3, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "pipeline_development", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 25.335048063512332, "b": 49.69371779881032, "C": 55.77929946717041, "h_degrees": 62.986423320341785, "observed_median_L": 56.53468250792719, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 28730, "eligible_px": 28727, "dark_px": 0, "light_px": 3, "valid_ratio": 0.9998955795335885, "dark_ratio": 0.0, "light_ratio": 0.00010442046641141664, "dominant_cluster": 1, "dominant_ratio_over_eligible": 0.7179656768893375, "dominant_ratio_over_color_mask": 0.7178907065784894, "dominant_cluster_ratio_over_eligible": 0.7179656768893375, "dominant_cluster_compactness": {"rms": 5.986753702262189, "median": 4.322719943758236, "p90": 9.321836357838833}}},
+    {"source": {"cohort_rank": 4, "role": "primary", "stable_id": "D1GT:76/120.png", "sample_id": "76", "mask_name": "120.png", "source_alias": "initial_d3263a6", "source_rank": 4, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "stress_test", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 36.75575391258668, "b": 6.550342991582636, "C": 37.33486894298689, "h_degrees": 10.104753220606208, "observed_median_L": 55.52542515708248, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 44563, "eligible_px": 41554, "dark_px": 2997, "light_px": 12, "valid_ratio": 0.9324776159594282, "dark_ratio": 0.06725310234948276, "light_ratio": 0.00026928169108902006, "dominant_cluster": 1, "dominant_ratio_over_eligible": 0.3922847379313664, "dominant_ratio_over_color_mask": 0.36579673720350964, "dominant_cluster_ratio_over_eligible": 0.3922847379313664, "dominant_cluster_compactness": {"rms": 7.2373434278116076, "median": 5.3849297004134735, "p90": 10.867304451133608}}},
+    {"source": {"cohort_rank": 5, "role": "primary", "stable_id": "D1GT:13/30.png", "sample_id": "13", "mask_name": "30.png", "source_alias": "replacements_71e40c1", "source_rank": 1, "source_group": "replacement", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "pipeline_development", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 17.81286014684136, "b": -48.54887560415377, "C": 51.7135505359913, "h_degrees": 290.14837601118836, "observed_median_L": 46.81880989310329, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 54107, "eligible_px": 53990, "dark_px": 117, "light_px": 0, "valid_ratio": 0.997837618053117, "dark_ratio": 0.0021623819468830283, "light_ratio": 0.0, "dominant_cluster": 1, "dominant_ratio_over_eligible": 0.6128171883682163, "dominant_ratio_over_color_mask": 0.6114920435433493, "dominant_cluster_ratio_over_eligible": 0.6128171883682163, "dominant_cluster_compactness": {"rms": 2.2939679510741797, "median": 1.9238690670329848, "p90": 3.392218560448144}}},
+    {"source": {"cohort_rank": 6, "role": "primary", "stable_id": "D1GT:19/31.png", "sample_id": "19", "mask_name": "31.png", "source_alias": "initial_d3263a6", "source_rank": 6, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "pipeline_development", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 9.43264458499643, "b": 17.10049193148857, "C": 19.529506091188484, "h_degrees": 61.11883727987914, "observed_median_L": 39.33556879409079, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 23339, "eligible_px": 22966, "dark_px": 373, "light_px": 0, "valid_ratio": 0.9840181670165817, "dark_ratio": 0.015981832983418313, "light_ratio": 0.0, "dominant_cluster": 2, "dominant_ratio_over_eligible": 0.4872855525559523, "dominant_ratio_over_color_mask": 0.4794978362397703, "dominant_cluster_ratio_over_eligible": 0.4872855525559523, "dominant_cluster_compactness": {"rms": 3.447454737151664, "median": 2.797462001528608, "p90": 5.132040309654336}}},
+    {"source": {"cohort_rank": 7, "role": "primary", "stable_id": "D1GT:46/97.png", "sample_id": "46", "mask_name": "97.png", "source_alias": "initial_d3263a6", "source_rank": 7, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 8, "role": "primary", "stable_id": "D1GT:11/180.png", "sample_id": "11", "mask_name": "180.png", "source_alias": "replacements_71e40c1", "source_rank": 2, "source_group": "replacement", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 9, "role": "primary", "stable_id": "D1GT:77/53.png", "sample_id": "77", "mask_name": "53.png", "source_alias": "initial_d3263a6", "source_rank": 9, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "pipeline_development", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": -1.5287373542421379, "b": 9.362782771564127, "C": 9.486766526364676, "h_degrees": 99.27331561539401, "observed_median_L": 71.17628802622201, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 44108, "eligible_px": 43890, "dark_px": 2, "light_px": 216, "valid_ratio": 0.9950575859254557, "dark_ratio": 4.534324839031468e-05, "light_ratio": 0.004897070826153985, "dominant_cluster": 1, "dominant_ratio_over_eligible": 0.9561631351105035, "dominant_ratio_over_color_mask": 0.951437380973973, "dominant_cluster_ratio_over_eligible": 0.9561631351105035, "dominant_cluster_compactness": {"rms": 2.8844665771174482, "median": 1.6930352294178894, "p90": 4.367734395251899}}},
+    {"source": {"cohort_rank": 10, "role": "primary", "stable_id": "D1GT:81/130.png", "sample_id": "81", "mask_name": "130.png", "source_alias": "initial_d3263a6", "source_rank": 10, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "pipeline_development", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 63.21805661727065, "b": 54.85769274644318, "C": 83.7011895729541, "h_degrees": 40.94992640208219, "observed_median_L": 53.40362376539517, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 40644, "eligible_px": 40637, "dark_px": 7, "light_px": 0, "valid_ratio": 0.9998277728570023, "dark_ratio": 0.00017222714299773643, "light_ratio": 0.0, "dominant_cluster": 2, "dominant_ratio_over_eligible": 0.5471122376159657, "dominant_ratio_over_color_mask": 0.547018010038382, "dominant_cluster_ratio_over_eligible": 0.5471122376159657, "dominant_cluster_compactness": {"rms": 5.604964734652405, "median": 4.515592951705105, "p90": 8.697762151389203}}},
+    {"source": {"cohort_rank": 11, "role": "primary", "stable_id": "D1GT:74/104.png", "sample_id": "74", "mask_name": "104.png", "source_alias": "initial_d3263a6", "source_rank": 11, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 12, "role": "primary", "stable_id": "D1GT:53/196.png", "sample_id": "53", "mask_name": "196.png", "source_alias": "initial_d3263a6", "source_rank": 12, "source_group": "pilot", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 13, "role": "primary", "stable_id": "D1GT:5/101.png", "sample_id": "5", "mask_name": "101.png", "source_alias": "replacements_71e40c1", "source_rank": 3, "source_group": "replacement", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "stress_test", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 31.640244651881478, "b": 64.17199549147146, "C": 71.54823608579284, "h_degrees": 63.754224113137624, "observed_median_L": 70.89735663363143, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 11608, "eligible_px": 11597, "dark_px": 11, "light_px": 0, "valid_ratio": 0.999052377670572, "dark_ratio": 0.0009476223294279807, "light_ratio": 0.0, "dominant_cluster": 2, "dominant_ratio_over_eligible": 0.7858066741398637, "dominant_ratio_over_color_mask": 0.7850620261888352, "dominant_cluster_ratio_over_eligible": 0.7858066741398637, "dominant_cluster_compactness": {"rms": 12.939102152214694, "median": 11.20298937357062, "p90": 19.411048932831424}}},
+    {"source": {"cohort_rank": 14, "role": "primary", "stable_id": "D1GT:43/156.png", "sample_id": "43", "mask_name": "156.png", "source_alias": "initial_d3263a6", "source_rank": 14, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "protocol_confirmation", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 37.31659622506584, "b": 48.43649133910439, "C": 61.14427239789294, "h_degrees": 52.388510002596696, "observed_median_L": 45.86220382465378, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 48155, "eligible_px": 48155, "dark_px": 0, "light_px": 0, "valid_ratio": 1.0, "dark_ratio": 0.0, "light_ratio": 0.0, "dominant_cluster": 2, "dominant_ratio_over_eligible": 0.5671062194995328, "dominant_ratio_over_color_mask": 0.5671062194995328, "dominant_cluster_ratio_over_eligible": 0.5671062194995328, "dominant_cluster_compactness": {"rms": 4.470341935341684, "median": 3.5200831742598084, "p90": 7.0089545416650925}}},
+    {"source": {"cohort_rank": 15, "role": "primary", "stable_id": "D1GT:10/91.png", "sample_id": "10", "mask_name": "91.png", "source_alias": "initial_d3263a6", "source_rank": 15, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 16, "role": "primary", "stable_id": "D1GT:71/152.png", "sample_id": "71", "mask_name": "152.png", "source_alias": "initial_d3263a6", "source_rank": 16, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "protocol_confirmation", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 15.141631905699837, "b": 45.55708565572236, "C": 48.00746890027146, "h_degrees": 71.61494103635971, "observed_median_L": 71.45405563420726, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 24846, "eligible_px": 24816, "dark_px": 5, "light_px": 25, "valid_ratio": 0.9987925621830476, "dark_ratio": 0.00020123963615873783, "light_ratio": 0.001006198180793689, "dominant_cluster": 2, "dominant_ratio_over_eligible": 0.4519261766602192, "dominant_ratio_over_color_mask": 0.45138050390404894, "dominant_cluster_ratio_over_eligible": 0.4519261766602192, "dominant_cluster_compactness": {"rms": 5.032572179364196, "median": 3.722080990695391, "p90": 7.038164646757155}}},
+    {"source": {"cohort_rank": 17, "role": "primary", "stable_id": "D1GT:31/98.png", "sample_id": "31", "mask_name": "98.png", "source_alias": "initial_d3263a6", "source_rank": 17, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "protocol_confirmation", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": 17.674086682118283, "b": -58.30767778086308, "C": 60.92748663980802, "h_degrees": 286.8629827345166, "observed_median_L": 39.134596163974585, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 10920, "eligible_px": 10889, "dark_px": 26, "light_px": 5, "valid_ratio": 0.9971611721611722, "dark_ratio": 0.002380952380952381, "light_ratio": 0.0004578754578754579, "dominant_cluster": 2, "dominant_ratio_over_eligible": 0.6468913582514464, "dominant_ratio_over_color_mask": 0.6450549450549451, "dominant_cluster_ratio_over_eligible": 0.6468913582514464, "dominant_cluster_compactness": {"rms": 7.5961119072909895, "median": 5.521814035730279, "p90": 12.02097513730068}}},
+    {"source": {"cohort_rank": 18, "role": "primary", "stable_id": "D1GT:1/8.png", "sample_id": "1", "mask_name": "8.png", "source_alias": "initial_d3263a6", "source_rank": 18, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 19, "role": "reserve", "stable_id": "D1GT:2/62.png", "sample_id": "2", "mask_name": "62.png", "source_alias": "replacements_71e40c1", "source_rank": 4, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "PASS", "failure_reason": null, "target_color_qc_approved": true, "downstream_eligible": true, "pipeline_role": "pipeline_development", "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING", "target": {"a": -11.56446761436214, "b": 25.950053139757223, "C": 28.410247608210923, "h_degrees": 114.01982315382563, "observed_median_L": 61.37075274152902, "lightness_is_fixed_target_token": false}, "metrics": {"color_area_px": 9350, "eligible_px": 9272, "dark_px": 78, "light_px": 0, "valid_ratio": 0.9916577540106952, "dark_ratio": 0.008342245989304813, "light_ratio": 0.0, "dominant_cluster": 0, "dominant_ratio_over_eligible": 0.6931622088006902, "dominant_ratio_over_color_mask": 0.687379679144385, "dominant_cluster_ratio_over_eligible": 0.6931622088006902, "dominant_cluster_compactness": {"rms": 4.330109615278019, "median": 3.7015409032132394, "p90": 6.536339763701574}}},
+    {"source": {"cohort_rank": 20, "role": "reserve", "stable_id": "D1GT:24/198.png", "sample_id": "24", "mask_name": "198.png", "source_alias": "replacements_71e40c1", "source_rank": 5, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"},
+    {"source": {"cohort_rank": 21, "role": "reserve", "stable_id": "D1GT:17/74.png", "sample_id": "17", "mask_name": "74.png", "source_alias": "replacements_71e40c1", "source_rank": 6, "source_group": "reserve", "source_status": "PASS", "source_manifest_human_review": {"extraction": "PASS", "color": "PASS", "compositing": "PASS", "overall": "PASS"}}, "human_verdict": "FAIL", "failure_reason": null, "target_color_qc_approved": false, "downstream_eligible": false, "pipeline_role": null, "recoloring_approved": false, "recoloring_status": "PENDING", "training_approved": false, "training_status": "PENDING"}
+  ]
+}
