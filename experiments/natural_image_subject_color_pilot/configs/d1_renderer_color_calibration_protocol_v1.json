@@ -1,0 +1,207 @@
+{
+  "schema": "renderer_color_calibration_protocol/v1",
+  "protocol_id": "d1_renderer_color_calibration_protocol_v1",
+  "study": "natural_image_subject_color_pilot",
+  "frozen_inputs": {
+    "selection_config": {
+      "repo_relative_path": "experiments/natural_image_subject_color_pilot/configs/d1_target_color_selection_v1.json",
+      "canonical_sha256": "33d9b2d5fb404786d63ac23b161c7578a08442ecd24691ca4c221721e88ee0a6",
+      "source_audit_manifest_sha256": "24eff6caf66dc6c938e888e5acc6a738ec9ff2a8ddd5c1da6cc602120861fc5a",
+      "selected_stable_id_order_sha256": "0fcacd0759a34bb5979663a746d28e8f3e50d12f949e1d1f5242a06a63a4c67f",
+      "pipeline_assignment_sha256": "2c4efac08e969f80509e25fa81570058e0069c3f6684763d22e9cd5af0078a90"
+    }
+  },
+  "target_definition": {
+    "space": "CIELAB D65",
+    "frozen_token_components": ["a", "b", "C", "h_degrees"],
+    "observed_median_L_is_metadata_only": true,
+    "lightness_is_fixed_target_token": false,
+    "renderer_L_input": 50.0
+  },
+  "conversion": {
+    "path": "Lab D65 -> XYZ D65 -> linear sRGB float64",
+    "white_point": [0.95047, 1.0, 1.08883],
+    "xyz_to_linear_srgb_matrix": [
+      [3.2404542, -1.5371385, -0.4985314],
+      [-0.9692660, 1.8760108, 0.0415560],
+      [0.0556434, -0.2040259, 1.0572252]
+    ],
+    "epsilon": "216/24389",
+    "kappa": "24389/27",
+    "gamut": "validate linear channels against [0,1]; no clipping",
+    "preview": "linear sRGB -> nonlinear sRGB uint8 with round-half-up",
+    "separate_fields": ["preview_srgb_uint8", "linear_rgb", "socket_rgba", "decoded_png_rgb_uint8"]
+  },
+  "renderer_contract": {
+    "renderer_profile_id": "d1_renderer_color_calibration_v1",
+    "engine": "Cycles",
+    "resolution": [512, 512],
+    "samples": 512,
+    "calibration_image": {"format": "PNG", "mode": "RGB", "bits_per_channel": 8},
+    "mask_image": {"format": "PNG", "mode": "L", "values": [0, 255]},
+    "material": "Rubber",
+    "color_management": {
+      "display_device": "sRGB",
+      "view_transform": "Standard",
+      "look": null,
+      "exposure": 0.0,
+      "gamma": 1.0,
+      "unsupported_setting_policy": "abort_and_record_available_settings"
+    },
+    "legacy_renderer_note": "Existing CLEVR renderer writes nominal_rgb/255 directly to the Color socket and does not explicitly fix color management; this protocol defines a future adapter contract only."
+  },
+  "scene_contract": {
+    "blender": {"version": "4.2.11", "render_engine": "CYCLES", "cycles_device": "CUDA", "samples": 512, "resolution": [512, 512]},
+    "object": {"scale": 1.3, "position_xy": [0.0, 0.0], "rotation_z_degrees": 0.0, "photometric_material": "Rubber"},
+    "camera": {
+      "view_count": 20,
+      "azimuth_degrees": "base_scene_camera_azimuth_degrees + 18*view_index",
+      "radius": "preserve_base_scene_camera_radius",
+      "elevation_degrees": "preserve_base_scene_camera_elevation_degrees",
+      "look_at": "object_center",
+      "rotation_policy": "look_at_object_center_negative_z_y_up",
+      "lens_sensor_shift_policy": "require_base_scene_lens_sensor_zero_shift_and_record",
+      "jitter": "none",
+      "record_runtime_fields": ["base_scene_camera_azimuth_degrees", "base_scene_camera_radius", "base_scene_camera_elevation_degrees", "lens_mm", "sensor_width_mm", "sensor_height_mm", "shift_x", "shift_y"]
+    },
+    "lights": {
+      "named_lights": ["Lamp_Key", "Lamp_Back", "Lamp_Fill", "Area"],
+      "position_policy": "preserve_base_scene_positions_and_record",
+      "energy_policy": "preserve_base_scene_energies_and_record",
+      "rgb": [1.0, 1.0, 1.0],
+      "jitter": "none",
+      "record_runtime_fields": ["name", "position", "energy", "rgb"]
+    },
+    "background": {"world_rgba": [0.05, 0.05, 0.05, 1.0], "ground_rgba": [0.5, 0.5, 0.5, 1.0], "ground_metallic": 0.0, "ground_roughness": 1.0},
+    "runtime_assets": {
+      "base_scene_sha256": "runtime_recorded",
+      "material_asset_sha256": "runtime_recorded",
+      "shape_asset_sha256": "runtime_recorded",
+      "path_policy": "runtime relative inputs and SHA256 recorded for base scene, material and shape assets; no absolute paths"
+    }
+  },
+  "planning": {
+    "preflight": {
+      "description": "Encoding validation only; not Rubber photometry.",
+      "linear_rgb_probes": [
+        [0.18, 0.18, 0.18],
+        [0.50, 0.50, 0.50],
+        [0.75, 0.10, 0.05],
+        [0.05, 0.55, 0.90]
+      ],
+      "shape": "sphere",
+      "view_indices": [0],
+      "expected_byte_tolerance": 1,
+      "expected_lab_delta_max": 0.5
+    },
+    "reduced_direct": {
+      "roles": ["pipeline_development"],
+      "target_count": 6,
+      "shapes": ["sphere"],
+      "view_indices": [0, 8, 16],
+      "request_count": 18
+    },
+    "full_invariance": {
+      "roles": ["pipeline_development"],
+      "target_count": 6,
+      "shapes": ["cube", "sphere", "cylinder"],
+      "view_indices": [0, 4, 8, 12, 16],
+      "request_count": 90
+    },
+    "full_expansion": {
+      "source": "full_invariance minus reusable reduced_direct keys",
+      "request_count": 72
+    },
+    "excluded_roles": ["protocol_confirmation", "stress_test"]
+  },
+  "request_hashes": {
+    "preflight": "c2b5a4078f9407c2e92d555924a89ad5ba5640eeee1ef5c38e41402253ea08ff",
+    "reduced_direct": "0cbbd38a7411fe02faaa4573130a40c3e6da53adc86fdeda6174af6f70254585",
+    "full_invariance": "36cd0f957f8049e84d08e73cfa278155539c7aefa4951cf07dba1e01444a2aff",
+    "full_expansion": "4ad0ad54e01634f0916c746372d089922a397b0e0b61a2c657d63cbf776c2b3a"
+  },
+  "measurement": {
+    "mask": "binary object/background complement-validated mask",
+    "object_ratio_min_inclusive": 0.005,
+    "object_ratio_max_exclusive": 0.90,
+    "interior_radius": {
+      "r_raw": "round-half-up(0.025*min(s,sqrt(A)))",
+      "r_min": "max(1,floor(0.01*s))",
+      "r_max": "max(r_min,floor(0.08*s))",
+      "selection": "clamp(r_raw,r_min,r_max)",
+      "interior": "distance_transform_edt(object_mask) >= r"
+    },
+    "interior_count_min": "max(0.15*A,0.002*image_area)",
+    "eligible_lightness": "5 < L < 95",
+    "eligible_count_min": "count >= 0.80*I and count >= max(0.12*A,0.0015*image_area)",
+    "render_stats": ["median_L", "median_a", "median_b", "iqr_L", "iqr_a", "iqr_b", "e_ch"],
+    "target_p90": "nearest-rank index ceil(0.90*n)-1",
+    "direct_target_pass": {"median_e_ch_max": 3.0, "p90_e_ch_max": 5.0},
+    "overall_pass": {"all_targets_pass": true, "overall_render_p90_e_ch_max": 5.0}
+  },
+  "fallback": {
+    "trigger": "after encoding preflight passes and a pipeline_development direct target fails",
+    "roles": ["pipeline_development"],
+    "candidate": "Lab=(L_input, scale*a, scale*b), fixed target hue",
+    "coarse": {"L_values": [35, 40, 45, 50, 55, 60, 65, 70, 75], "chroma_scales": [0.60, 0.70, 0.80, 0.90, 1.00, 1.10, 1.20], "candidate_count": 63},
+    "refine": {"L_delta": [-2, -1, 0, 1, 2], "scale_delta": [-0.04, -0.02, 0.0, 0.02, 0.04], "max_candidate_count": 25},
+    "bounds": {"L_min": 35.0, "L_max": 75.0, "scale_min": 0.60, "scale_max": 1.20},
+    "candidate_filter": "discard out-of-gamut before rendering",
+    "candidate_views": {"shape": "sphere", "view_indices": [0, 8, 16]},
+    "objective": "median(e_ch)+0.25*p90(e_ch)+0.02*abs(median_render_L-50)",
+    "tie_break": ["lower_p90", "closer_to_L50_scale1", "lower_L", "lower_scale"],
+    "acceptance": "choose minimum objective among passing candidates; otherwise expose diagnostic only",
+    "full_invariance_confirmation": "selected passing fallback must pass full 15-render target matrix unchanged",
+    "max_render_budget_per_failing_color": 279,
+    "refine_anchor": "exact best in-gamut coarse member for the same target",
+    "evaluation_policy": "evaluate all in-gamut coarse candidates, then all unique in-gamut refine candidates; no early stop",
+    "max_unique_renderable_evaluations": 88
+  },
+  "metadata_contract": {
+    "required_fields": [
+      "git_commit",
+      "protocol_canonical_sha256",
+      "selection_canonical_sha256",
+      "source_audit_manifest_sha256",
+      "blender_version",
+      "blender_build_identifier",
+      "base_scene_relative_path",
+      "base_scene_sha256",
+      "material_asset_relative_path",
+      "material_asset_sha256",
+      "shape_asset_relative_path",
+      "shape_asset_sha256",
+      "stable_id",
+      "target_a",
+      "target_b",
+      "target_C",
+      "target_h_degrees",
+      "L_input",
+      "linear_rgb",
+      "socket_rgba",
+      "preview_srgb_uint8",
+      "gamut",
+      "stage",
+      "shape",
+      "view_index",
+      "render_seed",
+      "camera",
+      "lights",
+      "world",
+      "ground",
+      "color_management",
+      "image_relative_path",
+      "image_sha256",
+      "mask_relative_path",
+      "mask_sha256",
+      "measurement_stats",
+      "decision"
+    ]
+  },
+  "approval_state": {
+    "selection_layer_approved_target_count": 11,
+    "downstream_eligible": true,
+    "recoloring_approved": false,
+    "training_approved": false
+  }
+}
