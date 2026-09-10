@@ -277,6 +277,18 @@ class D1EmissionPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(preflight.PreflightError, "Blender must be 4.2.11"):
             preflight.canonical_blender_version((4, 2, 10))
 
+    def test_derived_camera_scalars_allow_only_float32_round_trip_error(self) -> None:
+        location = [7.481131553649902, -6.5076398849487305, 5.34366512298584]
+        target = [0.0, 0.0, 1.2999999523162842]
+        camera = {
+            "base_scene_camera_radius": 10.708311464359104,
+            "base_scene_camera_azimuth_degrees": math.degrees(math.atan2(location[1], location[0])),
+            "base_scene_camera_elevation_degrees": 22.186293736756948,
+        }
+        self.assertTrue(preflight.derived_camera_scalars_match(camera, location, target))
+        camera["base_scene_camera_elevation_degrees"] += 1e-4
+        self.assertFalse(preflight.derived_camera_scalars_match(camera, location, target))
+
     def test_exact_edt_uses_tight_bbox_and_not_square_erosion(self) -> None:
         narrow = [False] * (512 * 512)
         for y in range(100, 130):

@@ -47,6 +47,9 @@ CONTRACT_NAME = "preflight_contract.json"
 MANIFEST_NAME = "preflight_render_manifest.json"
 SUMMARY_NAME = "preflight_analysis.json"
 RENDER_ROOT = "renders"
+# Blender persists object/camera coordinates as float32.  Re-deriving angles
+# from their JSON-decoded coordinates can move elevation by about 1.2e-6 deg.
+CAMERA_DERIVED_FLOAT32_ABS_TOLERANCE = 2e-6
 
 
 class PreflightError(RuntimeError):
@@ -573,6 +576,22 @@ def _finite_vector(value: Any, count: int, label: str) -> list[float]:
     return [float(item) for item in value]
 
 
+def derived_camera_scalars_match(camera: Mapping[str, Any], location: Sequence[float], target: Sequence[float]) -> bool:
+    """Compare camera scalars after Blender float32 coordinate round-tripping."""
+    delta = [float(location[index]) - float(target[index]) for index in range(3)]
+    radius = math.sqrt(sum(value * value for value in delta))
+    if radius <= 0.0:
+        return False
+    expected = {
+        "base_scene_camera_radius": radius,
+        "base_scene_camera_azimuth_degrees": math.degrees(math.atan2(delta[1], delta[0])),
+        "base_scene_camera_elevation_degrees": math.degrees(math.atan2(delta[2], math.hypot(delta[0], delta[1]))),
+    }
+    return all(math.isclose(float(camera[field]), value, rel_tol=0.0,
+                            abs_tol=CAMERA_DERIVED_FLOAT32_ABS_TOLERANCE)
+               for field, value in expected.items())
+
+
 def _verify_runtime_metadata(metadata: dict[str, Any], request: dict[str, Any], contract: dict[str, Any],
                              object_pixels: int) -> None:
     expected_fields = {
@@ -621,11 +640,7 @@ def _verify_runtime_metadata(metadata: dict[str, Any], request: dict[str, Any], 
             "Metadata camera scalar differs")
     require(abs(float(camera["shift_x"])) <= 1e-9 and abs(float(camera["shift_y"])) <= 1e-9,
             "Metadata camera shift differs")
-    delta = [location[index] - target[index] for index in range(3)]
-    radius = math.sqrt(sum(value * value for value in delta))
-    require(radius > 0.0 and math.isclose(float(camera["base_scene_camera_radius"]), radius, abs_tol=1e-9)
-            and math.isclose(float(camera["base_scene_camera_azimuth_degrees"]), math.degrees(math.atan2(delta[1], delta[0])), abs_tol=1e-9)
-            and math.isclose(float(camera["base_scene_camera_elevation_degrees"]), math.degrees(math.atan2(delta[2], math.hypot(delta[0], delta[1]))), abs_tol=1e-9),
+    require(derived_camera_scalars_match(camera, location, target),
             "Metadata base-scene camera mapping differs")
     lights = metadata["lights"]
     require(isinstance(lights, dict) and set(lights) == {"jitter", "records"} and lights["jitter"] == "none"
