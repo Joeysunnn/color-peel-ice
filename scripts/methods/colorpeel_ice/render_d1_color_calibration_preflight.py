@@ -234,6 +234,11 @@ def emission_socket_rgba(request: Mapping[str, Any]) -> tuple[float, float, floa
     return tuple(float(channel) for channel in rgba)
 
 
+def canonical_blender_version(version: Sequence[Any]) -> str:
+    require(tuple(version) == (4, 2, 11), f"Blender must be 4.2.11, got {tuple(version)}")
+    return "4.2.11"
+
+
 def configure_color_management(scene) -> dict[str, Any]:
     """Apply the RC-1 color-management contract or report supported choices."""
     try:
@@ -421,7 +426,7 @@ def _validate_blender_mask(mask_path: Path) -> int:
 def _render_one(output_root: Path, request: dict[str, Any], contract: dict[str, Any],
                 base_scene: Path, shape_asset: Path) -> dict[str, Any]:
     bpy.ops.wm.open_mainfile(filepath=str(base_scene))
-    require(tuple(bpy.app.version) == (4, 2, 11), f"Blender must be 4.2.11, got {bpy.app.version_string}")
+    blender_version = canonical_blender_version(bpy.app.version)
     scene = bpy.context.scene
     devices = _configure_cycles(scene, request["render_seed"])
     color_management = configure_color_management(scene)
@@ -447,7 +452,7 @@ def _render_one(output_root: Path, request: dict[str, Any], contract: dict[str, 
         metadata = {
             "request": request,
             "render_contract_sha256": canonical_sha256(contract),
-            "blender_version": bpy.app.version_string,
+            "blender_version": blender_version,
             "blender_build_identifier": str(getattr(bpy.app, "build_hash", "")),
             "renderer": {"engine": "CYCLES", "cuda_devices": devices, "samples": 512, "resolution": [512, 512],
                          "image": {"format": "PNG", "mode": "RGB", "bits_per_channel": 8}},

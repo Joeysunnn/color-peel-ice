@@ -272,6 +272,11 @@ class D1EmissionPreflightTests(unittest.TestCase):
         self.assertEqual(preflight.main(["render", "--output-root", str(self.output), "--asset-root", str(self.assets)]), 2)
         self.assertTrue((self.output / "preflight_render_failure.json").is_file())
 
+    def test_blender_version_is_strict_tuple_with_canonical_metadata_form(self) -> None:
+        self.assertEqual(preflight.canonical_blender_version((4, 2, 11)), "4.2.11")
+        with self.assertRaisesRegex(preflight.PreflightError, "Blender must be 4.2.11"):
+            preflight.canonical_blender_version((4, 2, 10))
+
     def test_exact_edt_uses_tight_bbox_and_not_square_erosion(self) -> None:
         narrow = [False] * (512 * 512)
         for y in range(100, 130):
