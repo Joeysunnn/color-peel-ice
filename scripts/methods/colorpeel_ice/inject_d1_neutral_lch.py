@@ -126,6 +126,8 @@ def analyze(root: Path, neutral_root: Path) -> dict[str, Any]:
     result = injection.summarize_measurements(rows); _write(root / SUMMARY, result); return result
 
 def main(argv=None) -> int:
+    if argv is None:
+        argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
     parser=argparse.ArgumentParser(); parser.add_argument("command", choices=["plan","render-neutral","inject","analyze"]); parser.add_argument("--output-root", required=True, type=Path); parser.add_argument("--neutral-root", type=Path); parser.add_argument("--asset-root", type=Path)
     args=parser.parse_args(argv)
     try:
