@@ -1,0 +1,45 @@
+{
+  "schema": "neutral_lch_injection_protocol/v1",
+  "protocol_id": "d1_neutral_lch_injection_protocol_v1",
+  "study": "natural_image_subject_color_pilot",
+  "frozen_inputs": {
+    "selection_config": "experiments/natural_image_subject_color_pilot/configs/d1_target_color_selection_v1.json",
+    "selection_canonical_sha256": "33d9b2d5fb404786d63ac23b161c7578a08442ecd24691ca4c221721e88ee0a6",
+    "renderer_protocol": "experiments/natural_image_subject_color_pilot/configs/d1_renderer_color_calibration_protocol_v1.json",
+    "renderer_protocol_canonical_sha256": "476d01c5a383ead7d1ceec5c276bb26d809cf2fabf51cd81e0c49695cc4aa48e"
+  },
+  "neutral_render": {
+    "material": "Rubber",
+    "lab_d65": [50.0, 0.0, 0.0],
+    "shapes": ["sphere"],
+    "view_indices": [0, 8, 16],
+    "render_seed": 42
+  },
+  "injection": {
+    "space": "CIELAB D65",
+    "object_mask": "binary_255_only",
+    "rule": "preserve_pixel_L_replace_target_a_b",
+    "background": "byte_identical",
+    "gamut": "strict_reject_no_clipping_or_chroma_scaling",
+    "png": "sRGB_uint8_round_half_up"
+  },
+  "pilot": {
+    "role": "pipeline_development",
+    "target_count": 6,
+    "request_count": 18,
+    "median_e_ch_max": 3.0,
+    "p90_e_ch_max": 5.0,
+    "overall_render_p90_e_ch_max": 5.0
+  },
+  "future_full_expansion": {
+    "defined_only_not_authorized_to_run": true,
+    "shapes": ["cube", "sphere", "cylinder"],
+    "view_indices": [0, 4, 8, 12, 16],
+    "request_count": 90
+  },
+  "approval_state": {
+    "recoloring_approved": false,
+    "training_approved": false,
+    "full90_approved": false
+  }
+}
