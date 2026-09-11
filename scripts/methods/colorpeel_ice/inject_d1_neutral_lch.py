@@ -7,7 +7,6 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path: sys.path.insert(0, str(REPO_ROOT))
-from PIL import Image
 import numpy as np
 from src.methods.colorpeel_ice import neutral_lch_injection as injection
 from src.methods.colorpeel_ice.natural_image_masks import canonical_sha256, file_sha256
@@ -81,6 +80,7 @@ def render_neutral(root: Path, asset_root: Path) -> dict[str, Any]:
     return {"records": records}
 
 def inject(root: Path, neutral_root: Path) -> dict[str, Any]:
+    from PIL import Image
     value = _load_plan(root)
     if (root / RESULTS).exists(): raise injection.NeutralLchInjectionError("Injection results already exist")
     base = {row["view_index"]: row for row in value["neutral_requests"]}
@@ -101,6 +101,7 @@ def inject(root: Path, neutral_root: Path) -> dict[str, Any]:
     _write(root / RESULTS, {"schema": "d1_neutral_lch_injection_results/v1", "rows": rows}); return {"rows": rows}
 
 def analyze(root: Path, neutral_root: Path) -> dict[str, Any]:
+    from PIL import Image
     rows = json.loads((root / RESULTS).read_text(encoding="utf-8"))["rows"]
     from scripts.methods.colorpeel_ice import render_d1_color_calibration_reduced_direct as direct
     for row in rows:
