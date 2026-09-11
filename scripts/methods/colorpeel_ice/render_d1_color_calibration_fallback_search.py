@@ -42,6 +42,8 @@ RETRYABLE_FAILURES = {"analyze-coarse_failure.json", "analyze-final_failure.json
 # Its completed coarse renders predate the GPU-inventory comparison fix.
 LEGACY_GPU_INVENTORY_GIT_COMMIT = "408efc838dffbaa30fdf30c5fa02a9c63404678f"
 LEGACY_GPU_INVENTORY_ADAPTER_SHA256 = "e3ea29454a97e043aa2a2c3330392dcebae1f95598c874628d3c64db833d1203"
+INITIAL_COMPATIBILITY_ANALYZER_GIT_COMMIT = "2fd71e96c195fe51f0b4c1c3c0cc9cda8cfaf7b6"
+INITIAL_COMPATIBILITY_ANALYZER_ADAPTER_SHA256 = "d0ea7a6714a4035c81c96241404c973dddb7db5faf6f4d65bdb06baf53ccafeb"
 
 
 def _calibration():
@@ -91,6 +93,18 @@ def _compatibility_evidence(contract: dict[str, Any]) -> dict[str, Any]:
             "legacy_adapter_sha256": contract["code_sha256"]["adapter"],
             "analyzer_git_commit": shared._git_commit(),
             "analyzer_adapter_sha256": _code_hashes()["adapter"]}
+
+
+def _valid_compatibility_evidence(contract: dict[str, Any], evidence: Any) -> bool:
+    # The sidecar records the analyzer that performed coarse analysis. It must
+    # remain valid after a later, non-rendering recovery patch changes HEAD.
+    initial = {"schema": f"{PREFIX}_legacy_gpu_inventory_compatibility/v1",
+               "reason": "cuda_devices_inventory_is_provenance_only",
+               "legacy_contract_git_commit": contract["git_commit"],
+               "legacy_adapter_sha256": contract["code_sha256"]["adapter"],
+               "analyzer_git_commit": INITIAL_COMPATIBILITY_ANALYZER_GIT_COMMIT,
+               "analyzer_adapter_sha256": INITIAL_COMPATIBILITY_ANALYZER_ADAPTER_SHA256}
+    return evidence == _compatibility_evidence(contract) or evidence == initial
 
 
 def _records(root: Path, requests: list[dict[str, Any]], contract: dict[str, Any],
@@ -261,7 +275,7 @@ def _load_contract(root: Path, *, frozen: bool = True, allow_legacy_gpu_inventor
     require(exact_code or (allow_legacy_gpu_inventory and legacy), "Adapter or frozen code hash differs")
     evidence = root / COMPATIBILITY
     if legacy and require_compatibility_evidence:
-        require(evidence.is_file() and load_json(evidence) == _compatibility_evidence(contract),
+        require(evidence.is_file() and _valid_compatibility_evidence(contract, load_json(evidence)),
                 "Legacy GPU inventory compatibility provenance differs")
     if exact_code:
         require(not evidence.exists(), "Unexpected legacy compatibility evidence")

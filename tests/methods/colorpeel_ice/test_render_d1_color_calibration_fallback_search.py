@@ -210,6 +210,18 @@ class FallbackSearchTests(unittest.TestCase):
         direct.atomic_json(self.output / runner.COMPATIBILITY, runner._compatibility_evidence(contract))
         self.assertEqual(runner._load_contract(self.output, allow_legacy_gpu_inventory=True,
                                                require_compatibility_evidence=True), contract)
+        historical = runner._compatibility_evidence(contract)
+        historical.update(analyzer_git_commit=runner.INITIAL_COMPATIBILITY_ANALYZER_GIT_COMMIT,
+                          analyzer_adapter_sha256=runner.INITIAL_COMPATIBILITY_ANALYZER_ADAPTER_SHA256)
+        direct.atomic_json(self.output / runner.COMPATIBILITY, historical)
+        self.assertEqual(runner._load_contract(self.output, allow_legacy_gpu_inventory=True,
+                                               require_compatibility_evidence=True), contract)
+        historical["analyzer_adapter_sha256"] = "0" * 64
+        direct.atomic_json(self.output / runner.COMPATIBILITY, historical)
+        with self.assertRaises(ERRORS):
+            runner._load_contract(self.output, allow_legacy_gpu_inventory=True,
+                                  require_compatibility_evidence=True)
+        direct.atomic_json(self.output / runner.COMPATIBILITY, runner._compatibility_evidence(contract))
         contract["code_sha256"]["rc1"] = "0" * 64
         direct.atomic_json(self.output / runner.CONTRACT, contract)
         with self.assertRaises(ERRORS):
