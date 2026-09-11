@@ -172,6 +172,50 @@ class FallbackSearchTests(unittest.TestCase):
         with self.assertRaisesRegex(direct.ReducedDirectError, "Trusted predecessor"):
             runner.make_plan(Path(self.work.name) / "wrong", self.assets, self.previous / direct.SUMMARY_NAME, "0" * 64)
 
+    def test_gpu_inventory_is_provenance_but_renderer_contract_still_drifts(self):
+        request = self.plan["requests"][0]
+        directory = self.output / "single"
+        record = self._render_fixture(directory, request, self.contract)
+        metadata_path = directory / record["metadata_relative_path"]
+        metadata = runner.load_json(metadata_path)
+        metadata["renderer"]["cuda_devices"].append({"name": "Tesla V100", "type": "CUDA", "id": "CUDA_test-extra"})
+        direct.atomic_json(metadata_path, metadata)
+        record["metadata_sha256"] = runner.file_sha256(metadata_path)
+        manifest = {"schema": f"{runner.PREFIX}_manifest/v1", "contract_sha256": runner.canonical_sha256(self.contract),
+                    "request_count": 1, "records": [record]}
+        rows, _, runtime = runner._records(directory, [request], self.contract, manifest, runner.PREFIX,
+                                           self.contract["base_scene_state"], self.contract["runtime_identity"])
+        self.assertEqual(rows[0]["request_id"], request["request_id"])
+        self.assertEqual(len(runtime["renderer"]["cuda_devices"]), 2)
+        metadata["renderer"]["samples"] = 1
+        direct.atomic_json(metadata_path, metadata)
+        record["metadata_sha256"] = runner.file_sha256(metadata_path)
+        with self.assertRaises(ERRORS):
+            runner._records(directory, [request], self.contract, manifest, runner.PREFIX,
+                            self.contract["base_scene_state"], self.contract["runtime_identity"])
+
+    def test_legacy_gpu_inventory_retry_requires_specific_contract_and_evidence(self):
+        contract = runner.load_json(self.output / runner.CONTRACT)
+        contract["git_commit"] = runner.LEGACY_GPU_INVENTORY_GIT_COMMIT
+        contract["code_sha256"]["adapter"] = runner.LEGACY_GPU_INVENTORY_ADAPTER_SHA256
+        direct.atomic_json(self.output / runner.CONTRACT, contract)
+        direct.atomic_json(self.output / "analyze-coarse_failure.json", {
+            "schema": f"{runner.PREFIX}_failure/v1", "status": "failed", "command": "analyze-coarse",
+            "error_type": "PreflightError"})
+        with self.assertRaises(ERRORS):
+            runner._load_contract(self.output)
+        self.assertEqual(runner._load_contract(self.output, allow_legacy_gpu_inventory=True), contract)
+        with self.assertRaises(ERRORS):
+            runner._load_contract(self.output, allow_legacy_gpu_inventory=True, require_compatibility_evidence=True)
+        direct.atomic_json(self.output / runner.COMPATIBILITY, runner._compatibility_evidence(contract))
+        self.assertEqual(runner._load_contract(self.output, allow_legacy_gpu_inventory=True,
+                                               require_compatibility_evidence=True), contract)
+        contract["code_sha256"]["rc1"] = "0" * 64
+        direct.atomic_json(self.output / runner.CONTRACT, contract)
+        with self.assertRaises(ERRORS):
+            runner._load_contract(self.output, allow_legacy_gpu_inventory=True,
+                                  require_compatibility_evidence=True)
+
     def test_drift_missing_duplicates_and_partial_outputs(self):
         with self.assertRaises(ERRORS):
             runner.plan_refine(self.output)

@@ -34,6 +34,12 @@ PLAN = "plan.json"
 MANIFEST = "render_manifest.json"
 ANALYSIS = "analysis.json"
 SELECTION = "selection_manifest.json"
+COMPATIBILITY = "legacy_gpu_inventory_compatibility.json"
+ANALYSIS_FAILURES = {"analyze-coarse_failure.json", "analyze-final_failure.json"}
+# The only RC-2C contract eligible for this GPU-inventory compatibility path.
+# Its completed coarse renders predate the GPU-inventory comparison fix.
+LEGACY_GPU_INVENTORY_GIT_COMMIT = "408efc838dffbaa30fdf30c5fa02a9c63404678f"
+LEGACY_GPU_INVENTORY_ADAPTER_SHA256 = "e3ea29454a97e043aa2a2c3330392dcebae1f95598c874628d3c64db833d1203"
 
 
 def _calibration():
@@ -63,6 +69,28 @@ def _targets() -> list[dict[str, Any]]:
     return [row for row in direct._requests() if row["view_index"] == 0]
 
 
+def _runtime_contract(identity: dict[str, Any]) -> dict[str, Any]:
+    """Keep GPU inventory as provenance, not a renderer-semantics equality key."""
+    return {**identity, "renderer": {key: value for key, value in identity["renderer"].items()
+                                       if key != "cuda_devices"}}
+
+
+def _legacy_gpu_inventory_contract(contract: dict[str, Any]) -> bool:
+    current = _code_hashes()
+    legacy = {**current, "adapter": LEGACY_GPU_INVENTORY_ADAPTER_SHA256}
+    return (contract["git_commit"] == LEGACY_GPU_INVENTORY_GIT_COMMIT
+            and contract["code_sha256"] == legacy)
+
+
+def _compatibility_evidence(contract: dict[str, Any]) -> dict[str, Any]:
+    return {"schema": f"{PREFIX}_legacy_gpu_inventory_compatibility/v1",
+            "reason": "cuda_devices_inventory_is_provenance_only",
+            "legacy_contract_git_commit": contract["git_commit"],
+            "legacy_adapter_sha256": contract["code_sha256"]["adapter"],
+            "analyzer_git_commit": shared._git_commit(),
+            "analyzer_adapter_sha256": _code_hashes()["adapter"]}
+
+
 def _records(root: Path, requests: list[dict[str, Any]], contract: dict[str, Any],
              manifest: dict[str, Any], prefix: str, expected_base=None, expected_runtime=None):
     require(set(manifest) == {"schema", "contract_sha256", "request_count", "records"}, "Manifest fields differ")
@@ -89,7 +117,8 @@ def _records(root: Path, requests: list[dict[str, Any]], contract: dict[str, Any
         metadata = load_json(shared._artifact_path(root, record["metadata_relative_path"], "metadata"))
         identity_runtime = {key: metadata[key] for key in ("blender_version", "blender_build_identifier", "renderer")}
         require(base is None or base == state, "Base scene metadata drift")
-        require(runtime is None or runtime == identity_runtime, "Runtime metadata drift")
+        require(runtime is None or _runtime_contract(runtime) == _runtime_contract(identity_runtime),
+                "Runtime metadata drift")
         base, runtime = state, identity_runtime
         measured[identity] = row
     render_root = root / "renders"
@@ -202,9 +231,19 @@ def make_plan(root: Path, asset_root: Path, direct_analysis: Path, direct_analys
     return plan, contract
 
 
-def _load_contract(root: Path, *, frozen: bool = True):
-    require({p.name for p in root.iterdir()} <= {CONTRACT, PREDECESSOR, "coarse", "refine", "refine_plan_binding.json", SELECTION},
+def _load_contract(root: Path, *, frozen: bool = True, allow_legacy_gpu_inventory: bool = False,
+                   require_compatibility_evidence: bool = False):
+    children = {p.name for p in root.iterdir()}
+    require(children <= {CONTRACT, PREDECESSOR, "coarse", "refine", "refine_plan_binding.json", SELECTION,
+                         COMPATIBILITY} | ANALYSIS_FAILURES,
             "Partial previous outputs or failed run evidence present")
+    for name in ANALYSIS_FAILURES & children:
+        failure = load_json(root / name)
+        command = name.removesuffix("_failure.json")
+        require(set(failure) == {"schema", "status", "command", "error_type"}
+                and failure["schema"] == f"{PREFIX}_failure/v1" and failure["status"] == "failed"
+                and failure["command"] == command and isinstance(failure["error_type"], str) and failure["error_type"],
+                "Analysis failure provenance differs")
     contract, bundle = load_json(root / CONTRACT), load_json(root / PREDECESSOR)
     _check_predecessor(bundle, frozen=frozen)
     require(set(contract) == {"schema", "git_commit", "code_sha256", "protocol_canonical_sha256", "assets", "material",
@@ -214,8 +253,16 @@ def _load_contract(root: Path, *, frozen: bool = True):
     require(contract["schema"] == f"{PREFIX}_contract/v1" and contract["material"] == "Rubber"
             and contract["predecessor_stage"] == "reduced_direct" and contract["predecessor_status"] == "failed"
             and contract["predecessor_sha256"] == canonical_sha256(bundle), "Search predecessor contract differs")
-    require(contract["git_commit"] == shared._git_commit(), "Current HEAD differs")
-    require(contract["code_sha256"] == _code_hashes(), "Adapter or frozen code hash differs")
+    exact_code = (contract["git_commit"] == shared._git_commit()
+                  and contract["code_sha256"] == _code_hashes())
+    legacy = _legacy_gpu_inventory_contract(contract)
+    require(exact_code or (allow_legacy_gpu_inventory and legacy), "Adapter or frozen code hash differs")
+    evidence = root / COMPATIBILITY
+    if legacy and require_compatibility_evidence:
+        require(evidence.is_file() and load_json(evidence) == _compatibility_evidence(contract),
+                "Legacy GPU inventory compatibility provenance differs")
+    if exact_code:
+        require(not evidence.exists(), "Unexpected legacy compatibility evidence")
     protocol = load_json(REPO_ROOT / "experiments/natural_image_subject_color_pilot/configs/d1_renderer_color_calibration_protocol_v1.json")
     require(contract["protocol_canonical_sha256"] == canonical_sha256(protocol) == shared.FROZEN_PROTOCOL_SHA256,
             "Protocol hash differs")
@@ -263,7 +310,7 @@ def _verified_coarse(root: Path, contract):
 
 def plan_refine(root: Path):
     require(not (root / "refine").exists(), "Refine output already exists")
-    contract = _load_contract(root)
+    contract = _load_contract(root, allow_legacy_gpu_inventory=True, require_compatibility_evidence=True)
     coarse = _verified_coarse(root, contract)
     plan = _stage_plan("refine", contract, coarse)
     _write(root / "refine_plan_binding.json", {"plan_sha256": _json_sha(plan),
@@ -316,7 +363,8 @@ def _render_plan(root: Path, stage: str, contract):
 
 def render(root: Path, asset_root: Path, stage: str):
     require(shared.bpy is not None, "Render requires Blender")
-    contract = _load_contract(root, frozen=False)
+    contract = _load_contract(root, frozen=False, allow_legacy_gpu_inventory=True,
+                              require_compatibility_evidence=True)
     plan = _render_plan(root, stage, contract)
     paths = direct._verify_runtime_assets(asset_root, contract)
     directory = root / stage
@@ -332,11 +380,14 @@ def analyze(root: Path, stage: str):
     calibration = _calibration()
     require(stage in {"coarse", "refine"}, "Only coarse/refine search is permitted")
     require(not (root / stage / ANALYSIS).exists() and not (root / SELECTION).exists(), "Analysis output already exists")
-    contract = _load_contract(root)
+    contract = _load_contract(root, allow_legacy_gpu_inventory=True,
+                              require_compatibility_evidence=stage == "refine")
     coarse = _verified_coarse(root, contract) if stage == "refine" else None
     result = _measure_stage(root, stage, contract, coarse)
     if stage == "coarse":
         _write(root / stage / ANALYSIS, result)
+        if _legacy_gpu_inventory_contract(contract):
+            _write(root / COMPATIBILITY, _compatibility_evidence(contract))
         return result
     selections = []
     for target in _targets():
