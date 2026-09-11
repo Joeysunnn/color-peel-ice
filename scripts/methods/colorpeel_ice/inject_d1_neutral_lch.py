@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Plan and strictly inject frozen D1 targets into neutral Rubber renders."""
 from __future__ import annotations
-import argparse, json, sys
+import argparse, hashlib, json, sys
 from pathlib import Path
 from typing import Any
 
@@ -9,9 +9,18 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path: sys.path.insert(0, str(REPO_ROOT))
 import numpy as np
 from src.methods.colorpeel_ice import neutral_lch_injection as injection
-from src.methods.colorpeel_ice.natural_image_masks import canonical_sha256, file_sha256
 
 PLAN, CONTRACT, RESULTS, SUMMARY = "neutral_lch_plan.json", "neutral_lch_contract.json", "neutral_lch_results.json", "neutral_lch_analysis.json"
+
+def canonical_sha256(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 def _write(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n", encoding="utf-8")
