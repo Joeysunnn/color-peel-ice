@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from src.methods.colorpeel_ice import natural_image_target_selection as selection
-from src.methods.colorpeel_ice.natural_image_masks import canonical_sha256
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROTOCOL_RELPATH = "experiments/natural_image_subject_color_pilot/configs/d1_neutral_lch_injection_protocol_v1.json"
 VIEWS = (0, 8, 16)
 NEUTRAL_LAB = (50.0, 0.0, 0.0)
+SELECTION_CANONICAL_SHA256 = "33d9b2d5fb404786d63ac23b161c7578a08442ecd24691ca4c221721e88ee0a6"
 
 
 class NeutralLchInjectionError(ValueError):
@@ -24,6 +25,10 @@ class NeutralLchInjectionError(ValueError):
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise NeutralLchInjectionError(message)
+
+
+def canonical_sha256(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
 def _srgb_to_linear(values: np.ndarray) -> np.ndarray:
@@ -61,6 +66,7 @@ def lab_to_linear_rgb(lab: np.ndarray) -> np.ndarray:
 
 
 def pilot_requests() -> list[dict[str, Any]]:
+    from src.methods.colorpeel_ice import natural_image_target_selection as selection
     rows = []
     for record in selection.pipeline_development_records():
         target = record["target"]
@@ -79,6 +85,7 @@ def neutral_requests() -> list[dict[str, Any]]:
 
 def future_full_requests() -> list[dict[str, Any]]:
     """Define, but never execute, the immutable 90-request full expansion."""
+    from src.methods.colorpeel_ice import natural_image_target_selection as selection
     rows = []
     for record in selection.pipeline_development_records():
         target = record["target"]

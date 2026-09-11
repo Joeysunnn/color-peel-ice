@@ -29,15 +29,16 @@ def plan(root: Path) -> dict[str, Any]:
     _write(root / PLAN, value); _write(root / CONTRACT, contract); return value
 
 def selection_hash() -> str:
-    from src.methods.colorpeel_ice import natural_image_target_selection as selection
-    return selection.FROZEN_CONFIG_CANONICAL_SHA256
+    return injection.SELECTION_CANONICAL_SHA256
 
-def _load_plan(root: Path) -> dict[str, Any]:
+def _load_plan(root: Path, *, validate_injection_requests: bool = True) -> dict[str, Any]:
     value = json.loads((root / PLAN).read_text(encoding="utf-8"))
     if set(value) != {"schema", "neutral_requests", "injection_requests", "requests_sha256"}:
         raise injection.NeutralLchInjectionError("Plan fields differ")
-    if value["schema"] != "d1_neutral_lch_injection_plan/v1" or value["neutral_requests"] != injection.neutral_requests() or value["injection_requests"] != injection.pilot_requests() or value["requests_sha256"] != canonical_sha256(injection.pilot_requests()):
+    if value["schema"] != "d1_neutral_lch_injection_plan/v1" or value["neutral_requests"] != injection.neutral_requests():
         raise injection.NeutralLchInjectionError("Plan request identity differs")
+    if validate_injection_requests and (value["injection_requests"] != injection.pilot_requests() or value["requests_sha256"] != canonical_sha256(injection.pilot_requests())):
+        raise injection.NeutralLchInjectionError("Plan injection request identity differs")
     contract = json.loads((root / CONTRACT).read_text(encoding="utf-8"))
     protocol = REPO_ROOT / injection.PROTOCOL_RELPATH
     expected = {"schema": "d1_neutral_lch_injection_contract/v1", "protocol_relative_path": injection.PROTOCOL_RELPATH,
@@ -53,7 +54,7 @@ def render_neutral(root: Path, asset_root: Path) -> dict[str, Any]:
     from scripts.methods.colorpeel_ice import render_d1_color_calibration_preflight as shared
     require = injection.require
     require(shared.bpy is not None, "render-neutral requires Blender")
-    plan_value = _load_plan(root)
+    plan_value = _load_plan(root, validate_injection_requests=False)
     output = root / "neutral"
     require(not output.exists(), "Neutral render output already exists")
     assets = {}
