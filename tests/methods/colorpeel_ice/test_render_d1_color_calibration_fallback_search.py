@@ -216,6 +216,19 @@ class FallbackSearchTests(unittest.TestCase):
             runner._load_contract(self.output, allow_legacy_gpu_inventory=True,
                                   require_compatibility_evidence=True)
 
+    def test_only_pre_render_failure_provenance_is_retryable(self):
+        for name in ("analyze-coarse_failure.json", "analyze-final_failure.json", "plan-refine_failure.json"):
+            failure = self.output / name
+            direct.atomic_json(failure, {"schema": f"{runner.PREFIX}_failure/v1", "status": "failed",
+                                         "command": name.removesuffix("_failure.json"), "error_type": "PreflightError"})
+            self.assertEqual(runner._load_contract(self.output), self.contract)
+            failure.unlink()
+        direct.atomic_json(self.output / "render-refine_failure.json", {
+            "schema": f"{runner.PREFIX}_failure/v1", "status": "failed", "command": "render-refine",
+            "error_type": "PreflightError"})
+        with self.assertRaises(ERRORS):
+            runner._load_contract(self.output)
+
     def test_drift_missing_duplicates_and_partial_outputs(self):
         with self.assertRaises(ERRORS):
             runner.plan_refine(self.output)

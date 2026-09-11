@@ -35,7 +35,9 @@ MANIFEST = "render_manifest.json"
 ANALYSIS = "analysis.json"
 SELECTION = "selection_manifest.json"
 COMPATIBILITY = "legacy_gpu_inventory_compatibility.json"
-ANALYSIS_FAILURES = {"analyze-coarse_failure.json", "analyze-final_failure.json"}
+# Only failure records from stages that write no rendered artifacts may be retried.
+# Render failures remain deliberate stop evidence.
+RETRYABLE_FAILURES = {"analyze-coarse_failure.json", "analyze-final_failure.json", "plan-refine_failure.json"}
 # The only RC-2C contract eligible for this GPU-inventory compatibility path.
 # Its completed coarse renders predate the GPU-inventory comparison fix.
 LEGACY_GPU_INVENTORY_GIT_COMMIT = "408efc838dffbaa30fdf30c5fa02a9c63404678f"
@@ -235,15 +237,15 @@ def _load_contract(root: Path, *, frozen: bool = True, allow_legacy_gpu_inventor
                    require_compatibility_evidence: bool = False):
     children = {p.name for p in root.iterdir()}
     require(children <= {CONTRACT, PREDECESSOR, "coarse", "refine", "refine_plan_binding.json", SELECTION,
-                         COMPATIBILITY} | ANALYSIS_FAILURES,
+                         COMPATIBILITY} | RETRYABLE_FAILURES,
             "Partial previous outputs or failed run evidence present")
-    for name in ANALYSIS_FAILURES & children:
+    for name in RETRYABLE_FAILURES & children:
         failure = load_json(root / name)
         command = name.removesuffix("_failure.json")
         require(set(failure) == {"schema", "status", "command", "error_type"}
                 and failure["schema"] == f"{PREFIX}_failure/v1" and failure["status"] == "failed"
                 and failure["command"] == command and isinstance(failure["error_type"], str) and failure["error_type"],
-                "Analysis failure provenance differs")
+                "Retryable failure provenance differs")
     contract, bundle = load_json(root / CONTRACT), load_json(root / PREDECESSOR)
     _check_predecessor(bundle, frozen=frozen)
     require(set(contract) == {"schema", "git_commit", "code_sha256", "protocol_canonical_sha256", "assets", "material",
