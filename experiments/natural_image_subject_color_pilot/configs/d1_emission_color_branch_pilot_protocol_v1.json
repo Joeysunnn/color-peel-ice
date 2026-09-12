@@ -1,0 +1,38 @@
+{
+  "schema": "emission_color_branch_pilot_protocol/v1",
+  "protocol_id": "d1_emission_color_branch_pilot_protocol_v1",
+  "study": "natural_image_subject_color_pilot",
+  "frozen_inputs": {
+    "selection_relative_path": "experiments/natural_image_subject_color_pilot/configs/d1_target_color_selection_v1.json",
+    "selection_canonical_sha256": "33d9b2d5fb404786d63ac23b161c7578a08442ecd24691ca4c221721e88ee0a6",
+    "renderer_protocol_relative_path": "experiments/natural_image_subject_color_pilot/configs/d1_renderer_color_calibration_protocol_v1.json",
+    "renderer_protocol_canonical_sha256": "476d01c5a383ead7d1ceec5c276bb26d809cf2fabf51cd81e0c49695cc4aa48e"
+  },
+  "renderer_contract": {
+    "inherits": "RC-2A scene, Cycles, Standard/sRGB colour management, binary mask and EDT measurement",
+    "material": "built_in_blender_emission",
+    "emission_strength": 1.0,
+    "lab_d65_input": "[50.0, target_a, target_b]",
+    "conversion": "Lab D65 -> XYZ D65 -> linear sRGB float64; reject out-of-gamut input without clipping",
+    "post_render_recoloring": "forbidden",
+    "inverse_calibration": "forbidden"
+  },
+  "targets": [
+    {"stable_id": "D1GT:13/30.png", "a": 17.81286014684136, "b": -48.54887560415377},
+    {"stable_id": "D1GT:81/130.png", "a": 63.21805661727065, "b": 54.85769274644318}
+  ],
+  "pilot": {
+    "shapes": ["cube", "sphere", "cylinder"],
+    "view_indices": [0, 8, 16],
+    "request_count": 18,
+    "render_seed_formula": "910000 + target_index*100 + shape_index*20 + view_index",
+    "median_e_ch_max": 3.0,
+    "p90_e_ch_max": 5.0,
+    "overall_render_p90_e_ch_max": 5.0
+  },
+  "approval_state": {
+    "pilot_approved": true,
+    "full_dataset_approved": false,
+    "training_approved": false
+  }
+}
