@@ -5,7 +5,7 @@
   "source": {
     "mask_manifest_sha256": "f792d7372ffae85132d87c52735295c52b829a99f08e4f7dcc427bf761654e4c",
     "stable_id": "D1GT:13/30.png",
-    "raw_image_sha256": "02b878028abe5ff212a52e89b007d1ed6f6e075bab195e4f802727f5a6eee2fc0",
+    "raw_image_sha256": "02b878028abe5ff212a52e89b007d1ed6f6e075bab195e4f802727f5a6ee2fc0",
     "raw_mask_sha256": "fd97e9300a11a8a1c307fa3325ff3da4d05a713f569e592ed3ffa622f03df08a",
     "original_hue_degrees": 290.14837601118836
   },
