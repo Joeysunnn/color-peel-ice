@@ -1,0 +1,23 @@
+schema_version: 1
+status: authorized_transfer_generation
+stage: generate_emission_transfer
+run:
+  study: natural_image_subject_color_pilot
+  variant: emission_color_transfer_orange_noun_transfer18
+  seed: 42
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_generation_protocol_v1.json
+args:
+  parent-training-run: ${COLORPEEL_EMISSION_TRANSFER_ORANGE_TRAIN_RUN}
+  model-dir: ${COLORPEEL_EMISSION_TRANSFER_ORANGE_MODEL_DIR}
+  protocol: experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_generation_protocol_v1.json
+  device: cuda:0
+  dtype: float16
+  pretrained-model-name-or-path: CompVis/stable-diffusion-v1-4
+protocol:
+  parent_training_only: emission_color_transfer_orange_short100
+  images: 18
+  no_additional_training: true
+  no_full_dataset_expansion: true
+  review: manual_color_identity_and_style_comparison_required

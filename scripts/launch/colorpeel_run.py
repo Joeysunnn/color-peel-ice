@@ -27,6 +27,7 @@ STAGES = {
     "prepare_joint_two_object": "src/methods/colorpeel_ice/prepare_joint_two_object.py",
     "train": "src/train/train_colorpeel.py",
     "generate": "scripts/methods/colorpeel_ice/generate.py",
+    "generate_emission_transfer": "scripts/methods/colorpeel_ice/generate_d1_emission_color_transfer.py",
     "generate_multiview": "scripts/methods/colorpeel_ice/generate_multiview_heldout.py",
     "generate_material_multiview": "scripts/methods/colorpeel_ice/generate_material_multiview.py",
     "generate_two_object": "scripts/methods/colorpeel_ice/generate_two_object.py",
@@ -181,7 +182,7 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "data")}
     if stage == "train":
         return {"output_dir": str(run_dir / "checkpoints")}
-    if stage in {"generate", "generate_multiview", "generate_material_multiview", "generate_two_object"}:
+    if stage in {"generate", "generate_emission_transfer", "generate_multiview", "generate_material_multiview", "generate_two_object"}:
         return {"output-dir": str(run_dir / "inference")}
     if stage == "bundle_two_object":
         return {"output-dir": str(run_dir / "evaluation" / "human_review")}
