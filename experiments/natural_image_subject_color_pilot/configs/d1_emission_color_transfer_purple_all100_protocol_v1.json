@@ -1,0 +1,13 @@
+{
+  "schema": "emission_color_transfer_all100_protocol/v1",
+  "protocol_id": "d1_emission_color_transfer_purple_all100_protocol_v1",
+  "purpose": "expanded_transfer_validation_all_templates",
+  "source_manifest": {"sha256": "b6ee984e2f120ae9b576693e935ef37a3f25d6f5ed7dcbed7afc4510687a4bd9", "category": "transfer", "required_transfer_row_count": 600},
+  "transfer_template_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  "replacement_token": "<C*>",
+  "inference_seeds": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
+  "parent_training": {"run_id": "20260912-073922__natural_image_subject_color_pilot__emission_color_transfer_purple_short100__7dd85d5__42", "git_commit": "7dd85d53d1881ccfb9164d1492ed3de8cf37ae88", "training_manifest_sha256": "6bbab40966f21c5a164122357d067b30f00ceacae2569781aa6f2f07e4fac645", "embedding_sha256": "db74b1dccbf450af7167626e865a7dc70abf6f096c6f4d224854e95139516d1e"},
+  "target": {"stable_id": "D1GT:13/30.png", "C": 51.7135505359913, "h_degrees": 290.14837601118836},
+  "inference": {"num_inference_steps": 100, "guidance_scale": 6.0, "dtype": "float16"},
+  "expected_image_count": 100
+}

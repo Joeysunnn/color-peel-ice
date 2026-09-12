@@ -1,0 +1,24 @@
+schema_version: 1
+status: authorized_expanded_transfer_validation
+stage: generate_emission_transfer_all
+run:
+  study: natural_image_subject_color_pilot
+  variant: emission_color_transfer_purple_all100
+  seed: 42
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_purple_all100_protocol_v1.json
+args:
+  parent-training-run: ${COLORPEEL_EMISSION_TRANSFER_TRAIN_RUN}
+  model-dir: ${COLORPEEL_EMISSION_TRANSFER_MODEL_DIR}
+  source-manifest: ${COLORPEEL_TRANSFER_SOURCE_MANIFEST}
+  protocol: experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_purple_all100_protocol_v1.json
+  device: cuda:0
+  dtype: float16
+  pretrained-model-name-or-path: CompVis/stable-diffusion-v1-4
+protocol:
+  transfer_templates: 10
+  samples_per_template: 10
+  image_count: 100
+  no_training: true
+  no_dataset_expansion: true
