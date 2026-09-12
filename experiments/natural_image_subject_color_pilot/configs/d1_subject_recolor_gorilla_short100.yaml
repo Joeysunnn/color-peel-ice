@@ -27,7 +27,9 @@ args:
   dataloader_num_workers: 2
   adam_beta1: 0.9
   adam_beta2: 0.999
-  adam_weight_decay: 0.01
+  # Non-modifier embedding gradients are masked.  AdamW weight decay would
+  # nevertheless change those rows, so this subject-only pilot must disable it.
+  adam_weight_decay: 0.0
   adam_epsilon: 1.0e-8
   hflip: true
   modifier_token: "<S*>"
