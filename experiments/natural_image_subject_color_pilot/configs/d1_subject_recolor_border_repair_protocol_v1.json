@@ -1,0 +1,43 @@
+{
+  "schema": "natural_subject_recolor_border_repair_protocol/v1",
+  "protocol_id": "d1_subject_recolor_border_repair_protocol_v1",
+  "purpose": "single_subject_auxiliary_hue_recoloring_with_approved_bottom_border_mask_repair_without_training",
+  "source": {
+    "mask_manifest_sha256": "f792d7372ffae85132d87c52735295c52b829a99f08e4f7dcc427bf761654e4c",
+    "stable_id": "D1GT:13/30.png",
+    "raw_image_sha256": "02b878028abe5ff212a52e89b007d1ed6f6e075bab195e4f802727f5a6ee2fc0",
+    "raw_mask_sha256": "fd97e9300a11a8a1c307fa3325ff3da4d05a713f569e592ed3ffa622f03df08a",
+    "original_hue_degrees": 290.14837601118836
+  },
+  "mask_repair": {
+    "coordinate_system": "source_512x512_xy_inclusive",
+    "kind": "approved_bottom_border_rectangle_v1",
+    "rectangle_xyxy_inclusive": [180, 508, 458, 511],
+    "expected_added_pixel_count": 837,
+    "pre_repair_mask_runs": {
+      "504": [[180, 458]],
+      "505": [[180, 458]],
+      "506": [[180, 458]],
+      "507": [[180, 458]],
+      "508": [[250, 458]],
+      "509": [[389, 458]],
+      "510": [],
+      "511": []
+    },
+    "alpha_derivation": "existing_pixel_centered_signed_edt_w_out_0_recomputed_from_repaired_binary_mask",
+    "approval_basis": "pixel_diagnosis_confirmed_raw_mask_undercoverage_for_canvas_bottom_truncated_subject"
+  },
+  "conversion": {"space": "sRGB_uint8_to_linear_sRGB_float64_to_Lab_D65_to_LCh", "gamut_margin": 0.995, "gamut_iterations": 32},
+  "auxiliary_palette": [
+    {"name": "red", "hue_degrees": 0.0},
+    {"name": "yellow", "hue_degrees": 60.0},
+    {"name": "green", "hue_degrees": 120.0},
+    {"name": "cyan", "hue_degrees": 180.0},
+    {"name": "blue", "hue_degrees": 240.0},
+    {"name": "magenta", "hue_degrees": 300.0}
+  ],
+  "held_out_guard": {"minimum_hue_separation_degrees": 30.0, "excluded_palette_names": ["magenta"], "generated_palette_names": ["red", "yellow", "green", "cyan", "blue"]},
+  "invariants": {"preserve_object_L": true, "preserve_object_C_except_gamut": true, "fixed_auxiliary_hue": true, "rgb_hard_clipping": false, "outside_repaired_binary_mask_rgb_change": 0, "use_recomputed_soft_alpha_compositing": true},
+  "expected_image_count": 5,
+  "training": {"allowed": false, "original_subject_color_training_record": "forbidden"}
+}
