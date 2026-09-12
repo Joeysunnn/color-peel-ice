@@ -49,12 +49,12 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def protocol() -> dict[str, Any]:
-    value = read_json(REPO_ROOT / PROTOCOL_RELPATH)
+def protocol(path: Path | None = None) -> dict[str, Any]:
+    value = read_json(path or REPO_ROOT / PROTOCOL_RELPATH)
     require(value.get("schema") == "emission_color_transfer_protocol/v1", "Protocol schema differs")
-    require(value.get("target", {}).get("stable_id") == "D1GT:81/130.png", "Target differs")
+    require(isinstance(value.get("target", {}).get("stable_id"), str), "Target differs")
     training = value.get("training", {})
-    require(training.get("modifier_token") == "<C*>" and training.get("initializer_token") == "orange", "Token identity differs")
+    require(training.get("modifier_token") == "<C*>" and isinstance(training.get("initializer_token"), str), "Token identity differs")
     require(training.get("subjects") == ["cube", "sphere", "cylinder"] and training.get("view_indices") == [0, 8, 16] and training.get("image_count") == 9, "Training matrix differs")
     require(value.get("approval_state", {}).get("short_transfer_training_approved") is True, "Training is not approved")
     return value
@@ -62,10 +62,11 @@ def protocol() -> dict[str, Any]:
 
 def expected_requests(value: dict[str, Any]) -> dict[str, dict[str, Any]]:
     target, training = value["target"], value["training"]
+    slug = target["stable_id"].replace("D1GT:", "D1GT_").replace("/", "_").replace(".png", "")
     rows = {}
     for shape in training["subjects"]:
         for view in training["view_indices"]:
-            request_id = f"emission__D1GT_81_130__{shape}__v{view:02d}"
+            request_id = f"emission__{slug}__{shape}__v{view:02d}"
             rows[request_id] = {"shape": shape, "view_index": view,
                                 "prompt": training["prompt_template"].format(subject=shape)}
     require(len(rows) == 9, "Expected request identity differs")
@@ -97,8 +98,9 @@ def verified_source(source_root: Path, value: dict[str, Any]) -> dict[str, dict[
     return selected
 
 
-def stage(source_root: Path, output_root: Path) -> dict[str, Any]:
-    value = protocol()
+def stage(source_root: Path, output_root: Path, protocol_path: Path | None = None) -> dict[str, Any]:
+    effective_protocol = protocol_path or REPO_ROOT / PROTOCOL_RELPATH
+    value = protocol(effective_protocol)
     selected = verified_source(source_root.resolve(), value)
     require(not output_root.exists() or not any(output_root.iterdir()), "Output root must be new or empty")
     output_root.mkdir(parents=True, exist_ok=True)
@@ -118,7 +120,7 @@ def stage(source_root: Path, output_root: Path) -> dict[str, Any]:
         records.append({"request_id": request_id, "shape": row["shape"], "view_index": row["view_index"], "prompt": row["prompt"], "source_image_sha256": row["image_sha256"], "staging_method": method})
     concepts_path, manifest_path = output_root / "concepts.json", output_root / "staging_manifest.json"
     concepts_path.write_text(json.dumps(concepts, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    manifest_path.write_text(json.dumps({"schema": "d1_emission_color_transfer_staging_manifest/v1", "source_analysis_sha256": value["source_pilot"]["analysis_sha256"], "protocol_sha256": sha256(REPO_ROOT / PROTOCOL_RELPATH), "record_count": 9, "records": records}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps({"schema": "d1_emission_color_transfer_staging_manifest/v1", "source_analysis_sha256": value["source_pilot"]["analysis_sha256"], "protocol_sha256": sha256(effective_protocol), "record_count": 9, "records": records}, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return {"status": "staged", "concepts": str(concepts_path), "manifest": str(manifest_path), "record_count": 9}
 
 
@@ -126,9 +128,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument("--protocol", type=Path)
     args = parser.parse_args(argv)
     try:
-        print(json.dumps(stage(args.source_root, args.output_root), sort_keys=True))
+        print(json.dumps(stage(args.source_root, args.output_root, args.protocol), sort_keys=True))
     except (OSError, StagingError) as exc:
         parser.exit(2, f"Emission transfer staging aborted: {exc}\n")
     return 0

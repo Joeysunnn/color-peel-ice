@@ -1,0 +1,9 @@
+{
+  "schema": "emission_color_transfer_protocol/v1",
+  "protocol_id": "d1_emission_color_transfer_purple_protocol_v1",
+  "study": "natural_image_subject_color_pilot",
+  "source_pilot": {"run_id": "emission_color_branch_4c9e55d_pilot", "git_commit": "4c9e55db134ea742b26ef362e11c5cfffdb78d7b", "analysis_sha256": "6845040fc1a9c991861ee0f5e3483729ffb6e2b43de57bca27ec8047a61339f8", "required_status": "passed"},
+  "target": {"stable_id": "D1GT:13/30.png", "a": 17.81286014684136, "b": -48.54887560415377, "C": 51.7135505359913, "h_degrees": 290.14837601118836},
+  "training": {"modifier_token": "<C*>", "initializer_token": "purple", "subjects": ["cube", "sphere", "cylinder"], "view_indices": [0, 8, 16], "prompt_template": "a photo of {subject} shape in <C*> color", "image_count": 9, "uses_subject_modifier_tokens": false, "uses_masks": false},
+  "approval_state": {"short_transfer_training_approved": true, "full_dataset_approved": false, "full_transfer_evaluation_approved": true}
+}
