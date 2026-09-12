@@ -38,4 +38,5 @@ def test_dry_run_writes_manifest_and_source_provenance(tmp_path):
     assert len((output / "generation_manifest.jsonl").read_text(encoding="utf-8").splitlines()) == 85
     provenance = json.loads((output / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["source_training"]["subject_token"] == "<S*>"
+    assert provenance["source_training"]["model_dir"].endswith("__d16c964__42/checkpoints")
     assert provenance["model_artifact_sha256"] is None

@@ -6,6 +6,7 @@
   "source_training": {
     "git_commit": "d16c9645337e3c7b4b361f6853de4491c65b4615",
     "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260912-160000__natural_image_subject_color_pilot__subject_recolor_gorilla_short100__d16c964__42",
+    "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260912-160000__natural_image_subject_color_pilot__subject_recolor_gorilla_short100__d16c964__42/checkpoints",
     "required_artifacts": [
       "<S*>.bin",
       "pytorch_custom_diffusion_weights.bin",

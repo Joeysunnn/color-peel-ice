@@ -64,6 +64,9 @@ def build_manifest(protocol: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_model_dir(model_dir: Path, protocol: dict[str, Any]) -> dict[str, str]:
+    expected_model_dir = Path(protocol["source_training"]["model_dir"]).resolve()
+    if model_dir.resolve() != expected_model_dir:
+        raise ValueError(f"model_dir must equal the protocol-bound source artifact directory: {expected_model_dir}")
     required = set(protocol["source_training"]["required_artifacts"])
     required.add(CUSTOM_DIFFUSION_WEIGHTS)
     missing = [name for name in sorted(required) if not (model_dir / name).is_file()]
