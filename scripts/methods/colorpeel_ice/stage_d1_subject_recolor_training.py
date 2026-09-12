@@ -44,7 +44,9 @@ def protocol(path: Path | None = None) -> dict[str, Any]:
     require(value.get("schema") == "natural_subject_recolor_training_protocol/v1", "Protocol differs")
     subject, data, approval = value.get("subject", {}), value.get("training_data", {}), value.get("approval_state", {})
     require(subject.get("modifier_token") == "<S*>" and subject.get("initializer_token") == "gorilla" and subject.get("prompt") == "a photo of <S*>", "Subject token contract differs")
-    require(data.get("image_names") == ["red", "yellow", "green", "cyan", "blue"] and data.get("original_subject_color_record") == "forbidden" and data.get("color_modifier_token") == "forbidden", "Training data identity differs")
+    expected_prompts = {name: f"a photo of <S*> in {name} color" for name in ("red", "yellow", "green", "cyan", "blue")}
+    require(data.get("image_names") == list(expected_prompts) and data.get("prompt_by_image") == expected_prompts and data.get("original_subject_color_record") == "forbidden" and data.get("color_modifier_token") == "forbidden", "Training data identity differs")
+    require(value.get("caa") == {"enabled": False, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"}, "CAA contract differs")
     require(data.get("use_repaired_binary_instance_mask") is True and approval.get("subject_only_short_training_approved") is True, "Training approval or mask contract differs")
     require(approval.get("mixed_shared_checkpoint_training_approved") is False, "Mixed training must remain forbidden")
     return value
@@ -89,17 +91,19 @@ def stage(source_root: Path, output_root: Path, protocol_path: Path | None = Non
     value = protocol(effective_protocol)
     images, source_mask = verified_source(source_root.resolve(), value)
     require(not output_root.exists() or not any(output_root.iterdir()), "Output root must be new or empty")
-    image_dir, mask_dir = output_root / "images", output_root / "masks"
-    image_dir.mkdir(parents=True)
-    mask_dir.mkdir()
-    records = []
+    output_root.mkdir(parents=True)
+    concepts, records = [], []
     for name in value["training_data"]["image_names"]:
-        image_destination, mask_destination = image_dir / f"{name}.png", mask_dir / f"{name}.png"
+        image_dir, mask_dir = output_root / name / "images", output_root / name / "masks"
+        image_dir.mkdir(parents=True)
+        mask_dir.mkdir()
+        image_destination, mask_destination = image_dir / "image.png", mask_dir / "image.png"
         expected_image = value["training_data"]["expected_image_sha256"][name]
         image_method = link_or_copy(images[name], image_destination, expected_image)
         mask_method = link_or_copy(source_mask, mask_destination, value["source_pilot"]["repaired_mask_sha256"])
-        records.append({"name": name, "image_sha256": expected_image, "mask_sha256": value["source_pilot"]["repaired_mask_sha256"], "image_staging_method": image_method, "mask_staging_method": mask_method})
-    concepts = [{"instance_prompt": [value["subject"]["prompt"]], "instance_data_dir": str(image_dir), "instance_mask_dir": str(mask_dir)}]
+        prompt = value["training_data"]["prompt_by_image"][name]
+        concepts.append({"instance_prompt": [prompt], "instance_data_dir": str(image_dir), "instance_mask_dir": str(mask_dir)})
+        records.append({"name": name, "prompt": prompt, "image_sha256": expected_image, "mask_sha256": value["source_pilot"]["repaired_mask_sha256"], "image_staging_method": image_method, "mask_staging_method": mask_method})
     concepts_path, manifest_path = output_root / "concepts.json", output_root / "staging_manifest.json"
     concepts_path.write_text(json.dumps(concepts, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     manifest_path.write_text(json.dumps({"schema": "natural_subject_recolor_training_staging_manifest/v1", "protocol_sha256": sha256(effective_protocol), "source_analysis_sha256": value["source_pilot"]["analysis_sha256"], "record_count": len(records), "records": records}, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -21,7 +21,7 @@ args:
   checkpointing_steps: 100
   seed: 42
   mixed_precision: "no"
-  cos_weight: 0.2
+  cos_weight: 0.0
   gradient_accumulation_steps: 1
   max_grad_norm: 1.0
   dataloader_num_workers: 2
@@ -36,6 +36,7 @@ protocol:
   source: d1_subject_recolor_gorilla_training_protocol_v1
   training_image_count: 5
   uses_instance_masks: true
+  caa: disabled_for_single_modifier_token
   color_modifier_token: forbidden
   original_subject_color_record: forbidden
   mixed_shared_checkpoint_training: forbidden

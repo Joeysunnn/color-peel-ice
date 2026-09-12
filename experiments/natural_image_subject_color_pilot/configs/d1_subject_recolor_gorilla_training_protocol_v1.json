@@ -19,6 +19,13 @@
   },
   "training_data": {
     "image_names": ["red", "yellow", "green", "cyan", "blue"],
+    "prompt_by_image": {
+      "red": "a photo of <S*> in red color",
+      "yellow": "a photo of <S*> in yellow color",
+      "green": "a photo of <S*> in green color",
+      "cyan": "a photo of <S*> in cyan color",
+      "blue": "a photo of <S*> in blue color"
+    },
     "expected_image_sha256": {
       "red": "3b56b1755c70367a57be2ca72d060ceb010fc2627894485579c9c17367ff58d9",
       "yellow": "c505c7403831af77de562816fca2bc59363976a348847eadb426e04213ba1610",
@@ -30,6 +37,7 @@
     "original_subject_color_record": "forbidden",
     "color_modifier_token": "forbidden"
   },
+  "caa": {"enabled": false, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"},
   "short_training": {"seed": 42, "max_train_steps": 100, "checkpointing_steps": 100},
   "approval_state": {"subject_only_short_training_approved": true, "mixed_shared_checkpoint_training_approved": false, "full_dataset_approved": false, "heldout_evaluation_approved": false}
 }

@@ -869,6 +869,8 @@ def main(args):
         args.modifier_token = args.modifier_token.split("+")
         args.initializer_token = args.initializer_token.split("+")
 
+        if len(args.modifier_token) < 2 and args.cos_weight != 0:
+            raise ValueError("cos_weight must be 0 when fewer than two modifier tokens are learned")
         if len(args.modifier_token) != len(args.initializer_token):
             raise ValueError("You must specify exactly one + separated initializer token for each modifier token.")
         if len(set(args.modifier_token)) != len(args.modifier_token):
@@ -1225,9 +1227,7 @@ def main(args):
                         matching_indices = (batch["input_ids"][0] == id).nonzero().squeeze()
                         if matching_indices.numel() > 0:
                             indices.append(matching_indices.item())
-                    if len(indices) == 1:
-                        indices.append(indices[0] + 1)
-                    cos = _compute_cosine(attention_maps, indices)
+                    cos = _compute_cosine(attention_maps, indices) if len(indices) >= 2 else torch.zeros((), device=loss.device)
                     raw_attention_loss = torch.zeros((), device=loss.device)
                     weighted_attention_loss = raw_attention_loss
                     leakage_mass = torch.zeros((), device=loss.device)

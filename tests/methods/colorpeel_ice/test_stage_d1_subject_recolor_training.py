@@ -33,10 +33,10 @@ def test_stage_uses_only_five_auxiliary_images_and_repaired_masks(tmp_path):
     analysis.write_text(json.dumps({"automatic_safety_pass": True, "added_bottom_region_recolored": True, "record_count": 5}), encoding="utf-8")
     (source / stage.REPAIR_NAME).write_text(json.dumps({"repaired_mask_sha256": mask_hash, "repaired_mask_relative_path": "masks/repaired_mask.png"}), encoding="utf-8")
     protocol = tmp_path / "protocol.json"
-    protocol.write_text(json.dumps({"schema": "natural_subject_recolor_training_protocol/v1", "source_pilot": {"analysis_sha256": digest(analysis), "results_sha256": digest(results), "repaired_mask_sha256": mask_hash, "required_automatic_safety_pass": True}, "subject": {"modifier_token": "<S*>", "initializer_token": "gorilla", "prompt": "a photo of <S*>"}, "training_data": {"image_names": names, "expected_image_sha256": hashes, "use_repaired_binary_instance_mask": True, "original_subject_color_record": "forbidden", "color_modifier_token": "forbidden"}, "approval_state": {"subject_only_short_training_approved": True, "mixed_shared_checkpoint_training_approved": False}}, indent=2), encoding="utf-8")
+    prompts = {name: f"a photo of <S*> in {name} color" for name in names}
+    protocol.write_text(json.dumps({"schema": "natural_subject_recolor_training_protocol/v1", "source_pilot": {"analysis_sha256": digest(analysis), "results_sha256": digest(results), "repaired_mask_sha256": mask_hash, "required_automatic_safety_pass": True}, "subject": {"modifier_token": "<S*>", "initializer_token": "gorilla", "prompt": "a photo of <S*>"}, "training_data": {"image_names": names, "prompt_by_image": prompts, "expected_image_sha256": hashes, "use_repaired_binary_instance_mask": True, "original_subject_color_record": "forbidden", "color_modifier_token": "forbidden"}, "caa": {"enabled": False, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"}, "approval_state": {"subject_only_short_training_approved": True, "mixed_shared_checkpoint_training_approved": False}}, indent=2), encoding="utf-8")
     result = stage.stage(source, output, protocol)
     concepts = json.loads(Path(result["concepts"]).read_text(encoding="utf-8"))
     assert result["record_count"] == 5
-    assert concepts == [{"instance_prompt": ["a photo of <S*>"], "instance_data_dir": str(output / "images"), "instance_mask_dir": str(output / "masks")}]
-    assert {path.stem for path in (output / "images").iterdir()} == set(names)
-    assert {path.stem for path in (output / "masks").iterdir()} == set(names)
+    assert concepts == [{"instance_prompt": [prompts[name]], "instance_data_dir": str(output / name / "images"), "instance_mask_dir": str(output / name / "masks")} for name in names]
+    assert {path.name for path in output.iterdir() if path.is_dir()} == set(names)
