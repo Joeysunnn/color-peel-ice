@@ -1,0 +1,60 @@
+{
+  "schema": "gamut_only_lch_injection_protocol/v1",
+  "protocol_id": "d1_gamut_only_lch_injection_protocol_v1",
+  "study": "natural_image_subject_color_pilot",
+  "frozen_inputs": {
+    "selection_canonical_sha256": "33d9b2d5fb404786d63ac23b161c7578a08442ecd24691ca4c221721e88ee0a6",
+    "renderer_protocol_canonical_sha256": "476d01c5a383ead7d1ceec5c276bb26d809cf2fabf51cd81e0c49695cc4aa48e",
+    "source_neutral_manifest_sha256": "04d843102f0b5a8ade7c2f74f8af32a6dc406448d49522a0b12a23454a06fa4b",
+    "source_neutral_contract_sha256": "cc703f95dbcd9d10345283fb16f21903132129b757dd6bc0dd079d1240649cc8"
+  },
+  "source_neutral_render": {
+    "reuse_only": true,
+    "source_batch": "d1_gamut_aware_lch_injection_protocol_v1",
+    "material": "Rubber",
+    "lab_d65": [50.0, 0.0, 0.0],
+    "shapes": ["cube", "sphere", "cylinder"],
+    "view_indices": [0, 8, 16],
+    "render_seed": 42
+  },
+  "targets": [
+    {"stable_id": "D1GT:19/31.png", "a": 9.43264458499643, "b": 17.10049193148857},
+    {"stable_id": "D1GT:81/130.png", "a": 63.21805661727065, "b": 54.85769274644318}
+  ],
+  "injection": {
+    "space": "CIELAB D65",
+    "object_mask": "binary_255_only_full_mask",
+    "measurement_mask": "renderer_protocol_eroded_interior",
+    "rule": "preserve_pixel_L_fixed_target_hue_full_target_chroma_unless_gamut_limited",
+    "C_desired": "C_target_for_every_object_pixel",
+    "background": "byte_identical",
+    "gamut": {
+      "method": "fixed_hue_Lab_to_linear_sRGB_binary_search",
+      "C_search_interval": [0.0, 200.0],
+      "iterations": 32,
+      "margin": 0.995,
+      "adaptation": "only_reduce_chroma_along_fixed_target_hue",
+      "rgb_hard_clipping": "forbidden"
+    },
+    "png": "sRGB_uint8_round_half_up"
+  },
+  "pilot": {
+    "request_count": 18,
+    "median_e_ch_max": 3.0,
+    "p90_e_ch_max": 5.0,
+    "overall_render_p90_e_ch_max": 5.0
+  },
+  "stop_conditions": {
+    "any_rgb_clipping_or_background_change": "freeze_negative",
+    "any_target_gate_failure": "freeze_negative",
+    "target_median_gamut_limited_ratio_gt": 0.5,
+    "target_median_gamut_reduction_gt": 0.25,
+    "target_p95_gamut_reduction_gt": 0.5,
+    "action": "freeze_negative_no_full90_no_training"
+  },
+  "approval_state": {
+    "pilot_approved": true,
+    "full_confirmation_approved": false,
+    "training_approved": false
+  }
+}
