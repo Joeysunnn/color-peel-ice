@@ -62,7 +62,7 @@ def _slug(stable_id: str) -> str:
 def target_lch(a: float, b: float) -> tuple[float, float]:
     chroma = math.hypot(a, b)
     require(math.isfinite(chroma) and chroma > 0.0, "Target chroma differs")
-    return chroma, math.degrees(math.atan2(b, a))
+    return chroma, math.degrees(math.atan2(b, a)) % 360.0
 
 
 def pilot_requests() -> list[dict[str, Any]]:

@@ -20,6 +20,7 @@ class EmissionColorBranchPilotTests(unittest.TestCase):
         self.assertEqual({row["shape"] for row in requests}, {"cube", "sphere", "cylinder"})
         self.assertEqual({row["view_index"] for row in requests}, {0, 8, 16})
         self.assertTrue(all(row["material"] == "Emission" and row["emission_strength"] == 1.0 for row in requests))
+        self.assertTrue(all(0.0 <= row["target_h_degrees"] < 360.0 for row in requests))
         for stable_id in {row["stable_id"] for row in requests}:
             group = [row for row in requests if row["stable_id"] == stable_id]
             self.assertEqual(len(group), 9)
