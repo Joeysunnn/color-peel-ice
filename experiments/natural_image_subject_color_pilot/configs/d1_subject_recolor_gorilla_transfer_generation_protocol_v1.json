@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_gorilla_transfer_generation_protocol_v1",
+  "status": "authorized_subject_only_diagnostic",
+  "purpose": "fixed subject-token transfer diagnostic; no training and no color-token loading",
+  "source_training": {
+    "git_commit": "d16c9645337e3c7b4b361f6853de4491c65b4615",
+    "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260912-160000__natural_image_subject_color_pilot__subject_recolor_gorilla_short100__d16c964__42",
+    "required_artifacts": [
+      "<S*>.bin",
+      "pytorch_custom_diffusion_weights.bin",
+      "embedding_update_audit.json",
+      "training_metrics.jsonl"
+    ],
+    "forbidden_artifacts": ["<C*>.bin"],
+    "subject_token": "<S*>"
+  },
+  "sampling": {
+    "seeds": [42, 43, 44, 45, 46],
+    "num_inference_steps": 100,
+    "guidance_scale": 6.0,
+    "expected_image_count": 85
+  },
+  "prompt_groups": [
+    {
+      "group": "identity_baseline",
+      "items": [
+        {"id": "identity_photo", "prompt": "a photo of <S*>"},
+        {"id": "identity_closeup", "prompt": "a close-up photo of <S*>"}
+      ]
+    },
+    {
+      "group": "seen_color_consistency",
+      "items": [
+        {"id": "seen_red", "prompt": "a photo of <S*> in red color"},
+        {"id": "seen_green", "prompt": "a photo of <S*> in green color"},
+        {"id": "seen_blue", "prompt": "a photo of <S*> in blue color"}
+      ]
+    },
+    {
+      "group": "unseen_color_transfer_primary",
+      "items": [
+        {"id": "unseen_purple", "prompt": "a photo of <S*> in purple color"},
+        {"id": "unseen_orange", "prompt": "a photo of <S*> in orange color"},
+        {"id": "unseen_pink", "prompt": "a photo of <S*> in pink color"}
+      ]
+    },
+    {
+      "group": "background_context_transfer",
+      "items": [
+        {"id": "context_white", "prompt": "a photo of <S*> on a plain white background"},
+        {"id": "context_museum", "prompt": "a photo of <S*> in a museum"},
+        {"id": "context_park", "prompt": "a photo of <S*> in a park"},
+        {"id": "context_pedestal", "prompt": "a photo of <S*> on a pedestal"}
+      ]
+    },
+    {
+      "group": "view_composition_transfer",
+      "items": [
+        {"id": "view_side", "prompt": "a side view photo of <S*>"},
+        {"id": "view_low_angle", "prompt": "a low-angle photo of <S*>"},
+        {"id": "view_full_body", "prompt": "a full-body photo of <S*>"}
+      ]
+    },
+    {
+      "group": "hard_diagnostic",
+      "items": [
+        {"id": "hard_purple_white", "prompt": "a photo of <S*> in purple color on a plain white background"},
+        {"id": "hard_side_orange", "prompt": "a side view photo of <S*> in orange color"}
+      ]
+    }
+  ],
+  "next_step": "human_review_only; no joint training or dataset expansion is authorized"
+}
