@@ -8,10 +8,6 @@ import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from src.methods.colorpeel_ice import renderer_color_calibration as calibration
-from src.methods.colorpeel_ice import natural_image_target_selection as selection
-
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROTOCOL_RELPATH = "experiments/natural_image_subject_color_pilot/configs/d1_emission_color_branch_pilot_protocol_v1.json"
 SHAPE_ORDINAL = {"cube": 0, "sphere": 1, "cylinder": 2}
@@ -30,7 +26,7 @@ def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
-def load_protocol() -> dict[str, Any]:
+def load_protocol(*, validate_natural_targets: bool = True) -> dict[str, Any]:
     try:
         value = json.loads((REPO_ROOT / PROTOCOL_RELPATH).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -45,13 +41,17 @@ def load_protocol() -> dict[str, Any]:
     require(pilot.get("shapes") == ["cube", "sphere", "cylinder"] and pilot.get("view_indices") == [0, 8, 16] and pilot.get("request_count") == 18, "Pilot matrix differs")
     require(pilot.get("median_e_ch_max") == 3.0 and pilot.get("p90_e_ch_max") == 5.0 and pilot.get("overall_render_p90_e_ch_max") == 5.0, "Pilot gate differs")
     require(value.get("approval_state") == {"pilot_approved": True, "full_dataset_approved": False, "training_approved": False}, "Approval state differs")
-    development = {record["source"]["stable_id"]: record for record in selection.pipeline_development_records()}
     targets = value.get("targets")
     require(isinstance(targets, list) and len(targets) == 2, "Target count differs")
-    for target in targets:
-        source = development.get(target.get("stable_id"))
-        require(source is not None and target.get("a") == source["target"]["a"] and target.get("b") == source["target"]["b"],
-                "Target is not the frozen natural-image color")
+    if validate_natural_targets:
+        # Blender's bundled Python omits Pillow, which target-selection imports.
+        # Render receives only a prevalidated, hashed plan; plan/analyze retain this check.
+        from src.methods.colorpeel_ice import natural_image_target_selection as selection
+        development = {record["source"]["stable_id"]: record for record in selection.pipeline_development_records()}
+        for target in targets:
+            source = development.get(target.get("stable_id"))
+            require(source is not None and target.get("a") == source["target"]["a"] and target.get("b") == source["target"]["b"],
+                    "Target is not the frozen natural-image color")
     return value
 
 
@@ -65,14 +65,29 @@ def target_lch(a: float, b: float) -> tuple[float, float]:
     return chroma, math.degrees(math.atan2(b, a)) % 360.0
 
 
-def pilot_requests() -> list[dict[str, Any]]:
-    protocol = load_protocol()
+def _lab_d65_to_linear_srgb(L: float, a: float, b: float) -> list[float]:
+    fy = (L + 16.0) / 116.0
+    fx, fz = fy + a / 500.0, fy - b / 200.0
+    epsilon, kappa = 216.0 / 24389.0, 24389.0 / 27.0
+    def inverse_f(value: float) -> float:
+        cube = value * value * value
+        return cube if cube > epsilon else (116.0 * value - 16.0) / kappa
+    X, Y, Z = inverse_f(fx) * 0.95047, inverse_f(fy), inverse_f(fz) * 1.08883
+    xyz = [X, Y, Z]
+    matrix = [[3.2404542, -1.5371385, -0.4985314], [-0.9692660, 1.8760108, 0.0415560],
+              [0.0556434, -0.2040259, 1.0572252]]
+    return [sum(row[index] * xyz[index] for index in range(3)) for row in matrix]
+
+
+def pilot_requests(*, validate_natural_targets: bool = True) -> list[dict[str, Any]]:
+    protocol = load_protocol(validate_natural_targets=validate_natural_targets)
     rows = []
     for target_index, target in enumerate(protocol["targets"]):
         stable_id, a, b = target.get("stable_id"), target.get("a"), target.get("b")
         require(isinstance(stable_id, str) and type(a) in {int, float} and type(b) in {int, float}, "Target differs")
         chroma, hue = target_lch(float(a), float(b))
-        linear = calibration.assert_linear_rgb_in_gamut(calibration.lab_d65_to_linear_srgb(50.0, float(a), float(b)))
+        linear = _lab_d65_to_linear_srgb(50.0, float(a), float(b))
+        require(all(math.isfinite(channel) and 0.0 <= channel <= 1.0 for channel in linear), "Target Lab input is out of linear-sRGB gamut")
         for shape in protocol["pilot"]["shapes"]:
             for view in protocol["pilot"]["view_indices"]:
                 rows.append({"request_id": f"emission__{_slug(stable_id)}__{shape}__v{view:02d}", "stable_id": stable_id,

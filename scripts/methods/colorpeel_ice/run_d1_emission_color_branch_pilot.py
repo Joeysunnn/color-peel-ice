@@ -78,10 +78,10 @@ def plan(root: Path, asset_root: Path) -> dict[str, Any]:
     return value
 
 
-def _load_plan_contract(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def _load_plan_contract(root: Path, *, validate_natural_targets: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
     plan_value = json.loads((root / PLAN_NAME).read_text(encoding="utf-8"))
     contract = json.loads((root / CONTRACT_NAME).read_text(encoding="utf-8"))
-    requests = pilot.pilot_requests()
+    requests = pilot.pilot_requests(validate_natural_targets=validate_natural_targets)
     expected_plan = {"schema": "d1_emission_color_branch_pilot_plan/v1", "requests": requests,
                      "requests_sha256": pilot.canonical_sha256(requests)}
     pilot.require(set(plan_value) == set(expected_plan) | {"contract_sha256"} and {key: plan_value[key] for key in expected_plan} == expected_plan,
@@ -92,7 +92,7 @@ def _load_plan_contract(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
                          "camera_adapter_script_sha256": _script_hash(Path(direct.__file__).resolve()),
                          "lab_measurement_script_sha256": _script_hash(Path(lab.__file__).resolve()),
                          "protocol_relative_path": pilot.PROTOCOL_RELPATH,
-                         "protocol_canonical_sha256": pilot.canonical_sha256(pilot.load_protocol()), "assets": contract.get("assets"),
+                         "protocol_canonical_sha256": pilot.canonical_sha256(pilot.load_protocol(validate_natural_targets=validate_natural_targets)), "assets": contract.get("assets"),
                          "requests_sha256": expected_plan["requests_sha256"]}
     pilot.require(contract == expected_contract and plan_value["contract_sha256"] == pilot.canonical_sha256(contract), "Contract provenance differs")
     pilot.require(isinstance(contract["assets"], dict) and set(contract["assets"]) == set(ASSETS), "Asset contract differs")
@@ -178,7 +178,7 @@ def _render_one(root: Path, request: Mapping[str, Any], contract: Mapping[str, A
 
 def render(root: Path, asset_root: Path) -> dict[str, Any]:
     pilot.require(shared.bpy is not None, "render requires Blender")
-    plan_value, contract = _load_plan_contract(root)
+    plan_value, contract = _load_plan_contract(root, validate_natural_targets=False)
     pilot.require({path.name for path in root.iterdir()} == {PLAN_NAME, CONTRACT_NAME}, "Run root contains existing output")
     records = [_render_one(root, request, contract, _runtime_assets(asset_root, contract)) for request in plan_value["requests"]]
     value = {"schema": "d1_emission_color_branch_pilot_manifest/v1", "contract_sha256": pilot.canonical_sha256(contract), "request_count": 18, "records": records}

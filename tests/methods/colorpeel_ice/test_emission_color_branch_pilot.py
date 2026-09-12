@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scripts.methods.colorpeel_ice import run_d1_emission_color_branch_pilot as runner
 from src.methods.colorpeel_ice import emission_color_branch_pilot as pilot
+from src.methods.colorpeel_ice import renderer_color_calibration as calibration
 
 
 class EmissionColorBranchPilotTests(unittest.TestCase):
@@ -26,6 +27,11 @@ class EmissionColorBranchPilotTests(unittest.TestCase):
             self.assertEqual(len(group), 9)
             self.assertEqual(len({tuple(row["socket_rgba"]) for row in group}), 1)
             self.assertTrue(all(0.0 <= channel <= 1.0 for row in group for channel in row["linear_rgb"]))
+
+    def test_blender_safe_lab_conversion_matches_frozen_renderer_math(self) -> None:
+        for request in pilot.pilot_requests():
+            expected = calibration.lab_d65_to_linear_srgb(request["L_input"], request["target_a"], request["target_b"])
+            self.assertEqual(request["linear_rgb"], expected)
 
     def test_color_gate_and_safety_fail_closed(self) -> None:
         rows = self._passing_rows()
