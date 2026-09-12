@@ -1,0 +1,25 @@
+schema_version: 1
+status: authorized_one_off_quick_transfer_test
+stage: generate_emission_transfer_quick
+run:
+  study: natural_image_subject_color_pilot
+  variant: emission_color_transfer_orange_quick40
+  seed: 20260912
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_quick40_protocol_v1.json
+args:
+  parent-training-run: ${COLORPEEL_EMISSION_TRANSFER_ORANGE_TRAIN_RUN}
+  model-dir: ${COLORPEEL_EMISSION_TRANSFER_ORANGE_MODEL_DIR}
+  source-manifest: ${COLORPEEL_EMISSION_TRANSFER_ORANGE_QUICK40_SOURCE_MANIFEST}
+  protocol: experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_quick40_protocol_v1.json
+  device: cuda:0
+  dtype: float16
+  pretrained-model-name-or-path: CompVis/stable-diffusion-v1-4
+protocol:
+  images: 40
+  selection: random_sample_of_five_transfer_templates_from_user_manifest
+  samples_per_prompt: 8
+  one_off_quick_test_only: true
+  no_training: true
+  no_dataset_expansion: true
