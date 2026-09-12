@@ -1,0 +1,35 @@
+{
+  "schema": "natural_subject_recolor_training_protocol/v1",
+  "protocol_id": "d1_subject_recolor_gorilla_training_protocol_v1",
+  "study": "natural_image_subject_color_pilot",
+  "source_pilot": {
+    "run_id": "subject_recolor_border_repair_d1gt13_33cb2de_20260912",
+    "git_commit": "33cb2de15103dbb9dca39bb15a9201a3f175fd87",
+    "analysis_sha256": "100a591c5826460fd7735300e7c5e27d5619598a21f8d58866ea87a91de272bc",
+    "results_sha256": "f73310c54d5077a710aeefe7f2b165a325aa8a40a347c40c7de188483ea22151",
+    "repaired_mask_sha256": "f318974099cb26b24706b880f186b97ce910d30d6305ed2952c49031fd1dbfc2",
+    "required_automatic_safety_pass": true
+  },
+  "subject": {
+    "stable_id": "D1GT:13/30.png",
+    "modifier_token": "<S*>",
+    "initializer_token": "gorilla",
+    "prompt": "a photo of <S*>",
+    "semantic_basis": "frozen replacement selection describes the subject as a blue gorilla statue"
+  },
+  "training_data": {
+    "image_names": ["red", "yellow", "green", "cyan", "blue"],
+    "expected_image_sha256": {
+      "red": "3b56b1755c70367a57be2ca72d060ceb010fc2627894485579c9c17367ff58d9",
+      "yellow": "c505c7403831af77de562816fca2bc59363976a348847eadb426e04213ba1610",
+      "green": "35335c16d50d7bd88549e9a5e53cd0d1ca958b50a1455a38d55296201aeac481",
+      "cyan": "42645f0be0127da0b7fcaddb1ff4838169e745fffc5cf1807b03c0bbfef12faa",
+      "blue": "fde11fe2aab6bdda365f7b000338d11f65f719e82a66d22be28fe9b9652e0352"
+    },
+    "use_repaired_binary_instance_mask": true,
+    "original_subject_color_record": "forbidden",
+    "color_modifier_token": "forbidden"
+  },
+  "short_training": {"seed": 42, "max_train_steps": 100, "checkpointing_steps": 100},
+  "approval_state": {"subject_only_short_training_approved": true, "mixed_shared_checkpoint_training_approved": false, "full_dataset_approved": false, "heldout_evaluation_approved": false}
+}
