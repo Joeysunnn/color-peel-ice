@@ -39,6 +39,6 @@
     "color_modifier_token": "forbidden"
   },
   "caa": {"enabled": false, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"},
-  "followup_training": {"seed": 42, "authorized_steps": [250, 500, 1000], "independent_runs": true},
+  "followup_training": {"seed": 42, "authorized_steps": [250, 500, 750, 1000], "independent_runs": true},
   "approval_state": {"statue_prompt_underfit_followup_approved": true, "mixed_shared_checkpoint_training_approved": false, "full_dataset_approved": false, "heldout_evaluation_approved": false}
 }

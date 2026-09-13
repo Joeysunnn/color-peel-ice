@@ -49,7 +49,7 @@ def test_shipped_statue_followup_protocol_locks_the_literal_statue_prompt():
     value = stage.protocol(
         ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_gorilla_statue_training_protocol_v2.json"
     )
-    assert value["followup_training"]["authorized_steps"] == [250, 500, 1000]
+    assert value["followup_training"]["authorized_steps"] == [250, 500, 750, 1000]
     assert set(value["training_data"]["prompt_by_image"].values()) == {
         f"a photo of <S*> statue in {color} color"
         for color in ("red", "yellow", "green", "cyan", "blue")
