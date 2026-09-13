@@ -9,6 +9,9 @@ from PIL import Image
 from scripts.methods.colorpeel_ice import stage_d1_subject_recolor_training as stage
 
 
+ROOT = Path(__file__).parents[3]
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -40,3 +43,14 @@ def test_stage_uses_only_five_auxiliary_images_and_repaired_masks(tmp_path):
     assert result["record_count"] == 5
     assert concepts == [{"instance_prompt": [prompts[name]], "instance_data_dir": str(output / name / "images"), "instance_mask_dir": str(output / name / "masks")} for name in names]
     assert {path.name for path in output.iterdir() if path.is_dir()} == set(names)
+
+
+def test_shipped_statue_followup_protocol_locks_the_literal_statue_prompt():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_gorilla_statue_training_protocol_v2.json"
+    )
+    assert value["followup_training"]["authorized_steps"] == [250, 500, 1000]
+    assert set(value["training_data"]["prompt_by_image"].values()) == {
+        f"a photo of <S*> statue in {color} color"
+        for color in ("red", "yellow", "green", "cyan", "blue")
+    }

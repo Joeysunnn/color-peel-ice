@@ -1,0 +1,31 @@
+schema_version: 1
+status: authorized_subject_only_underfit_followup
+stage: train
+run: {study: natural_image_subject_color_pilot, variant: subject_recolor_gorilla_statue_1000, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_gorilla_statue_training_protocol_v2.json
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_SUBJECT_RECOLOR_GORILLA_STATUE_CONCEPTS}
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 1000
+  checkpointing_steps: 1000
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.0
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.0
+  adam_epsilon: 1.0e-8
+  hflip: true
+  modifier_token: "<S*>"
+  initializer_token: gorilla
+protocol: {source: d1_subject_recolor_gorilla_statue_training_protocol_v2, training_image_count: 5, uses_instance_masks: true, caa: disabled_for_single_modifier_token, color_modifier_token: forbidden, original_subject_color_record: forbidden, mixed_shared_checkpoint_training: forbidden}
