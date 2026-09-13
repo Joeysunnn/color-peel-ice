@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_gorilla_statue_750_reconstruction_protocol_v1",
+  "purpose": "750-step training-prompt reconstruction before transfer diagnostics",
+  "source_checkpoints": [{"steps": 750, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-130000__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_750__61c588d__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-130000__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_750__61c588d__42/checkpoints"}],
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 15},
+  "prompts": [{"color": "red", "prompt": "a photo of <S*> statue in red color"}, {"color": "green", "prompt": "a photo of <S*> statue in green color"}, {"color": "blue", "prompt": "a photo of <S*> statue in blue color"}],
+  "forbidden_token_artifacts": ["<C*>.bin"]
+}

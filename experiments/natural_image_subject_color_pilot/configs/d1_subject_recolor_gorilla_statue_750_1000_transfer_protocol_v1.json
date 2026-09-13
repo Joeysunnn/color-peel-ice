@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_gorilla_statue_750_1000_transfer_protocol_v1",
+  "purpose": "fixed 750-vs-1000 subject-token diagnostic; user-specified prompts only",
+  "source_checkpoints": [
+    {"steps": 750, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-130000__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_750__61c588d__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-130000__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_750__61c588d__42/checkpoints"},
+    {"steps": 1000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-102000__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_1000__b717584__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-102000__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_1000__b717584__42/checkpoints"}
+  ],
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 170},
+  "prompts": [
+    {"color": "identity_photo", "prompt": "a photo of <S*>"}, {"color": "identity_closeup", "prompt": "a close-up photo of <S*>"},
+    {"color": "seen_red", "prompt": "a photo of <S*> in red color"}, {"color": "seen_green", "prompt": "a photo of <S*> in green color"}, {"color": "seen_blue", "prompt": "a photo of <S*> in blue color"},
+    {"color": "unseen_purple", "prompt": "a photo of <S*> in purple color"}, {"color": "unseen_orange", "prompt": "a photo of <S*> in orange color"}, {"color": "unseen_pink", "prompt": "a photo of <S*> in pink color"},
+    {"color": "context_white", "prompt": "a photo of <S*> on a plain white background"}, {"color": "context_museum", "prompt": "a photo of <S*> in a museum"}, {"color": "context_park", "prompt": "a photo of <S*> in a park"}, {"color": "context_pedestal", "prompt": "a photo of <S*> on a pedestal"},
+    {"color": "view_side", "prompt": "a side view photo of <S*>"}, {"color": "view_low_angle", "prompt": "a low-angle photo of <S*>"}, {"color": "view_full_body", "prompt": "a full-body photo of <S*>"},
+    {"color": "hard_purple_white", "prompt": "a photo of <S*> in purple color on a plain white background"}, {"color": "hard_side_orange", "prompt": "a side view photo of <S*> in orange color"}
+  ],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "next_step": "human review only; no joint training authorized"
+}
