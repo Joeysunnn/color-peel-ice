@@ -135,7 +135,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     protocol = read_json(args.protocol)
     rows = build_manifest(protocol)
-    args.output_dir.mkdir(parents=True, exist_ok=False)
+    if args.output_dir.exists() and any(args.output_dir.iterdir()):
+        raise FileExistsError(f"output directory must be new or empty: {args.output_dir}")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl(rows, args.output_dir / "generation_manifest.jsonl")
     provenance = {"protocol_path": str(args.protocol.resolve()), "protocol_sha256": sha256(args.protocol), "model_artifact_sha256": None}
     if args.dry_run:

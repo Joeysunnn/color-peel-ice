@@ -20,3 +20,10 @@ def test_reconstruction_grid_is_45_training_prompt_images():
     assert {row["prompt"] for row in rows} == {
         "a photo of <S*> statue in red color", "a photo of <S*> statue in green color", "a photo of <S*> statue in blue color",
     }
+
+
+def test_dry_run_accepts_launcher_created_empty_output_directory(tmp_path):
+    output = tmp_path / "inference"
+    output.mkdir()
+    assert module.main(["--protocol", str(PROTOCOL), "--output-dir", str(output), "--dry-run"]) == 0
+    assert len((output / "generation_manifest.jsonl").read_text(encoding="utf-8").splitlines()) == 45
