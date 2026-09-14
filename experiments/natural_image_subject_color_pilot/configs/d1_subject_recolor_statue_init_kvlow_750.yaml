@@ -1,0 +1,7 @@
+schema_version: 1
+status: authorized_subject_only_step_dose
+stage: train
+run: {study: natural_image_subject_color_pilot, variant: subject_recolor_statue_init_kvlow_750, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_statue_init_kvlow_step_dose_protocol_v4.json
+args: {pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4, concepts_list: "${COLORPEEL_STATUE_INIT_STEP_DOSE_CONCEPTS}", resolution: 512, train_batch_size: 1, learning_rate: 1.0e-5, kv_learning_rate: 1.0e-6, scale_lr: true, lr_scheduler: constant, lr_warmup_steps: 0, max_train_steps: 750, checkpointing_steps: 750, seed: 42, mixed_precision: "no", cos_weight: 0.0, gradient_accumulation_steps: 1, max_grad_norm: 1.0, dataloader_num_workers: 2, adam_beta1: 0.9, adam_beta2: 0.999, adam_weight_decay: 0.0, adam_epsilon: 1.0e-8, hflip: true, modifier_token: "<S*>", initializer_token: statue}

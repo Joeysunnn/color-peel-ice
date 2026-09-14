@@ -69,3 +69,15 @@ def test_statue_initializer_ablation_protocol_locks_category_prompt():
         f"a photo of <S*> gorilla statue in {color} color"
         for color in ("red", "yellow", "green", "cyan", "blue")
     }
+
+
+def test_statue_initializer_low_kv_step_dose_protocol_locks_only_750_and_1000_steps():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_protocol_v4.json"
+    )
+    assert value["followup_training"] == {
+        "authorized_steps": [750, 1000],
+        "kv_learning_rate": 1.0e-6,
+        "from_scratch": True,
+        "transfer": "forbidden",
+    }
