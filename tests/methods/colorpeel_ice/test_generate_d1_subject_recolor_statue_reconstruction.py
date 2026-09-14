@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "scripts" / "methods" / "colorpeel_ice" / "generate_d1_subject_recolor_statue_reconstruction.py"
 PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_gorilla_statue_reconstruction_generation_protocol_v1.json"
+ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_protocol_v1.json"
 SPEC = importlib.util.spec_from_file_location("statue_reconstruction", SCRIPT)
 module = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -42,4 +43,16 @@ def test_checkpoint_ids_keep_same_step_ablation_outputs_distinct():
     assert {row["id"] for row in rows} == {"kvfull-500-red-seed-42", "kvlow-500-red-seed-42"}
     assert {row["image_path"] for row in rows} == {
         "images/kvfull-500/red-seed-42.png", "images/kvlow-500/red-seed-42.png",
+    }
+
+
+def test_statue_initializer_ablation_reconstruction_grid_is_bound_and_disjoint():
+    rows = module.build_manifest(json.loads(ABLATION_PROTOCOL.read_text(encoding="utf-8")))
+    assert len(rows) == 30
+    assert {row["checkpoint_id"] for row in rows} == {"kvfull-500", "kvlow-500"}
+    assert len({row["image_path"] for row in rows}) == 30
+    assert {row["prompt"] for row in rows} == {
+        "a photo of <S*> gorilla statue in red color",
+        "a photo of <S*> gorilla statue in green color",
+        "a photo of <S*> gorilla statue in blue color",
     }

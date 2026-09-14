@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_statue_init_kv_ablation_reconstruction_protocol_v1",
+  "purpose": "compare statue-initialized full versus reduced K/V learning rate at fixed 500 steps before transfer evaluation",
+  "source_checkpoints": [
+    {
+      "id": "kvfull-500",
+      "steps": 500,
+      "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-090000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvfull_500__86bc45e__42",
+      "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-090000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvfull_500__86bc45e__42/checkpoints"
+    },
+    {
+      "id": "kvlow-500",
+      "steps": 500,
+      "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-091000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvlow_500__86bc45e__42",
+      "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-091000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvlow_500__86bc45e__42/checkpoints"
+    }
+  ],
+  "sampling": {
+    "seeds": [42, 43, 44, 45, 46],
+    "num_inference_steps": 100,
+    "guidance_scale": 6.0,
+    "expected_image_count": 30
+  },
+  "prompts": [
+    {"color": "red", "prompt": "a photo of <S*> gorilla statue in red color"},
+    {"color": "green", "prompt": "a photo of <S*> gorilla statue in green color"},
+    {"color": "blue", "prompt": "a photo of <S*> gorilla statue in blue color"}
+  ],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "next_step": "human reconstruction review; no transfer, context augmentation, or joint training is authorized by this protocol"
+}
