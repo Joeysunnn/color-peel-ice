@@ -27,3 +27,19 @@ def test_dry_run_accepts_launcher_created_empty_output_directory(tmp_path):
     output.mkdir()
     assert module.main(["--protocol", str(PROTOCOL), "--output-dir", str(output), "--dry-run"]) == 0
     assert len((output / "generation_manifest.jsonl").read_text(encoding="utf-8").splitlines()) == 45
+
+
+def test_checkpoint_ids_keep_same_step_ablation_outputs_distinct():
+    protocol = {
+        "source_checkpoints": [
+            {"id": "kvfull-500", "steps": 500, "model_dir": "/tmp/full"},
+            {"id": "kvlow-500", "steps": 500, "model_dir": "/tmp/low"},
+        ],
+        "sampling": {"seeds": [42], "num_inference_steps": 10, "guidance_scale": 1.0, "expected_image_count": 2},
+        "prompts": [{"color": "red", "prompt": "a photo of <S*> gorilla statue in red color"}],
+    }
+    rows = module.build_manifest(protocol)
+    assert {row["id"] for row in rows} == {"kvfull-500-red-seed-42", "kvlow-500-red-seed-42"}
+    assert {row["image_path"] for row in rows} == {
+        "images/kvfull-500/red-seed-42.png", "images/kvlow-500/red-seed-42.png",
+    }

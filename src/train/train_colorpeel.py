@@ -567,6 +567,12 @@ def parse_args(input_args=None):
         help="Initial learning rate (after the potential warmup period) to use.",
     )
     parser.add_argument(
+        "--kv_learning_rate",
+        type=float,
+        default=None,
+        help="Optional Custom Diffusion K/V learning rate; defaults to --learning_rate.",
+    )
+    parser.add_argument(
         "--scale_lr",
         action="store_true",
         default=False,
@@ -1016,9 +1022,10 @@ def main(args):
         torch.backends.cuda.matmul.allow_tf32 = True
 
     if args.scale_lr:
-        args.learning_rate = (
-            args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
-        )
+        scale = args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+        args.learning_rate = args.learning_rate * scale
+        if args.kv_learning_rate is not None:
+            args.kv_learning_rate = args.kv_learning_rate * scale
         if args.with_prior_preservation:
             args.learning_rate = args.learning_rate * 2.0
 
@@ -1061,10 +1068,15 @@ def main(args):
         optimizer_class = torch.optim.AdamW
 
     # Optimizer creation
+    kv_learning_rate = args.learning_rate if args.kv_learning_rate is None else args.kv_learning_rate
+    optimizer_parameters = (
+        [
+            {"params": text_encoder.get_input_embeddings().parameters(), "lr": args.learning_rate},
+            {"params": custom_diffusion_layers.parameters(), "lr": kv_learning_rate},
+        ] if args.modifier_token is not None else custom_diffusion_layers.parameters()
+    )
     optimizer = optimizer_class(
-        itertools.chain(text_encoder.get_input_embeddings().parameters(), custom_diffusion_layers.parameters())
-        if args.modifier_token is not None
-        else custom_diffusion_layers.parameters(),
+        optimizer_parameters,
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,

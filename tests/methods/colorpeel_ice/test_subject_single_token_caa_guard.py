@@ -17,3 +17,10 @@ def test_subject_only_pilot_disables_adamw_decay_on_masked_base_embeddings():
         / "d1_subject_recolor_gorilla_short100.yaml"
     ).read_text(encoding="utf-8")
     assert "adam_weight_decay: 0.0" in config
+
+
+def test_custom_diffusion_supports_a_distinct_kv_learning_rate():
+    source = (Path(__file__).parents[3] / "src" / "train" / "train_colorpeel.py").read_text(encoding="utf-8")
+    assert '"--kv_learning_rate"' in source
+    assert 'kv_learning_rate = args.learning_rate if args.kv_learning_rate is None else args.kv_learning_rate' in source
+    assert '{"params": custom_diffusion_layers.parameters(), "lr": kv_learning_rate}' in source

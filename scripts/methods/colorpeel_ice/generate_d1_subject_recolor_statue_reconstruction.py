@@ -44,12 +44,15 @@ def build_manifest(protocol: dict[str, Any]) -> list[dict[str, Any]]:
         for item in protocol["prompts"]:
             for seed in protocol["sampling"]["seeds"]:
                 step = checkpoint["steps"]
+                checkpoint_id = checkpoint.get("id", f"step-{step}")
+                image_group = checkpoint.get("id", f"step_{step}")
                 rows.append({
-                    "id": f"step-{step}-{item['color']}-seed-{seed}", "checkpoint_steps": step,
+                    "id": f"{checkpoint_id}-{item['color']}-seed-{seed}", "checkpoint_steps": step,
+                    "checkpoint_id": checkpoint_id,
                     "model_dir": checkpoint["model_dir"], "color": item["color"], "prompt": item["prompt"],
                     "seed": seed, "num_inference_steps": protocol["sampling"]["num_inference_steps"],
                     "guidance_scale": protocol["sampling"]["guidance_scale"],
-                    "image_path": f"images/step_{step}/{item['color']}-seed-{seed}.png",
+                    "image_path": f"images/{image_group}/{item['color']}-seed-{seed}.png",
                 })
     if len(rows) != protocol["sampling"]["expected_image_count"]:
         raise ValueError("protocol expected_image_count does not match its grid")

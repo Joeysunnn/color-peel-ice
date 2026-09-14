@@ -54,3 +54,18 @@ def test_shipped_statue_followup_protocol_locks_the_literal_statue_prompt():
         f"a photo of <S*> statue in {color} color"
         for color in ("red", "yellow", "green", "cyan", "blue")
     }
+
+
+def test_statue_initializer_ablation_protocol_locks_category_prompt():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_initializer_kv_ablation_protocol_v3.json"
+    )
+    assert value["subject"] == {
+        "modifier_token": "<S*>",
+        "initializer_token": "statue",
+        "training_prompt_template": "a photo of <S*> gorilla statue in {color} color",
+    }
+    assert set(value["training_data"]["prompt_by_image"].values()) == {
+        f"a photo of <S*> gorilla statue in {color} color"
+        for color in ("red", "yellow", "green", "cyan", "blue")
+    }
