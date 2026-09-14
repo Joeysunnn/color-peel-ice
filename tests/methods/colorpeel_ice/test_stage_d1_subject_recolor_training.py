@@ -98,3 +98,15 @@ def test_no_gorilla_initializer_screen_protocol_locks_three_single_token_candida
         "from_scratch": True,
         "transfer": "forbidden",
     }
+
+
+def test_no_gorilla_initializer_step_screen_protocol_locks_the_two_step_values():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_step_screen_protocol_v6.json"
+    )
+    assert value["screen"] == {
+        "authorized_steps": [500, 750],
+        "kv_learning_rate": 1.0e-5,
+        "from_scratch": True,
+        "transfer": "forbidden",
+    }

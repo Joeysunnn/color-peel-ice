@@ -42,7 +42,7 @@ def read_json(path: Path) -> dict[str, Any]:
 def protocol(path: Path | None = None) -> dict[str, Any]:
     value = read_json(path or REPO_ROOT / PROTOCOL_RELPATH)
     schema = value.get("schema")
-    require(schema in {"natural_subject_recolor_training_protocol/v1", "natural_subject_recolor_training_protocol/v2", "natural_subject_recolor_training_protocol/v3", "natural_subject_recolor_training_protocol/v4", "natural_subject_recolor_training_protocol/v5"}, "Protocol differs")
+    require(schema in {"natural_subject_recolor_training_protocol/v1", "natural_subject_recolor_training_protocol/v2", "natural_subject_recolor_training_protocol/v3", "natural_subject_recolor_training_protocol/v4", "natural_subject_recolor_training_protocol/v5", "natural_subject_recolor_training_protocol/v6"}, "Protocol differs")
     subject, data, approval = value.get("subject", {}), value.get("training_data", {}), value.get("approval_state", {})
     require(subject.get("modifier_token") == "<S*>", "Subject token contract differs")
     if schema.endswith("/v1"):
@@ -66,12 +66,18 @@ def protocol(path: Path | None = None) -> dict[str, Any]:
         require(subject.get("training_prompt_template") == prompt_template, "Statue category prompt contract differs")
         require(approval.get("step_dose_response_approved") is True, "Training approval differs")
         require(value.get("followup_training", {}).get("authorized_steps") == [750, 1000], "Step-dose contract differs")
-    else:
+    elif schema.endswith("/v5"):
         require(subject.get("modifier_token") == "<S*>" and subject.get("initializer_tokens") == ["statue", "gorilla", "sculpture"], "Initializer screen contract differs")
         prompt_template = "a photo of <S*> statue in {color} color"
         require(subject.get("training_prompt_template") == prompt_template, "No-gorilla prompt contract differs")
         require(approval.get("initializer_screen_approved") is True, "Training approval differs")
         require(value.get("screen", {}).get("authorized_steps") == 500 and value["screen"].get("kv_learning_rate") == 1.0e-5, "Initializer screen parameters differ")
+    else:
+        require(subject.get("modifier_token") == "<S*>" and subject.get("initializer_tokens") == ["statue", "gorilla", "sculpture"], "Initializer screen contract differs")
+        prompt_template = "a photo of <S*> statue in {color} color"
+        require(subject.get("training_prompt_template") == prompt_template, "No-gorilla prompt contract differs")
+        require(approval.get("initializer_step_screen_approved") is True, "Training approval differs")
+        require(value.get("screen", {}).get("authorized_steps") == [500, 750] and value["screen"].get("kv_learning_rate") == 1.0e-5, "Initializer step-screen parameters differ")
     expected_prompts = {name: prompt_template.format(color=name) for name in ("red", "yellow", "green", "cyan", "blue")}
     require(data.get("image_names") == list(expected_prompts) and data.get("prompt_by_image") == expected_prompts and data.get("original_subject_color_record") == "forbidden" and data.get("color_modifier_token") == "forbidden", "Training data identity differs")
     require(value.get("caa") == {"enabled": False, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"}, "CAA contract differs")

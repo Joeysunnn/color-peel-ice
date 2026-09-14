@@ -40,3 +40,22 @@ def test_no_gorilla_initializer_screen_configs_keep_everything_except_initialize
         assert config["args"]["kv_learning_rate"] == config["args"]["learning_rate"] == 1.0e-5
         assert config["args"]["max_train_steps"] == config["args"]["checkpointing_steps"] == 500
         assert config["args"]["cos_weight"] == 0.0
+
+
+def test_no_gorilla_initializer_step_screen_is_the_complete_three_by_two_grid():
+    config_dir = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs"
+    configs = [
+        yaml.safe_load((config_dir / f"d1_subject_recolor_no_gorilla_step_screen_{initializer}_{steps}.yaml").read_text(encoding="utf-8"))
+        for initializer in ("statue", "gorilla", "sculpture")
+        for steps in (500, 750)
+    ]
+    assert {(config["args"]["initializer_token"], config["args"]["max_train_steps"]) for config in configs} == {
+        (initializer, steps)
+        for initializer in ("statue", "gorilla", "sculpture")
+        for steps in (500, 750)
+    }
+    for config in configs:
+        assert config["args"]["concepts_list"] == "${COLORPEEL_NO_GORILLA_INITIALIZER_STEP_SCREEN_CONCEPTS}"
+        assert config["args"]["learning_rate"] == config["args"]["kv_learning_rate"] == 1.0e-5
+        assert config["args"]["checkpointing_steps"] == config["args"]["max_train_steps"]
+        assert config["args"]["cos_weight"] == 0.0
