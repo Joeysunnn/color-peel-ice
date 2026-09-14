@@ -81,3 +81,20 @@ def test_statue_initializer_low_kv_step_dose_protocol_locks_only_750_and_1000_st
         "from_scratch": True,
         "transfer": "forbidden",
     }
+
+
+def test_no_gorilla_initializer_screen_protocol_locks_three_single_token_candidates():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_screen_protocol_v5.json"
+    )
+    assert value["subject"] == {
+        "modifier_token": "<S*>",
+        "initializer_tokens": ["statue", "gorilla", "sculpture"],
+        "training_prompt_template": "a photo of <S*> statue in {color} color",
+    }
+    assert value["screen"] == {
+        "authorized_steps": 500,
+        "kv_learning_rate": 1.0e-5,
+        "from_scratch": True,
+        "transfer": "forbidden",
+    }
