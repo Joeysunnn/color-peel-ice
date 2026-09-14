@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_no_gorilla_initializer_step_screen_reconstruction_protocol_v1",
+  "purpose": "compare no-gorilla subject reconstruction across three initializer choices and 500/750 training steps; transfer is forbidden",
+  "source_checkpoints": [
+    {"id": "statue-500", "steps": 500, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-153000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_statue_500__efe42a7__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-153000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_statue_500__efe42a7__42/checkpoints"},
+    {"id": "statue-750", "steps": 750, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-153500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_statue_750__efe42a7__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-153500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_statue_750__efe42a7__42/checkpoints"},
+    {"id": "gorilla-500", "steps": 500, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-154000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_gorilla_500__efe42a7__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-154000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_gorilla_500__efe42a7__42/checkpoints"},
+    {"id": "gorilla-750", "steps": 750, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-154500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_gorilla_750__efe42a7__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-154500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_gorilla_750__efe42a7__42/checkpoints"},
+    {"id": "sculpture-500", "steps": 500, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-155000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_sculpture_500__efe42a7__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-155000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_sculpture_500__efe42a7__42/checkpoints"},
+    {"id": "sculpture-750", "steps": 750, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-155500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_sculpture_750__efe42a7__42", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-155500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_sculpture_750__efe42a7__42/checkpoints"}
+  ],
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 90},
+  "prompts": [
+    {"color": "red", "prompt": "a photo of <S*> statue in red color"},
+    {"color": "green", "prompt": "a photo of <S*> statue in green color"},
+    {"color": "blue", "prompt": "a photo of <S*> statue in blue color"}
+  ],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "next_step": "human reconstruction review; no transfer, context augmentation, or joint training is authorized by this protocol"
+}

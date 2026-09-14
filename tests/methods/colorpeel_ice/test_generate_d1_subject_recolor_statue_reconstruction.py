@@ -8,6 +8,7 @@ SCRIPT = ROOT / "scripts" / "methods" / "colorpeel_ice" / "generate_d1_subject_r
 PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_gorilla_statue_reconstruction_generation_protocol_v1.json"
 ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_protocol_v1.json"
 STEP_DOSE_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_protocol_v1.json"
+INITIALIZER_STEP_SCREEN_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_step_screen_reconstruction_protocol_v1.json"
 SPEC = importlib.util.spec_from_file_location("statue_reconstruction", SCRIPT)
 module = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -65,3 +66,17 @@ def test_low_kv_step_dose_reconstruction_grid_is_bound_and_disjoint():
     assert {row["checkpoint_id"] for row in rows} == {"kvlow-750", "kvlow-1000"}
     assert len({row["image_path"] for row in rows}) == 30
     assert all("transfer" not in row["id"] for row in rows)
+
+
+def test_no_gorilla_initializer_step_screen_reconstruction_grid_is_complete_and_disjoint():
+    rows = module.build_manifest(json.loads(INITIALIZER_STEP_SCREEN_PROTOCOL.read_text(encoding="utf-8")))
+    assert len(rows) == 90
+    assert {row["checkpoint_id"] for row in rows} == {
+        "statue-500", "statue-750", "gorilla-500", "gorilla-750", "sculpture-500", "sculpture-750",
+    }
+    assert len({row["image_path"] for row in rows}) == 90
+    assert {row["prompt"] for row in rows} == {
+        "a photo of <S*> statue in red color",
+        "a photo of <S*> statue in green color",
+        "a photo of <S*> statue in blue color",
+    }
