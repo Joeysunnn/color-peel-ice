@@ -1,0 +1,12 @@
+schema_version: 1
+status: authorized_subject_only_reconstruction_generation
+stage: generate_subject_statue_reconstruction
+run: {study: natural_image_subject_color_pilot, variant: subject_recolor_statue_init_kvlow_step_dose_reconstruction, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_protocol_v1.json
+args:
+  protocol: experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_protocol_v1.json
+  device: cuda:0
+  dtype: float16
+  pretrained-model-name-or-path: CompVis/stable-diffusion-v1-4
+protocol: {subject_token: "<S*>", checkpoints: [kvlow-750, kvlow-1000], colors: [red, green, blue], seeds: [42, 43, 44, 45, 46], caa: not_applicable_to_generation, transfer: forbidden}
