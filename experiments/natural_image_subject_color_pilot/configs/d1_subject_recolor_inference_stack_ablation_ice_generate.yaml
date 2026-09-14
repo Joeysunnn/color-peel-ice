@@ -1,0 +1,22 @@
+schema_version: 1
+status: authorized_subject_only_inference_stack_ablation
+stage: generate_subject_statue_reconstruction
+run: {study: natural_image_subject_color_pilot, variant: subject_recolor_inference_stack_ablation_ice, seed: 42}
+environment:
+  CUDA_VISIBLE_DEVICES: "3"
+  COLORPEEL_INFERENCE_RUNTIME: "ice"
+  COLORPEEL_INFERENCE_PYTHON: "/home/r12user5/miniforge3/envs/ice/bin/python"
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_inference_stack_ablation_protocol_v1.json
+args:
+  protocol: experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_inference_stack_ablation_protocol_v1.json
+  device: cuda:0
+  dtype: float16
+  pretrained-model-name-or-path: CompVis/stable-diffusion-v1-4
+protocol:
+  inference_runtime: ice
+  source_checkpoints: [historical-750, v6-gorilla-750]
+  colors: [red, green, blue]
+  seeds: [42, 43, 44, 45, 46]
+  expected_image_count: 30
+  training: forbidden
+  transfer: forbidden

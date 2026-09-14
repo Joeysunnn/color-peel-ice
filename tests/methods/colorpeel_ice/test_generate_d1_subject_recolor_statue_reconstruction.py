@@ -9,6 +9,7 @@ PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs
 ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_protocol_v1.json"
 STEP_DOSE_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_protocol_v1.json"
 INITIALIZER_STEP_SCREEN_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_step_screen_reconstruction_protocol_v1.json"
+INFERENCE_STACK_ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_inference_stack_ablation_protocol_v1.json"
 SPEC = importlib.util.spec_from_file_location("statue_reconstruction", SCRIPT)
 module = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -80,3 +81,15 @@ def test_no_gorilla_initializer_step_screen_reconstruction_grid_is_complete_and_
         "a photo of <S*> statue in green color",
         "a photo of <S*> statue in blue color",
     }
+
+
+def test_inference_stack_ablation_is_a_2_by_2_checkpoint_runtime_comparison():
+    protocol = json.loads(INFERENCE_STACK_ABLATION_PROTOCOL.read_text(encoding="utf-8"))
+    rows = module.build_manifest(protocol)
+    assert len(rows) == 30
+    assert {row["checkpoint_id"] for row in rows} == {"historical-750", "v6-gorilla-750"}
+    assert {row["checkpoint_steps"] for row in rows} == {750}
+    assert len({row["image_path"] for row in rows}) == 30
+    assert protocol["prohibitions"] == [
+        "no training", "no checkpoint modification", "no transfer prompts", "no shared output directories",
+    ]
