@@ -10,6 +10,11 @@ ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" /
 STEP_DOSE_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_protocol_v1.json"
 INITIALIZER_STEP_SCREEN_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_step_screen_reconstruction_protocol_v1.json"
 INFERENCE_STACK_ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_inference_stack_ablation_protocol_v1.json"
+LEGACY_REGENERATION_CONFIGS = [
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_step_screen_reconstruction_legacy_generate.yaml",
+]
 SPEC = importlib.util.spec_from_file_location("statue_reconstruction", SCRIPT)
 module = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -93,3 +98,14 @@ def test_inference_stack_ablation_is_a_2_by_2_checkpoint_runtime_comparison():
     assert protocol["prohibitions"] == [
         "no training", "no checkpoint modification", "no transfer prompts", "no shared output directories",
     ]
+
+
+def test_legacy_regeneration_configs_bind_old_runtime_and_expected_grids():
+    expected_counts = [30, 30, 90]
+    for config, expected_count in zip(LEGACY_REGENERATION_CONFIGS, expected_counts):
+        text = config.read_text(encoding="utf-8")
+        assert "COLORPEEL_INFERENCE_RUNTIME: \"colorpeel017\"" in text
+        assert "/envs/colorpeel017/bin/python" in text
+        assert f"expected_image_count: {expected_count}" in text
+        assert "training: forbidden" in text
+        assert "transfer: forbidden" in text
