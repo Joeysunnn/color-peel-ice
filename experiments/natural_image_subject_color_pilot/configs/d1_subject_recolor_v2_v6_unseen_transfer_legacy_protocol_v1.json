@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_v2_v6_unseen_transfer_legacy_protocol_v1",
+  "purpose": "Run the fixed subject-only transfer diagnostic under the legacy inference environment for every actually trained V2-V6 checkpoint that has not already received the diagnostic.",
+  "source_checkpoints": [
+    {"id": "v2-250", "steps": 250, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-101000__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_250__b717584__42/checkpoints"},
+    {"id": "v2-500", "steps": 500, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260913-101500__natural_image_subject_color_pilot__subject_recolor_gorilla_statue_500__b717584__42/checkpoints"},
+    {"id": "v3-kvfull-500", "steps": 500, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-090000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvfull_500__86bc45e__42/checkpoints"},
+    {"id": "v3-kvlow-500", "steps": 500, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-091000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvlow_500__86bc45e__42/checkpoints"},
+    {"id": "v4-kvlow-750", "steps": 750, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-111000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvlow_750__eda8672__42/checkpoints"},
+    {"id": "v4-kvlow-1000", "steps": 1000, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-112000__natural_image_subject_color_pilot__subject_recolor_statue_init_kvlow_1000__eda8672__42/checkpoints"},
+    {"id": "v6-statue-500", "steps": 500, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-153000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_statue_500__efe42a7__42/checkpoints"},
+    {"id": "v6-statue-750", "steps": 750, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-153500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_statue_750__efe42a7__42/checkpoints"},
+    {"id": "v6-gorilla-500", "steps": 500, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-154000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_gorilla_500__efe42a7__42/checkpoints"},
+    {"id": "v6-gorilla-750", "steps": 750, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-154500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_gorilla_750__efe42a7__42/checkpoints"},
+    {"id": "v6-sculpture-500", "steps": 500, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-155000__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_sculpture_500__efe42a7__42/checkpoints"},
+    {"id": "v6-sculpture-750", "steps": 750, "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260914-155500__natural_image_subject_color_pilot__subject_recolor_no_gorilla_step_screen_sculpture_750__efe42a7__42/checkpoints"}
+  ],
+  "excluded": {"v2_750_1000": "already tested by d1_subject_recolor_gorilla_statue_750_1000_transfer_protocol_v1", "v5": "no executed checkpoint is bound by a later protocol"},
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 1020},
+  "prompts": [
+    {"color": "identity_photo", "prompt": "a photo of <S*>"},
+    {"color": "identity_closeup", "prompt": "a close-up photo of <S*>"},
+    {"color": "seen_red", "prompt": "a photo of <S*> in red color"},
+    {"color": "seen_green", "prompt": "a photo of <S*> in green color"},
+    {"color": "seen_blue", "prompt": "a photo of <S*> in blue color"},
+    {"color": "unseen_purple", "prompt": "a photo of <S*> in purple color"},
+    {"color": "unseen_orange", "prompt": "a photo of <S*> in orange color"},
+    {"color": "unseen_pink", "prompt": "a photo of <S*> in pink color"},
+    {"color": "context_white", "prompt": "a photo of <S*> on a plain white background"},
+    {"color": "context_museum", "prompt": "a photo of <S*> in a museum"},
+    {"color": "context_park", "prompt": "a photo of <S*> in a park"},
+    {"color": "context_pedestal", "prompt": "a photo of <S*> on a pedestal"},
+    {"color": "view_side", "prompt": "a side view photo of <S*>"},
+    {"color": "view_low_angle", "prompt": "a low-angle photo of <S*>"},
+    {"color": "view_full_body", "prompt": "a full-body photo of <S*>"},
+    {"color": "hard_purple_white", "prompt": "a photo of <S*> in purple color on a plain white background"},
+    {"color": "hard_side_orange", "prompt": "a side view photo of <S*> in orange color"}
+  ],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "prohibitions": ["no training", "no checkpoint modification", "no joint subject-color training", "no V5 inference without a bound checkpoint"]
+}

@@ -10,6 +10,7 @@ ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" /
 STEP_DOSE_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_protocol_v1.json"
 INITIALIZER_STEP_SCREEN_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_step_screen_reconstruction_protocol_v1.json"
 INFERENCE_STACK_ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_inference_stack_ablation_protocol_v1.json"
+UNSEEN_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_v2_v6_unseen_transfer_legacy_protocol_v1.json"
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -109,3 +110,16 @@ def test_legacy_regeneration_configs_bind_old_runtime_and_expected_grids():
         assert f"expected_image_count: {expected_count}" in text
         assert "training: forbidden" in text
         assert "transfer: forbidden" in text
+
+
+def test_unseen_v2_v6_transfer_grid_excludes_tested_and_unbound_checkpoints():
+    protocol = json.loads(UNSEEN_TRANSFER_PROTOCOL.read_text(encoding="utf-8"))
+    rows = module.build_manifest(protocol)
+    assert len(rows) == 1020
+    assert {row["checkpoint_id"] for row in rows} == {
+        "v2-250", "v2-500", "v3-kvfull-500", "v3-kvlow-500", "v4-kvlow-750", "v4-kvlow-1000",
+        "v6-statue-500", "v6-statue-750", "v6-gorilla-500", "v6-gorilla-750", "v6-sculpture-500", "v6-sculpture-750",
+    }
+    assert "v2_750_1000" in protocol["excluded"]
+    assert "v5" in protocol["excluded"]
+    assert len({row["image_path"] for row in rows}) == 1020
