@@ -111,6 +111,18 @@ def test_statue_initializer_full_kv_transfer_protocol_binds_only_the_new_step_do
     assert value["next_step"] == "human review only; no joint training authorized"
 
 
+def test_mailbox_prompt_ablation_protocols_lock_full_kv_and_the_five_repaired_colors():
+    configs = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs"
+    category = stage.protocol(configs / "d1_subject_recolor_mailbox_category_training_protocol_v1.json")
+    token_first = stage.protocol(configs / "d1_subject_recolor_mailbox_token_first_training_protocol_v1.json")
+    assert category["training"]["authorized_steps"] == token_first["training"]["authorized_steps"] == [750]
+    assert category["training"]["kv_learning_rate"] == token_first["training"]["kv_learning_rate"] == 1.0e-5
+    assert category["training_data"]["image_names"] == token_first["training_data"]["image_names"] == ["red", "green", "cyan", "blue", "magenta"]
+    assert category["subject"]["training_prompt_template"] == "a photo of <S*> mailbox in {color} color"
+    assert token_first["subject"]["training_prompt_template"] == "a photo of <S*> in {color} color"
+    assert category["caa"]["cos_weight"] == token_first["caa"]["cos_weight"] == 0.0
+
+
 def test_no_gorilla_initializer_screen_protocol_locks_three_single_token_candidates():
     value = stage.protocol(
         ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_screen_protocol_v5.json"
