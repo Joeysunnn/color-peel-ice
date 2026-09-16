@@ -83,6 +83,23 @@ def test_statue_initializer_low_kv_step_dose_protocol_locks_only_750_and_1000_st
     }
 
 
+def test_statue_initializer_full_kv_step_dose_protocol_locks_750_and_1000_steps():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvfull_step_dose_protocol_v1.json"
+    )
+    assert value["step_dose"] == {
+        "authorized_steps": [750, 1000],
+        "embedding_learning_rate": 1.0e-5,
+        "kv_learning_rate": 1.0e-5,
+        "from_scratch": True,
+        "transfer_after_training": "authorized",
+    }
+    assert value["approval_state"]["initializer_kv_ablation_approved"] is True
+    assert value["approval_state"]["full_kv_step_dose_approved"] is True
+    assert value["approval_state"]["mixed_shared_checkpoint_training_approved"] is False
+    assert value["approval_state"]["joint_training_approved"] is False
+
+
 def test_no_gorilla_initializer_screen_protocol_locks_three_single_token_candidates():
     value = stage.protocol(
         ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_screen_protocol_v5.json"
