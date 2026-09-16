@@ -12,6 +12,10 @@ STEP_DOSE_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" 
 INITIALIZER_STEP_SCREEN_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_step_screen_reconstruction_protocol_v1.json"
 INFERENCE_STACK_ABLATION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_inference_stack_ablation_protocol_v1.json"
 UNSEEN_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_v2_v6_unseen_transfer_legacy_protocol_v1.json"
+MAILBOX_RECONSTRUCTION_PROTOCOLS = [
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_category_750_reconstruction_protocol_v1.json",
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_token_first_750_reconstruction_protocol_v1.json",
+]
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -141,3 +145,14 @@ def test_unseen_v2_v6_transfer_grid_excludes_tested_and_unbound_checkpoints():
     assert "v2_750_1000" in protocol["excluded"]
     assert "v5" in protocol["excluded"]
     assert len({row["image_path"] for row in rows}) == 1020
+
+
+def test_mailbox_reconstruction_protocols_are_exact_training_prompt_grids():
+    for protocol_path in MAILBOX_RECONSTRUCTION_PROTOCOLS:
+        protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+        rows = module.build_manifest(protocol)
+        assert len(rows) == 25
+        assert {row["checkpoint_steps"] for row in rows} == {750}
+        assert {row["seed"] for row in rows} == {42, 43, 44, 45, 46}
+        assert {row["color"] for row in rows} == {"seen_red", "seen_green", "seen_cyan", "seen_blue", "seen_magenta"}
+        assert all("transfer" not in row["color"] for row in rows)

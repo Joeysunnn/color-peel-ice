@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_mailbox_category_750_reconstruction_protocol_v1",
+  "purpose": "Exact training-prompt reconstruction diagnostic for the mailbox category-conditioned full-K/V 750-step checkpoint; no transfer prompts.",
+  "source_checkpoints": [{"id": "category-750", "steps": 750, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-163006__natural_image_subject_color_pilot__subject_recolor_mailbox_category_750__bce4364__42", "run_manifest_sha256": "1e3590641bc35f2ef4a7aae1dde212a43c05dad35dbf8b21ef37d44346ac6c49", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-163006__natural_image_subject_color_pilot__subject_recolor_mailbox_category_750__bce4364__42/checkpoints", "model_sha256": "984fb87e7e87a302da59b5a8d0e7bb6cdf0c3e381424a532a7fd4530128fb426"}],
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 25},
+  "prompts": [{"color": "seen_red", "prompt": "a photo of <S*> mailbox in red color"}, {"color": "seen_green", "prompt": "a photo of <S*> mailbox in green color"}, {"color": "seen_cyan", "prompt": "a photo of <S*> mailbox in cyan color"}, {"color": "seen_blue", "prompt": "a photo of <S*> mailbox in blue color"}, {"color": "seen_magenta", "prompt": "a photo of <S*> mailbox in magenta color"}],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "next_step": "human reconstruction review before transfer"
+}
