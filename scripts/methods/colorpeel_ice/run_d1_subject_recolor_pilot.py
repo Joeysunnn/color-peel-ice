@@ -45,8 +45,9 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def plan(run_root: Path, source_root: Path) -> dict[str, Any]:
-    protocol, source_root = read_json(PROTOCOL), source_root.resolve()
+def plan(run_root: Path, source_root: Path, protocol_path: Path = PROTOCOL) -> dict[str, Any]:
+    protocol_path, source_root = protocol_path.resolve(), source_root.resolve()
+    protocol = read_json(protocol_path)
     core.require(protocol.get("schema") == "natural_subject_recolor_pilot_protocol/v1", "Protocol differs")
     source_manifest = source_root / "manifests" / "pilot_mask_manifest.json"
     core.require(source_manifest.is_file() and sha256(source_manifest) == protocol["source"]["mask_manifest_sha256"], "Source manifest differs")
@@ -66,7 +67,7 @@ def plan(run_root: Path, source_root: Path) -> dict[str, Any]:
         "git_commit": git_commit(),
         "adapter_script_sha256": sha256(Path(__file__).resolve()),
         "runtime": {"python": platform.python_version(), "numpy": np.__version__},
-        "protocol_sha256": sha256(PROTOCOL),
+        "protocol_sha256": sha256(protocol_path),
         "source_root": str(source_root),
         "source_manifest_sha256": sha256(source_manifest),
         "source": {"stable_id": source["stable_id"], "paths": {name: str(path) for name, path in paths.items()}, "sha256": {name: sha256(path) for name, path in paths.items()}},
@@ -137,11 +138,11 @@ def analyze(run_root: Path) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("plan", "recolor", "analyze")); parser.add_argument("--run-root", type=Path, required=True); parser.add_argument("--source-root", type=Path)
+    parser.add_argument("command", choices=("plan", "recolor", "analyze")); parser.add_argument("--run-root", type=Path, required=True); parser.add_argument("--source-root", type=Path); parser.add_argument("--protocol", type=Path, default=PROTOCOL)
     args = parser.parse_args(argv)
     if args.command == "plan":
         if args.source_root is None: parser.error("--source-root is required for plan")
-        result = plan(args.run_root, args.source_root)
+        result = plan(args.run_root, args.source_root, args.protocol)
     elif args.command == "recolor": result = recolor(args.run_root)
     else: result = analyze(args.run_root)
     print(json.dumps({"status": "ok", "keys": sorted(result)}, sort_keys=True)); return 0
