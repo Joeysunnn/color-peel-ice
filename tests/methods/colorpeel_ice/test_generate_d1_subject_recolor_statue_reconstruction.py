@@ -16,6 +16,7 @@ MAILBOX_RECONSTRUCTION_PROTOCOLS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_category_750_reconstruction_protocol_v1.json",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_token_first_750_reconstruction_protocol_v1.json",
 ]
+MAILBOX_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_750_transfer_protocol_v1.json"
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -156,3 +157,18 @@ def test_mailbox_reconstruction_protocols_are_exact_training_prompt_grids():
         assert {row["seed"] for row in rows} == {42, 43, 44, 45, 46}
         assert {row["color"] for row in rows} == {"seen_red", "seen_green", "seen_cyan", "seen_blue", "seen_magenta"}
         assert all("transfer" not in row["color"] for row in rows)
+
+
+def test_mailbox_transfer_grid_includes_all_user_requested_hard_compositions():
+    protocol = json.loads(MAILBOX_TRANSFER_PROTOCOL.read_text(encoding="utf-8"))
+    rows = module.build_manifest(protocol)
+    assert len(rows) == 230
+    assert {row["checkpoint_id"] for row in rows} == {"category-750", "token-first-750"}
+    assert {item["group"] for item in protocol["prompts"]} == {"unseen_color", "context", "viewpoint", "composition", "hard_compositional"}
+    hard = {item["prompt"] for item in protocol["prompts"] if item["group"] == "hard_compositional"}
+    assert hard == {
+        "a photo of <S*> mailbox in purple color on a plain white background",
+        "a side view photo of <S*> mailbox in orange color on a city street",
+        "a photo of <S*> mailbox in pink color in a snowy environment",
+        "a close-up photo of <S*> mailbox in white color in front of a house",
+    }
