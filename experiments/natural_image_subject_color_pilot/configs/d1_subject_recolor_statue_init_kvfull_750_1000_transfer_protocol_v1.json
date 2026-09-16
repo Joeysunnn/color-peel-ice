@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_statue_init_kvfull_750_1000_transfer_protocol_v1",
+  "purpose": "Fixed V3 statue-initialized full-K/V 750-vs-1000 subject-token transfer diagnostic; user-specified prompts only.",
+  "source_training_protocol": "d1_subject_recolor_statue_init_kvfull_step_dose_protocol_v1",
+  "source_checkpoints": [
+    {"steps": 750, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-125542__natural_image_subject_color_pilot__subject_recolor_statue_init_kvfull_750__7e9265d__42", "run_manifest_sha256": "1ff64e45d8d3805657a37286aa61aa46f2569896ca0342fa0833eca495551ffe", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-125542__natural_image_subject_color_pilot__subject_recolor_statue_init_kvfull_750__7e9265d__42/checkpoints", "model_sha256": "2df39cebff503a593368d76ce2f7d64c1e6d5bfc350c9723b0928f529cc4ad6a"},
+    {"steps": 1000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-125542__natural_image_subject_color_pilot__subject_recolor_statue_init_kvfull_1000__7e9265d__42", "run_manifest_sha256": "28fa47cf7667a366cf65bbab34c3f1bc5314f0ca75d7ab282413d8ac2cdadd47", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-125542__natural_image_subject_color_pilot__subject_recolor_statue_init_kvfull_1000__7e9265d__42/checkpoints", "model_sha256": "bcf642bca82df36a2b0f438555abb97cefeb7c63e9ba630edb0248ac96025c92"}
+  ],
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 170},
+  "prompts": [
+    {"color": "identity_photo", "prompt": "a photo of <S*>"}, {"color": "identity_closeup", "prompt": "a close-up photo of <S*>"},
+    {"color": "seen_red", "prompt": "a photo of <S*> in red color"}, {"color": "seen_green", "prompt": "a photo of <S*> in green color"}, {"color": "seen_blue", "prompt": "a photo of <S*> in blue color"},
+    {"color": "unseen_purple", "prompt": "a photo of <S*> in purple color"}, {"color": "unseen_orange", "prompt": "a photo of <S*> in orange color"}, {"color": "unseen_pink", "prompt": "a photo of <S*> in pink color"},
+    {"color": "context_white", "prompt": "a photo of <S*> on a plain white background"}, {"color": "context_museum", "prompt": "a photo of <S*> in a museum"}, {"color": "context_park", "prompt": "a photo of <S*> in a park"}, {"color": "context_pedestal", "prompt": "a photo of <S*> on a pedestal"},
+    {"color": "view_side", "prompt": "a side view photo of <S*>"}, {"color": "view_low_angle", "prompt": "a low-angle photo of <S*>"}, {"color": "view_full_body", "prompt": "a full-body photo of <S*>"},
+    {"color": "hard_purple_white", "prompt": "a photo of <S*> in purple color on a plain white background"}, {"color": "hard_side_orange", "prompt": "a side view photo of <S*> in orange color"}
+  ],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "next_step": "human review only; no joint training authorized"
+}

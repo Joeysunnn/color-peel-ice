@@ -100,6 +100,17 @@ def test_statue_initializer_full_kv_step_dose_protocol_locks_750_and_1000_steps(
     assert value["approval_state"]["joint_training_approved"] is False
 
 
+def test_statue_initializer_full_kv_transfer_protocol_binds_only_the_new_step_dose_runs():
+    path = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvfull_750_1000_transfer_protocol_v1.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
+    assert [item["steps"] for item in value["source_checkpoints"]] == [750, 1000]
+    assert all("subject_recolor_statue_init_kvfull" in item["run_dir"] for item in value["source_checkpoints"])
+    assert all(len(item["model_sha256"]) == 64 for item in value["source_checkpoints"])
+    assert value["sampling"]["expected_image_count"] == 170
+    assert len(value["prompts"]) == 17
+    assert value["next_step"] == "human review only; no joint training authorized"
+
+
 def test_no_gorilla_initializer_screen_protocol_locks_three_single_token_candidates():
     value = stage.protocol(
         ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_screen_protocol_v5.json"
