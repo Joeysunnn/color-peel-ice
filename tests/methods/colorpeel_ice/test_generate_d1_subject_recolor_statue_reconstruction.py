@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "scripts" / "methods" / "colorpeel_ice" / "generate_d1_subject_recolor_statue_reconstruction.py"
@@ -53,6 +54,23 @@ def test_checkpoint_ids_keep_same_step_ablation_outputs_distinct():
     assert {row["image_path"] for row in rows} == {
         "images/kvfull-500/red-seed-42.png", "images/kvlow-500/red-seed-42.png",
     }
+
+
+def test_checkpoint_hash_fields_reject_replaced_weight_or_manifest(tmp_path):
+    run_dir, model_dir = tmp_path / "run", tmp_path / "run" / "checkpoints"
+    model_dir.mkdir(parents=True)
+    (run_dir / "manifest.json").write_text("manifest", encoding="utf-8")
+    for name in ("<S*>.bin", module.WEIGHTS, "embedding_update_audit.json", "training_metrics.jsonl"):
+        (model_dir / name).write_bytes(name.encode("utf-8"))
+    protocol = {"source_checkpoints": [{
+        "model_dir": str(model_dir), "run_dir": str(run_dir),
+        "model_sha256": module.sha256(model_dir / module.WEIGHTS),
+        "run_manifest_sha256": module.sha256(run_dir / "manifest.json"),
+    }], "forbidden_token_artifacts": ["<C*>.bin"]}
+    module.validate_model_dir(model_dir, protocol)
+    (model_dir / module.WEIGHTS).write_bytes(b"replaced")
+    with pytest.raises(ValueError, match="weights do not match"):
+        module.validate_model_dir(model_dir, protocol)
 
 
 def test_statue_initializer_ablation_reconstruction_grid_is_bound_and_disjoint():

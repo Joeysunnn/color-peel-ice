@@ -60,8 +60,9 @@ def build_manifest(protocol: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
-    expected = {Path(item["model_dir"]).resolve() for item in protocol["source_checkpoints"]}
-    if path.resolve() not in expected:
+    resolved = path.resolve()
+    checkpoint = next((item for item in protocol["source_checkpoints"] if Path(item["model_dir"]).resolve() == resolved), None)
+    if checkpoint is None:
         raise ValueError("model directory is not bound by the protocol")
     required = ("<S*>.bin", WEIGHTS, "embedding_update_audit.json", "training_metrics.jsonl")
     missing = [name for name in required if not (path / name).is_file()]
@@ -70,7 +71,17 @@ def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
     forbidden = [name for name in protocol["forbidden_token_artifacts"] if (path / name).exists()]
     if forbidden:
         raise ValueError("forbidden token artifacts: " + ", ".join(forbidden))
-    return {name: sha256(path / name) for name in required}
+    hashes = {name: sha256(path / name) for name in required}
+    if checkpoint.get("model_sha256") and hashes[WEIGHTS] != checkpoint["model_sha256"]:
+        raise ValueError("checkpoint weights do not match the protocol hash")
+    if checkpoint.get("run_manifest_sha256"):
+        run_dir = Path(checkpoint["run_dir"])
+        if path.parent.resolve() != run_dir.resolve():
+            raise ValueError("model directory does not belong to the protocol run directory")
+        manifest = run_dir / "manifest.json"
+        if not manifest.is_file() or sha256(manifest) != checkpoint["run_manifest_sha256"]:
+            raise ValueError("run manifest does not match the protocol hash")
+    return hashes
 
 
 def load_pipeline(model_dir: Path, args: argparse.Namespace) -> Any:
