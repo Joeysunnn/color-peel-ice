@@ -1,0 +1,30 @@
+{
+  "schema": "natural_subject_recolor_border_repair_protocol/v1",
+  "protocol_id": "d1_subject_recolor_mailbox_border_repair_protocol_v1",
+  "purpose": "single_subject_auxiliary_hue_recoloring_with_source-specific_bottom_residual_mask_repair_without_training",
+  "source": {
+    "mask_manifest_sha256": "073bc48cfd9120c230f9fe03b2c654f27421ab09cf4b968b103331c6060c558c",
+    "stable_id": "D1GT:81/130.png",
+    "raw_image_sha256": "ba9c6624d9998cdfcd16308b0cf8fd8f3778909d8655efe2ba9cebba370483d0",
+    "raw_mask_sha256": "1b226d6b66c95c49ff2dddb734ff2c9efac172cddf6d3231bd12eebbad5d7157",
+    "original_hue_degrees": 40.94992640208219
+  },
+  "mask_repair": {
+    "kind": "approved_bottom_residual_row_runs_v1",
+    "diagnosis": {"baseline_red_output_sha256": "bb2d51bf94380fa40161b35d67e8fd8eaae5ad47d423a8b9864ad453393fd1cb", "source_hue_degrees": 40.94992640208219, "source_hue_tolerance_degrees": 15.0, "source_chroma_min": 20.0, "row_range_inclusive": [480, 511]},
+    "pre_repair_mask_runs": {
+      "480": [[147,423]], "481": [[147,421]], "482": [[147,420]], "483": [[147,418]], "484": [[147,412]], "485": [[146,409]], "486": [[146,406]], "487": [[146,404]], "488": [[146,397],[400,401]], "489": [[146,396]], "490": [[146,395]], "491": [[145,393]], "492": [[145,392]], "493": [[145,391]], "494": [[145,390]], "495": [[145,388]], "496": [[145,387]], "497": [[145,386]], "498": [[144,385]], "499": [[144,383]], "500": [[144,382]], "501": [[144,381]], "502": [[144,380]], "503": [[144,378]], "504": [[143,377]], "505": [[143,376]], "506": [[143,375]], "507": [[171,373]], "508": [[228,372]], "509": [[285,371]], "510": [[342,370]], "511": []
+    },
+    "row_runs_xy_inclusive": {
+      "480": [[425,438]], "481": [[423,438]], "482": [[424,438]], "483": [[424,438]], "484": [[413,415],[424,438]], "485": [[412,414],[423,438]], "486": [[407,407],[423,438]], "487": [[145,145],[405,406],[422,438]], "488": [[145,145],[398,399],[402,405],[422,438]], "489": [[144,145],[397,405],[421,438]], "490": [[144,145],[396,403],[421,438]], "491": [[144,144],[394,400],[402,403],[421,438]], "492": [[144,144],[393,399],[421,438]], "493": [[144,144],[392,399],[421,438]], "494": [[144,144],[391,399],[414,415],[421,438]], "495": [[144,144],[389,398],[413,415],[421,438]], "496": [[144,144],[388,399],[412,414],[422,438]], "497": [[144,144],[387,394],[396,401],[411,413],[422,438]], "498": [[386,394],[397,400],[412,413],[422,438]], "499": [[384,393],[395,400],[412,413],[422,438]], "500": [[383,400],[412,413],[422,438]], "501": [[382,400],[412,413],[422,438]], "502": [[381,388],[392,392],[397,400],[412,414],[422,438]], "503": [[379,384],[387,387],[399,399],[412,414],[422,438]], "504": [[412,414],[422,438]], "505": [[377,377],[411,414],[422,438]], "506": [[411,415],[423,438]], "507": [[146,170],[374,374],[411,415],[423,438]], "508": [[146,227],[373,373],[411,415],[423,438]], "509": [[147,266],[271,284],[411,415],[423,438]], "510": [[147,266],[271,341],[411,415],[423,438]], "511": [[147,266],[271,369],[411,415],[423,438]]
+    },
+    "expected_added_pixel_count": 1450,
+    "alpha_derivation": "pixel_centered_signed_edt_w_out_0_recomputed_from_repaired_binary_mask"
+  },
+  "conversion": {"space": "sRGB_uint8_to_linear_sRGB_float64_to_Lab_D65_to_LCh", "gamut_margin": 0.995, "gamut_iterations": 32},
+  "auxiliary_palette": [{"name":"red","hue_degrees":0.0},{"name":"yellow","hue_degrees":60.0},{"name":"green","hue_degrees":120.0},{"name":"cyan","hue_degrees":180.0},{"name":"blue","hue_degrees":240.0},{"name":"magenta","hue_degrees":300.0}],
+  "held_out_guard": {"minimum_hue_separation_degrees":30.0,"excluded_palette_names":["yellow"],"generated_palette_names":["red","green","cyan","blue","magenta"]},
+  "invariants": {"preserve_object_L":true,"preserve_object_C_except_gamut":true,"fixed_auxiliary_hue":true,"rgb_hard_clipping":false,"outside_repaired_binary_mask_rgb_change":0,"use_recomputed_soft_alpha_compositing":true},
+  "expected_image_count":5,
+  "training":{"allowed":false,"original_subject_color_training_record":"forbidden"}
+}

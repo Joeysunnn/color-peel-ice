@@ -75,8 +75,9 @@ def generated_requests(protocol: dict[str, Any]) -> list[dict[str, Any]]:
     return generated
 
 
-def plan(run_root: Path, source_root: Path) -> dict[str, Any]:
-    protocol = read_json(PROTOCOL)
+def plan(run_root: Path, source_root: Path, protocol_path: Path = PROTOCOL) -> dict[str, Any]:
+    protocol_path = protocol_path.resolve()
+    protocol = read_json(protocol_path)
     recolor_core.require(protocol.get("schema") == "natural_subject_recolor_border_repair_protocol/v1", "Protocol differs")
     source_root = source_root.resolve()
     source_manifest, paths = source_paths(source_root, protocol)
@@ -85,7 +86,7 @@ def plan(run_root: Path, source_root: Path) -> dict[str, Any]:
         "git_commit": git_commit(),
         "adapter_script_sha256": sha256(Path(__file__).resolve()),
         "runtime": {"python": platform.python_version(), "numpy": np.__version__},
-        "protocol_sha256": sha256(PROTOCOL),
+        "protocol_sha256": sha256(protocol_path),
         "source_root": str(source_root),
         "source_manifest_sha256": sha256(source_manifest),
         "source": {"paths": {name: str(path) for name, path in paths.items()}, "sha256": {name: sha256(path) for name, path in paths.items()}},
@@ -119,7 +120,7 @@ def repair_mask(run_root: Path) -> dict[str, Any]:
         "repaired_alpha_relative_path": str(alpha_path.relative_to(run_root)),
         "repaired_alpha_sha256": sha256(alpha_path),
         "added_pixel_count": int(added.sum()),
-        "added_bbox_xyxy_inclusive": plan_value["mask_repair"]["rectangle_xyxy_inclusive"],
+        "added_bbox_xyxy_inclusive": [int(np.nonzero(added)[1].min()), int(np.nonzero(added)[0].min()), int(np.nonzero(added)[1].max()), int(np.nonzero(added)[0].max())],
         "alpha_derivation": alpha_derivation,
     }
     write_json(run_root / REPAIR_NAME, value)
@@ -211,11 +212,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("command", choices=("plan", "repair-mask", "recolor", "analyze"))
     parser.add_argument("--run-root", required=True, type=Path)
     parser.add_argument("--source-root", type=Path)
+    parser.add_argument("--protocol", type=Path, default=PROTOCOL)
     args = parser.parse_args(argv)
     if args.command == "plan":
         if args.source_root is None:
             parser.error("--source-root is required for plan")
-        value = plan(args.run_root, args.source_root)
+        value = plan(args.run_root, args.source_root, args.protocol)
     elif args.command == "repair-mask":
         value = repair_mask(args.run_root)
     elif args.command == "recolor":

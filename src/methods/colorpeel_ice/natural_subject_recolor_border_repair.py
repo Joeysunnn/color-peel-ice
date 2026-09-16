@@ -25,11 +25,21 @@ def repair_bottom_border(raw_mask_u8: np.ndarray, repair: dict[str, Any]) -> tup
     for row_text, expected in expected_runs.items():
         row = int(row_text)
         require(contiguous_runs(raw_mask_u8[row] == 255) == expected, f"Raw mask row {row} differs")
-    x0, y0, x1, y1 = repair["rectangle_xyxy_inclusive"]
-    require(0 <= x0 <= x1 < 512 and 0 <= y0 <= y1 < 512 and y1 == 511, "Repair rectangle differs")
     repaired = raw_mask_u8 == 255
     before = repaired.copy()
-    repaired[y0 : y1 + 1, x0 : x1 + 1] = True
+    if "rectangle_xyxy_inclusive" in repair:
+        x0, y0, x1, y1 = repair["rectangle_xyxy_inclusive"]
+        require(0 <= x0 <= x1 < 512 and 0 <= y0 <= y1 < 512 and y1 == 511, "Repair rectangle differs")
+        repaired[y0 : y1 + 1, x0 : x1 + 1] = True
+    else:
+        row_runs = repair.get("row_runs_xy_inclusive")
+        require(isinstance(row_runs, dict) and row_runs, "Repair row runs differ")
+        for row_text, runs in row_runs.items():
+            row = int(row_text)
+            require(0 <= row < 512 and isinstance(runs, list), "Repair row differs")
+            for x0, x1 in runs:
+                require(0 <= x0 <= x1 < 512, "Repair run differs")
+                repaired[row, x0 : x1 + 1] = True
     added = repaired & ~before
     require(int(added.sum()) == repair["expected_added_pixel_count"], "Repair added-pixel count differs")
     require(np.all(repaired[before]), "Repair removed foreground")

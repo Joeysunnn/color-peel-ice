@@ -31,3 +31,13 @@ def test_repaired_alpha_is_zero_outside_and_opaque_at_the_canvas_bottom_interior
     assert metadata["w_out_px"] == 0
     assert np.all(alpha[raw == 0] == 0)
     assert alpha[511, 300] == 65535
+
+
+def test_row_run_repair_adds_only_the_frozen_runs():
+    raw = np.zeros((512, 512), dtype=np.uint8)
+    raw[510, 10:13] = 255
+    spec = {"pre_repair_mask_runs": {"510": [[10, 12]], "511": []}, "row_runs_xy_inclusive": {"510": [[14, 15]], "511": [[20, 20]]}, "expected_added_pixel_count": 3}
+    repaired, added = repair.repair_bottom_border(raw, spec)
+    assert int(added.sum()) == 3
+    assert np.all(repaired[510, [14, 15]]) and repaired[511, 20]
+    assert not repaired[510, 13]
