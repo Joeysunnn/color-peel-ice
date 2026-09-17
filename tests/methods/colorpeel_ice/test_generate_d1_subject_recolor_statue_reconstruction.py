@@ -16,6 +16,10 @@ MAILBOX_RECONSTRUCTION_PROTOCOLS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_category_750_reconstruction_protocol_v1.json",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_token_first_750_reconstruction_protocol_v1.json",
 ]
+MAILBOX_1000_RECONSTRUCTION_PROTOCOLS = [
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_category_1000_reconstruction_protocol_v1.json",
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_token_first_1000_reconstruction_protocol_v1.json",
+]
 MAILBOX_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_750_transfer_protocol_v1.json"
 MAILBOX_FREE_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_free_750_transfer_protocol_v1.json"
 LEGACY_REGENERATION_CONFIGS = [
@@ -158,6 +162,17 @@ def test_mailbox_reconstruction_protocols_are_exact_training_prompt_grids():
         assert {row["seed"] for row in rows} == {42, 43, 44, 45, 46}
         assert {row["color"] for row in rows} == {"seen_red", "seen_green", "seen_cyan", "seen_blue", "seen_magenta"}
         assert all("transfer" not in row["color"] for row in rows)
+
+
+def test_mailbox_1000_reconstruction_protocols_bind_the_completed_full_kv_runs():
+    for protocol_path in MAILBOX_1000_RECONSTRUCTION_PROTOCOLS:
+        protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+        rows = module.build_manifest(protocol)
+        assert len(rows) == 25
+        assert {row["checkpoint_steps"] for row in rows} == {1000}
+        assert len({row["image_path"] for row in rows}) == 25
+        assert all(len(item["model_sha256"]) == 64 for item in protocol["source_checkpoints"])
+        assert protocol["next_step"] == "human reconstruction review before transfer"
 
 
 def test_mailbox_transfer_grid_includes_all_user_requested_hard_compositions():
