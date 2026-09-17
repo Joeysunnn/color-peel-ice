@@ -64,7 +64,8 @@ def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
     checkpoint = next((item for item in protocol["source_checkpoints"] if Path(item["model_dir"]).resolve() == resolved), None)
     if checkpoint is None:
         raise ValueError("model directory is not bound by the protocol")
-    required = ("<S*>.bin", WEIGHTS, "embedding_update_audit.json", "training_metrics.jsonl")
+    token_artifacts = tuple(protocol.get("required_token_artifacts", ("<S*>.bin",)))
+    required = (*token_artifacts, WEIGHTS, "embedding_update_audit.json", "training_metrics.jsonl")
     missing = [name for name in required if not (path / name).is_file()]
     if missing:
         raise FileNotFoundError("missing checkpoint artifacts: " + ", ".join(missing))
@@ -74,6 +75,9 @@ def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
     hashes = {name: sha256(path / name) for name in required}
     if checkpoint.get("model_sha256") and hashes[WEIGHTS] != checkpoint["model_sha256"]:
         raise ValueError("checkpoint weights do not match the protocol hash")
+    for name, expected in checkpoint.get("token_artifact_sha256", {}).items():
+        if name not in token_artifacts or hashes.get(name) != expected:
+            raise ValueError(f"checkpoint token artifact does not match the protocol hash: {name}")
     if checkpoint.get("run_manifest_sha256"):
         run_dir = Path(checkpoint["run_dir"])
         if path.parent.resolve() != run_dir.resolve():
@@ -84,14 +88,15 @@ def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
     return hashes
 
 
-def load_pipeline(model_dir: Path, args: argparse.Namespace) -> Any:
+def load_pipeline(model_dir: Path, protocol: dict[str, Any], args: argparse.Namespace) -> Any:
     import torch
     from diffusers import DiffusionPipeline
 
     dtype = torch.float16 if args.dtype == "float16" else torch.float32
     pipe = DiffusionPipeline.from_pretrained(args.pretrained_model_name_or_path, low_cpu_mem_usage=False, torch_dtype=dtype, local_files_only=True).to(args.device)
     pipe.unet.load_attn_procs(str(model_dir), weight_name=WEIGHTS)
-    pipe.load_textual_inversion(str(model_dir), weight_name="<S*>.bin")
+    for token_artifact in protocol.get("required_token_artifacts", ("<S*>.bin",)):
+        pipe.load_textual_inversion(str(model_dir), weight_name=token_artifact)
     return pipe
 
 
@@ -106,7 +111,7 @@ def generate(rows: list[dict[str, Any]], protocol: dict[str, Any], args: argpars
     for model_dir_text in dict.fromkeys(row["model_dir"] for row in rows):
         model_dir = Path(model_dir_text)
         artifacts[str(model_dir)] = validate_model_dir(model_dir, protocol)
-        pipe = load_pipeline(model_dir, args)
+        pipe = load_pipeline(model_dir, protocol, args)
         for row in (item for item in rows if item["model_dir"] == model_dir_text):
             path = args.output_dir / row["image_path"]
             status = {"id": row["id"], "image_path": str(path), "status": None, "failure_reason": None, "image_sha256": None, "nsfw_content_detected": None}

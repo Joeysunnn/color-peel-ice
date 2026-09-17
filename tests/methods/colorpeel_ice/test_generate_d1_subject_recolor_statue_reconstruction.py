@@ -31,6 +31,7 @@ MAILBOX_1000_TRANSFER_PROTOCOLS = [
         "d1_subject_recolor_mailbox_token_first_free_1000_transfer_protocol_v1.json",
     )
 ]
+JOINT_RECONSTRUCTION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_reconstruction_protocol_v1.json"
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -89,6 +90,24 @@ def test_checkpoint_hash_fields_reject_replaced_weight_or_manifest(tmp_path):
     module.validate_model_dir(model_dir, protocol)
     (model_dir / module.WEIGHTS).write_bytes(b"replaced")
     with pytest.raises(ValueError, match="weights do not match"):
+        module.validate_model_dir(model_dir, protocol)
+
+
+def test_required_joint_token_artifacts_reject_a_replaced_token(tmp_path):
+    run_dir, model_dir = tmp_path / "run", tmp_path / "run" / "checkpoints"
+    model_dir.mkdir(parents=True)
+    (run_dir / "manifest.json").write_text("manifest", encoding="utf-8")
+    for name in ("<S*>.bin", "<C*>.bin", module.WEIGHTS, "embedding_update_audit.json", "training_metrics.jsonl"):
+        (model_dir / name).write_bytes(name.encode("utf-8"))
+    protocol = {"source_checkpoints": [{
+        "model_dir": str(model_dir), "run_dir": str(run_dir),
+        "model_sha256": module.sha256(model_dir / module.WEIGHTS),
+        "run_manifest_sha256": module.sha256(run_dir / "manifest.json"),
+        "token_artifact_sha256": {"<S*>.bin": module.sha256(model_dir / "<S*>.bin"), "<C*>.bin": module.sha256(model_dir / "<C*>.bin")},
+    }], "required_token_artifacts": ["<S*>.bin", "<C*>.bin"], "forbidden_token_artifacts": []}
+    module.validate_model_dir(model_dir, protocol)
+    (model_dir / "<C*>.bin").write_bytes(b"replaced")
+    with pytest.raises(ValueError, match="token artifact"):
         module.validate_model_dir(model_dir, protocol)
 
 
@@ -219,3 +238,15 @@ def test_mailbox_1000_transfer_protocols_are_single_checkpoint_fully_pinned_grid
         assert len(protocol["source_checkpoints"][0]["model_sha256"]) == 64
         is_free = "_free_" in protocol_path.name
         assert all(("mailbox" not in row["prompt"].lower()) == is_free for row in rows)
+
+
+def test_shared_kv_joint_reconstruction_checks_both_single_token_branches_only():
+    protocol = json.loads(JOINT_RECONSTRUCTION_PROTOCOL.read_text(encoding="utf-8"))
+    rows = module.build_manifest(protocol)
+    assert len(rows) == 40
+    assert protocol["required_token_artifacts"] == ["<S*>.bin", "<C*>.bin"]
+    assert {row["color"] for row in rows} == {
+        "subject_seen_red", "subject_seen_green", "subject_seen_cyan", "subject_seen_blue", "subject_seen_magenta",
+        "color_cube", "color_sphere", "color_cylinder",
+    }
+    assert all(not ({"<S*>", "<C*>"} <= set(row["prompt"].split())) for row in rows)
