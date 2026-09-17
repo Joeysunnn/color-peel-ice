@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_mailbox_orange_shared_kv_joint_1000_color_transfer_protocol_v1",
+  "purpose": "Single-token color transfer diagnostic for the completed shared-K/V mailbox/orange joint pilot; prompts exactly reproduce the 10 completed orange all100 transfer templates while <S*> is absent from every prompt.",
+  "prompt_source": {"run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260912-074208__natural_image_subject_color_pilot__emission_color_transfer_orange_all100__7dd85d5__42", "generation_manifest_sha256": "1225aa345d142ec4f61c1efdccfd57f85d2407f8a88c5015c5ed7c5eb6bd4781", "protocol_path": "experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_all100_protocol_v1.json", "protocol_sha256": "421f9c95993bed266cb115fa8cca51382086ccb1f6e4314afe07d9e816d1fd75"},
+  "source_checkpoints": [{"id": "shared-kv-1000", "steps": 1000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260917-170639__natural_image_subject_color_pilot__mailbox_orange_shared_kv_joint_1000__bb81c73__42", "run_manifest_sha256": "21116f66cfb186d4a85549e0939113fca7527cdc8a4c3bacb218ec73bcdca59e", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260917-170639__natural_image_subject_color_pilot__mailbox_orange_shared_kv_joint_1000__bb81c73__42/checkpoints", "model_sha256": "e39a88ebbc459b9fd82eecd504d8650699d169265136a961ea9789d5a225ecfe", "token_artifact_sha256": {"<S*>.bin": "88af75f136080edc817c356f3d84930ca68cce9e48cdef7595feb2f2562f0d22", "<C*>.bin": "bb81f93ee2d67f88ea813c2435d72dae00c45e778af5b57894468a775030733e"}}],
+  "required_token_artifacts": ["<S*>.bin", "<C*>.bin"],
+  "forbidden_token_artifacts": [],
+  "sampling": {"seeds": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 100},
+  "prompts": [
+    {"color":"transfer_00_bowl","prompt":"a <C*> bowl on the table"}, {"color":"transfer_01_bowling_ball","prompt":"a <C*> bowling ball in a bowling alley"}, {"color":"transfer_02_plate","prompt":"a <C*> plate on the table"}, {"color":"transfer_03_vase","prompt":"a <C*> vase on the shelf"}, {"color":"transfer_04_pants","prompt":"a women wearing <C*> pants"}, {"color":"transfer_05_teddy_bear","prompt":"a <C*> teddy-bear in Time Square"}, {"color":"transfer_06_snooker_ball","prompt":"a <C*> snooker ball on the table"}, {"color":"transfer_07_parrot","prompt":"a <C*> parrot perched on a tree"}, {"color":"transfer_08_sofa","prompt":"a <C*> sofa in living room"}, {"color":"transfer_09_rose","prompt":"a <C*> rose blooming in a wooden pot"}
+  ],
+  "acceptance": {"generation_status": "all_decodable_rgb_512", "color_transfer": "manual_review_required", "fruit_or_other_initializer_leakage": "record_not_filter", "safety_filtered_or_black_outputs": "record_as_invalid_not_success"},
+  "next_step": "human transfer review only; no training or dataset expansion without separate authorization"
+}

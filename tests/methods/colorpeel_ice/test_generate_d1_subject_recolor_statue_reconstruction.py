@@ -33,6 +33,8 @@ MAILBOX_1000_TRANSFER_PROTOCOLS = [
 ]
 JOINT_RECONSTRUCTION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_reconstruction_protocol_v1.json"
 JOINT_COMPOSITION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_composition_protocol_v1.json"
+JOINT_SUBJECT_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_subject_transfer_protocol_v1.json"
+JOINT_COLOR_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_color_transfer_protocol_v1.json"
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -264,3 +266,20 @@ def test_shared_kv_joint_composition_is_a_pinned_heldout_two_token_grid():
     assert {row["color"] for row in rows} == {"core", "closeup", "side_view", "white_background", "street"}
     assert all("<S*>" in row["prompt"] and "<C*>" in row["prompt"] for row in rows)
     assert all("orange" not in row["prompt"].lower() for row in rows)
+
+
+def test_shared_kv_joint_single_token_transfer_grids_reuse_the_prior_prompt_sets():
+    subject_protocol = json.loads(JOINT_SUBJECT_TRANSFER_PROTOCOL.read_text(encoding="utf-8"))
+    subject_rows = module.build_manifest(subject_protocol)
+    assert len(subject_rows) == 115
+    assert {item["group"] for item in subject_protocol["prompts"]} == {"unseen_color", "context", "viewpoint", "composition", "hard_compositional"}
+    assert all("<S*>" in row["prompt"] and "<C*>" not in row["prompt"] for row in subject_rows)
+
+    color_protocol = json.loads(JOINT_COLOR_TRANSFER_PROTOCOL.read_text(encoding="utf-8"))
+    color_rows = module.build_manifest(color_protocol)
+    assert len(color_rows) == 100
+    assert [item["color"] for item in color_protocol["prompts"]] == [f"transfer_{index:02d}_{name}" for index, name in enumerate(("bowl", "bowling_ball", "plate", "vase", "pants", "teddy_bear", "snooker_ball", "parrot", "sofa", "rose"))]
+    assert all("<C*>" in row["prompt"] and "<S*>" not in row["prompt"] for row in color_rows)
+    for protocol in (subject_protocol, color_protocol):
+        assert protocol["required_token_artifacts"] == ["<S*>.bin", "<C*>.bin"]
+        assert set(protocol["source_checkpoints"][0]["token_artifact_sha256"]) == {"<S*>.bin", "<C*>.bin"}
