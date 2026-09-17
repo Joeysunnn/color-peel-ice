@@ -123,6 +123,18 @@ def test_mailbox_prompt_ablation_protocols_lock_full_kv_and_the_five_repaired_co
     assert category["caa"]["cos_weight"] == token_first["caa"]["cos_weight"] == 0.0
 
 
+def test_mailbox_1000_step_protocols_keep_the_prompt_ablation_and_full_kv_contract():
+    configs = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs"
+    category = stage.protocol(configs / "d1_subject_recolor_mailbox_category_1000_training_protocol_v1.json")
+    token_first = stage.protocol(configs / "d1_subject_recolor_mailbox_token_first_1000_training_protocol_v1.json")
+    assert category["training"]["authorized_steps"] == token_first["training"]["authorized_steps"] == [1000]
+    assert category["training"]["kv_learning_rate"] == token_first["training"]["kv_learning_rate"] == 1.0e-5
+    assert category["training_data"] == token_first["training_data"] | {"prompt_by_image": category["training_data"]["prompt_by_image"]}
+    assert category["subject"]["training_prompt_template"] == "a photo of <S*> mailbox in {color} color"
+    assert token_first["subject"]["training_prompt_template"] == "a photo of <S*> in {color} color"
+    assert category["caa"] == token_first["caa"] == {"enabled": False, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"}
+
+
 def test_no_gorilla_initializer_screen_protocol_locks_three_single_token_candidates():
     value = stage.protocol(
         ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_screen_protocol_v5.json"

@@ -42,7 +42,7 @@ def read_json(path: Path) -> dict[str, Any]:
 def protocol(path: Path | None = None) -> dict[str, Any]:
     value = read_json(path or REPO_ROOT / PROTOCOL_RELPATH)
     schema = value.get("schema")
-    require(schema in {"natural_subject_recolor_training_protocol/v1", "natural_subject_recolor_training_protocol/v2", "natural_subject_recolor_training_protocol/v3", "natural_subject_recolor_training_protocol/v4", "natural_subject_recolor_training_protocol/v5", "natural_subject_recolor_training_protocol/v6", "natural_subject_recolor_training_protocol/v7"}, "Protocol differs")
+    require(schema in {"natural_subject_recolor_training_protocol/v1", "natural_subject_recolor_training_protocol/v2", "natural_subject_recolor_training_protocol/v3", "natural_subject_recolor_training_protocol/v4", "natural_subject_recolor_training_protocol/v5", "natural_subject_recolor_training_protocol/v6", "natural_subject_recolor_training_protocol/v7", "natural_subject_recolor_training_protocol/v8"}, "Protocol differs")
     subject, data, approval = value.get("subject", {}), value.get("training_data", {}), value.get("approval_state", {})
     require(subject.get("modifier_token") == "<S*>", "Subject token contract differs")
     image_names = ("red", "yellow", "green", "cyan", "blue")
@@ -85,7 +85,8 @@ def protocol(path: Path | None = None) -> dict[str, Any]:
         require(prompt_template in {"a photo of <S*> mailbox in {color} color", "a photo of <S*> in {color} color"}, "Mailbox prompt contract differs")
         image_names = ("red", "green", "cyan", "blue", "magenta")
         require(approval.get("mailbox_prompt_ablation_approved") is True, "Training approval differs")
-        require(value.get("training", {}).get("authorized_steps") == [750] and value["training"].get("kv_learning_rate") == 1.0e-5, "Mailbox full-K/V parameters differ")
+        expected_steps = [750] if schema.endswith("/v7") else [1000]
+        require(value.get("training", {}).get("authorized_steps") == expected_steps and value["training"].get("kv_learning_rate") == 1.0e-5, "Mailbox full-K/V parameters differ")
     expected_prompts = {name: prompt_template.format(color=name) for name in image_names}
     require(data.get("image_names") == list(expected_prompts) and data.get("prompt_by_image") == expected_prompts and data.get("original_subject_color_record") == "forbidden" and data.get("color_modifier_token") == "forbidden", "Training data identity differs")
     require(value.get("caa") == {"enabled": False, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"}, "CAA contract differs")

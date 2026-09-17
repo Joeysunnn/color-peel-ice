@@ -1,0 +1,11 @@
+{
+  "schema": "natural_subject_recolor_training_protocol/v8",
+  "protocol_id": "d1_subject_recolor_mailbox_token_first_1000_training_protocol_v1",
+  "purpose": "Independent 1000-step mailbox subject-only full-K/V training without the ordinary category word in the training prompt; original orange subject record is held out.",
+  "source_pilot": {"run_id": "subject_recolor_mailbox_border_repair_8fcfe0f_20260916", "analysis_sha256": "4e4940228a6081856c382f4a5f4dc7174cbd33cf83eb7f92c43478e9b8b3f2ed", "results_sha256": "05d7d87a2eb3d26d8b5887c5a03f67beb2b845f0fa2d1d2572f531af7509caaa", "repaired_mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "required_automatic_safety_pass": true},
+  "subject": {"stable_id": "D1GT:81/130.png", "modifier_token": "<S*>", "initializer_token": "mailbox", "training_prompt_template": "a photo of <S*> in {color} color"},
+  "training_data": {"image_names": ["red", "green", "cyan", "blue", "magenta"], "prompt_by_image": {"red": "a photo of <S*> in red color", "green": "a photo of <S*> in green color", "cyan": "a photo of <S*> in cyan color", "blue": "a photo of <S*> in blue color", "magenta": "a photo of <S*> in magenta color"}, "expected_image_sha256": {"red": "4c62305b55f0e0aa494a402a643cec60897493fcdda25b802f7f3b4e81c6269b", "green": "15b93e4e49502870daa3b71f524220943ccfaf2114f810c54da827e0a210aed0", "cyan": "3a8114eb9738e655cbb47cdf088569cf02b1ae8e9fe9bb8f59015606f9ce1126", "blue": "5475c02c3713ce6353bd262f584f16105d24c23285ec1312eb427fb87edd4dc5", "magenta": "8fd34d57121ea58f89039e90badd3dd8c318ecf84d5c78158a048e5faf128ab8"}, "use_repaired_binary_instance_mask": true, "original_subject_color_record": "forbidden", "color_modifier_token": "forbidden"},
+  "caa": {"enabled": false, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"},
+  "training": {"seed": 42, "authorized_steps": [1000], "embedding_learning_rate": 1.0e-5, "kv_learning_rate": 1.0e-5, "from_scratch": true, "transfer_after_training": "authorized"},
+  "approval_state": {"mailbox_prompt_ablation_approved": true, "mixed_shared_checkpoint_training_approved": false, "joint_training_approved": false}
+}
