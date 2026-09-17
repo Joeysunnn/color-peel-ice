@@ -1,0 +1,8 @@
+schema_version: 1
+status: authorized_shared_kv_subject_color_joint_pilot
+stage: train
+run: {study: natural_image_subject_color_pilot, variant: mailbox_orange_shared_kv_joint_1000, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_mailbox_orange_shared_kv_joint_training_protocol_v1.json
+args: {pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4, concepts_list: "${COLORPEEL_MAILBOX_ORANGE_JOINT_CONCEPTS}", resolution: 512, train_batch_size: 1, learning_rate: 1.0e-5, kv_learning_rate: 1.0e-5, freeze_model: crossattn_kv, scale_lr: true, lr_scheduler: constant, lr_warmup_steps: 0, max_train_steps: 1000, checkpointing_steps: 250, seed: 42, mixed_precision: "no", cos_weight: 0.0, gradient_accumulation_steps: 1, max_grad_norm: 1.0, dataloader_num_workers: 2, adam_beta1: 0.9, adam_beta2: 0.999, adam_weight_decay: 0.0, adam_epsilon: 1.0e-8, hflip: true, modifier_token: "<S*>+<C*>", initializer_token: "mailbox+orange"}
+protocol: {subject_token: "<S*>", color_token: "<C*>", training_rows: 90, exact_subject_color_pairs: forbidden, full_kv: true, CAA: disabled_for_unpaired_rows, joint_two_object_binding: forbidden, original_subject_color_record: forbidden}

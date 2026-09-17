@@ -1,0 +1,13 @@
+{
+  "schema": "natural_subject_color_joint_training_protocol/v1",
+  "protocol_id": "d1_mailbox_orange_shared_kv_joint_training_protocol_v1",
+  "purpose": "Minimal unpaired mailbox/orange shared-Custom-Diffusion-KV composition pilot; evaluate the held-out original subject/color combination only after training.",
+  "branches": {
+    "subject": {"source_protocol_relative_path": "experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_mailbox_category_1000_training_protocol_v1.json", "source_protocol_sha256": "0923bcf628b5d0aea903cdeabbedd45942a051290ee0d7cad98931fea58ae4f3", "source_root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-150327__natural_image_subject_color_pilot__subject_recolor_mailbox_border_repair__8fcfe0f__42"},
+    "color": {"source_protocol_relative_path": "experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_protocol_v1.json", "source_protocol_sha256": "9a71823b1fc55bfb4d5a0f1462190aeec46d22453ea78d62c840874ee83b83b1", "source_root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_image_subject_color_pilot/emission_color_branch_4c9e55d_pilot"}
+  },
+  "training": {"modifier_tokens": ["<S*>", "<C*>"], "initializer_tokens": ["mailbox", "orange"], "shared_kv": true, "cos_weight": 0.0, "joint_two_object_binding": false, "original_subject_color_record": "forbidden", "paired_subject_color_rows": "forbidden"},
+  "schedule": {"subject_rows": 45, "color_rows": 45, "ordering": "strict_alternation_subject_then_color"},
+  "checkpoint_plan": {"max_train_steps": 1000, "state_checkpoint_steps": 250, "final_export_only_for_inference": true},
+  "approval_state": {"shared_kv_joint_pilot_approved": true, "joint_dataset_expansion_approved": false, "full_training_approved": false}
+}
