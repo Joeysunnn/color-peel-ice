@@ -32,6 +32,7 @@ MAILBOX_1000_TRANSFER_PROTOCOLS = [
     )
 ]
 JOINT_RECONSTRUCTION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_reconstruction_protocol_v1.json"
+JOINT_COMPOSITION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_composition_protocol_v1.json"
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -251,3 +252,15 @@ def test_shared_kv_joint_reconstruction_checks_both_single_token_branches_only()
         "color_cube", "color_sphere", "color_cylinder",
     }
     assert all(not ({"<S*>", "<C*>"} <= set(row["prompt"].split())) for row in rows)
+
+
+def test_shared_kv_joint_composition_is_a_pinned_heldout_two_token_grid():
+    protocol = json.loads(JOINT_COMPOSITION_PROTOCOL.read_text(encoding="utf-8"))
+    rows = module.build_manifest(protocol)
+    assert len(rows) == 25
+    assert protocol["required_token_artifacts"] == ["<S*>.bin", "<C*>.bin"]
+    assert set(protocol["source_checkpoints"][0]["token_artifact_sha256"]) == {"<S*>.bin", "<C*>.bin"}
+    assert {row["checkpoint_id"] for row in rows} == {"shared-kv-1000"}
+    assert {row["color"] for row in rows} == {"core", "closeup", "side_view", "white_background", "street"}
+    assert all("<S*>" in row["prompt"] and "<C*>" in row["prompt"] for row in rows)
+    assert all("orange" not in row["prompt"].lower() for row in rows)

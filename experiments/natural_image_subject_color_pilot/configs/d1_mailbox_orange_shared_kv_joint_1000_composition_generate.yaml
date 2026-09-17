@@ -1,0 +1,8 @@
+schema_version: 1
+status: authorized_shared_kv_joint_heldout_composition
+stage: generate_subject_statue_reconstruction
+run: {study: natural_image_subject_color_pilot, variant: mailbox_orange_shared_kv_joint_1000_composition, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3", COLORPEEL_INFERENCE_RUNTIME: colorpeel017, COLORPEEL_INFERENCE_PYTHON: /home/r12user5/miniforge3/envs/colorpeel017/bin/python}
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_mailbox_orange_shared_kv_joint_1000_composition_protocol_v1.json
+args: {protocol: experiments/natural_image_subject_color_pilot/configs/d1_mailbox_orange_shared_kv_joint_1000_composition_protocol_v1.json, device: cuda:0, dtype: float16, pretrained-model-name-or-path: CompVis/stable-diffusion-v1-4}
+protocol: {subject_token: "<S*>", color_token: "<C*>", checkpoint_steps: [1000], prompt_count: 5, seeds: [42, 43, 44, 45, 46], paired_subject_color_prompts: required, ordinary_orange_word: forbidden, training: forbidden}
