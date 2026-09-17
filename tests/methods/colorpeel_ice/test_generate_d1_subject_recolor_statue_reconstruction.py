@@ -245,6 +245,7 @@ def test_shared_kv_joint_reconstruction_checks_both_single_token_branches_only()
     rows = module.build_manifest(protocol)
     assert len(rows) == 40
     assert protocol["required_token_artifacts"] == ["<S*>.bin", "<C*>.bin"]
+    assert set(protocol["source_checkpoints"][0]["token_artifact_sha256"]) == {"<S*>.bin", "<C*>.bin"}
     assert {row["color"] for row in rows} == {
         "subject_seen_red", "subject_seen_green", "subject_seen_cyan", "subject_seen_blue", "subject_seen_magenta",
         "color_cube", "color_sphere", "color_cylinder",
