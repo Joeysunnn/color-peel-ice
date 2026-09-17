@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_mailbox_orange_shared_kv_joint_1500_reconstruction_protocol_v1",
+  "purpose": "Single-branch reconstruction diagnostic for the completed 1500-step shared-K/V mailbox/orange joint run; no prompt pairs <S*> with <C*>.",
+  "source_checkpoints": [{"id":"shared-kv-1500","steps":1500,"run_dir":"/home/r12user5/Documents/Jiawei/colorpeel-runs/20260917-221108__natural_image_subject_color_pilot__mailbox_orange_shared_kv_joint_1500__35fe0e8__42","run_manifest_sha256":"dcb76d29287376cbcc1565c1815ba81c091a673218a00988ba6899adffb372a7","model_dir":"/home/r12user5/Documents/Jiawei/colorpeel-runs/20260917-221108__natural_image_subject_color_pilot__mailbox_orange_shared_kv_joint_1500__35fe0e8__42/checkpoints","model_sha256":"55572e383028678d042304cbfbae5d0a3cd00187e42c899f957a285a4036f609","token_artifact_sha256":{"<S*>.bin":"f32b6eeac55fba2f7dff82f3537b330218d6f4ce84953ee9b77c00a610bfa688","<C*>.bin":"0e9d002923f0cd080f9abd9e2de674bddcaa3ea938850494e4956b06dd192453"}}],
+  "required_token_artifacts":["<S*>.bin","<C*>.bin"], "forbidden_token_artifacts":[],
+  "sampling":{"seeds":[42,43,44,45,46],"num_inference_steps":100,"guidance_scale":6.0,"expected_image_count":40},
+  "prompts":[
+    {"color":"subject_seen_red","prompt":"a photo of <S*> mailbox in red color"},{"color":"subject_seen_green","prompt":"a photo of <S*> mailbox in green color"},{"color":"subject_seen_cyan","prompt":"a photo of <S*> mailbox in cyan color"},{"color":"subject_seen_blue","prompt":"a photo of <S*> mailbox in blue color"},{"color":"subject_seen_magenta","prompt":"a photo of <S*> mailbox in magenta color"},
+    {"color":"color_cube","prompt":"a photo of cube shape in <C*> color"},{"color":"color_sphere","prompt":"a photo of sphere shape in <C*> color"},{"color":"color_cylinder","prompt":"a photo of cylinder shape in <C*> color"}
+  ],
+  "next_step":"human reconstruction review before held-out composition and transfer"
+}

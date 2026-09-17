@@ -35,6 +35,15 @@ JOINT_RECONSTRUCTION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_co
 JOINT_COMPOSITION_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_composition_protocol_v1.json"
 JOINT_SUBJECT_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_subject_transfer_protocol_v1.json"
 JOINT_COLOR_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_mailbox_orange_shared_kv_joint_1000_color_transfer_protocol_v1.json"
+JOINT_1500_PROTOCOLS = [
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / name
+    for name in (
+        "d1_mailbox_orange_shared_kv_joint_1500_reconstruction_protocol_v1.json",
+        "d1_mailbox_orange_shared_kv_joint_1500_composition_protocol_v1.json",
+        "d1_mailbox_orange_shared_kv_joint_1500_subject_transfer_protocol_v1.json",
+        "d1_mailbox_orange_shared_kv_joint_1500_color_transfer_protocol_v1.json",
+    )
+]
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -283,3 +292,21 @@ def test_shared_kv_joint_single_token_transfer_grids_reuse_the_prior_prompt_sets
     for protocol in (subject_protocol, color_protocol):
         assert protocol["required_token_artifacts"] == ["<S*>.bin", "<C*>.bin"]
         assert set(protocol["source_checkpoints"][0]["token_artifact_sha256"]) == {"<S*>.bin", "<C*>.bin"}
+
+
+def test_shared_kv_joint_1500_protocols_bind_one_final_checkpoint_and_preserve_grid_roles():
+    expected_counts = [40, 25, 115, 100]
+    for protocol_path, expected_count in zip(JOINT_1500_PROTOCOLS, expected_counts):
+        protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+        rows = module.build_manifest(protocol)
+        checkpoint = protocol["source_checkpoints"][0]
+        assert len(rows) == expected_count
+        assert {row["checkpoint_id"] for row in rows} == {"shared-kv-1500"}
+        assert {row["checkpoint_steps"] for row in rows} == {1500}
+        assert checkpoint["model_sha256"] == "55572e383028678d042304cbfbae5d0a3cd00187e42c899f957a285a4036f609"
+        assert checkpoint["token_artifact_sha256"] == {"<S*>.bin": "f32b6eeac55fba2f7dff82f3537b330218d6f4ce84953ee9b77c00a610bfa688", "<C*>.bin": "0e9d002923f0cd080f9abd9e2de674bddcaa3ea938850494e4956b06dd192453"}
+    reconstruction, composition, subject, color = [json.loads(path.read_text(encoding="utf-8")) for path in JOINT_1500_PROTOCOLS]
+    assert all(not ({"<S*>", "<C*>"} <= set(row["prompt"].split())) for row in module.build_manifest(reconstruction))
+    assert all("<S*>" in row["prompt"] and "<C*>" in row["prompt"] for row in module.build_manifest(composition))
+    assert all("<S*>" in row["prompt"] and "<C*>" not in row["prompt"] for row in module.build_manifest(subject))
+    assert all("<C*>" in row["prompt"] and "<S*>" not in row["prompt"] for row in module.build_manifest(color))
