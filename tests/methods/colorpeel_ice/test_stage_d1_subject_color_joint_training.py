@@ -47,5 +47,4 @@ def test_1500_step_dose_protocol_reuses_the_hashed_unpaired_concepts_only():
         "row_count": 90,
     }
     assert value["checkpoint_plan"] == {"max_train_steps": 1500, "state_checkpoint_steps": 250, "final_export_only_for_inference": True}
-    assert value["schedule"]["expected_exposures_per_token"] == 750
-    assert value["training"]["initialization"] == "base_stable_diffusion_not_resume"
+    assert value["step_dose_metadata"] == {"initialization": "base_stable_diffusion_not_resume", "expected_exposures_per_token": 750}
