@@ -17,6 +17,7 @@ MAILBOX_RECONSTRUCTION_PROTOCOLS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_token_first_750_reconstruction_protocol_v1.json",
 ]
 MAILBOX_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_750_transfer_protocol_v1.json"
+MAILBOX_FREE_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_free_750_transfer_protocol_v1.json"
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -172,3 +173,12 @@ def test_mailbox_transfer_grid_includes_all_user_requested_hard_compositions():
         "a photo of <S*> mailbox in pink color in a snowy environment",
         "a close-up photo of <S*> mailbox in white color in front of a house",
     }
+
+
+def test_mailbox_free_transfer_grid_removes_the_ordinary_category_word_only():
+    protocol = json.loads(MAILBOX_FREE_TRANSFER_PROTOCOL.read_text(encoding="utf-8"))
+    rows = module.build_manifest(protocol)
+    assert len(rows) == 230
+    assert all("mailbox" not in item["prompt"].lower() for item in protocol["prompts"])
+    assert {item["group"] for item in protocol["prompts"]} == {"unseen_color", "context", "viewpoint", "composition", "hard_compositional"}
+    assert {row["checkpoint_id"] for row in rows} == {"category-750", "token-first-750"}
