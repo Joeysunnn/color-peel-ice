@@ -22,6 +22,15 @@ MAILBOX_1000_RECONSTRUCTION_PROTOCOLS = [
 ]
 MAILBOX_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_750_transfer_protocol_v1.json"
 MAILBOX_FREE_TRANSFER_PROTOCOL = ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_free_750_transfer_protocol_v1.json"
+MAILBOX_1000_TRANSFER_PROTOCOLS = [
+    ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / name
+    for name in (
+        "d1_subject_recolor_mailbox_category_1000_transfer_protocol_v1.json",
+        "d1_subject_recolor_mailbox_category_free_1000_transfer_protocol_v1.json",
+        "d1_subject_recolor_mailbox_token_first_1000_transfer_protocol_v1.json",
+        "d1_subject_recolor_mailbox_token_first_free_1000_transfer_protocol_v1.json",
+    )
+]
 LEGACY_REGENERATION_CONFIGS = [
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kv_ablation_reconstruction_legacy_generate.yaml",
     ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_statue_init_kvlow_step_dose_reconstruction_legacy_generate.yaml",
@@ -197,3 +206,16 @@ def test_mailbox_free_transfer_grid_removes_the_ordinary_category_word_only():
     assert all("mailbox" not in item["prompt"].lower() for item in protocol["prompts"])
     assert {item["group"] for item in protocol["prompts"]} == {"unseen_color", "context", "viewpoint", "composition", "hard_compositional"}
     assert {row["checkpoint_id"] for row in rows} == {"category-750", "token-first-750"}
+
+
+def test_mailbox_1000_transfer_protocols_are_single_checkpoint_fully_pinned_grids():
+    for protocol_path in MAILBOX_1000_TRANSFER_PROTOCOLS:
+        protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+        rows = module.build_manifest(protocol)
+        assert len(rows) == 115
+        assert len(protocol["source_checkpoints"]) == 1
+        assert {row["checkpoint_steps"] for row in rows} == {1000}
+        assert len({row["image_path"] for row in rows}) == 115
+        assert len(protocol["source_checkpoints"][0]["model_sha256"]) == 64
+        is_free = "_free_" in protocol_path.name
+        assert all(("mailbox" not in row["prompt"].lower()) == is_free for row in rows)
