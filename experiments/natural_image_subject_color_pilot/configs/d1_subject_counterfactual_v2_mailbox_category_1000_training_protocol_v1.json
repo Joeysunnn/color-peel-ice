@@ -1,0 +1,18 @@
+{
+  "schema": "natural_subject_counterfactual_v2_training_protocol/v1",
+  "protocol_id": "d1_subject_counterfactual_v2_mailbox_category_1000_training_protocol_v1",
+  "purpose": "Independent 1000-step mailbox subject-only full-K/V run on the reviewed deterministic D1GT:81/130 counterfactual-v2 assets; original mailbox-orange remains held out.",
+  "source_counterfactual": {
+    "source_root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-173000__natural_image_subject_color_pilot__mailbox_subject_counterfactual_v2__9e50958__42",
+    "source_protocol_relative_path": "experiments/natural_image_subject_color_pilot/configs/d1_subject_counterfactual_v2_protocol_v1.json",
+    "source_protocol_sha256": "c0a76e9a6b9bcd2594693207498c7eb884f9fc2e4b7b0f93a21748be270cf5a1",
+    "plan_sha256": "9850ef231a958e3b517a1bd7344922b82ba2b59f65c30e8f794979b64e084b9f",
+    "results_sha256": "011d169d66191c6980099c9399e6e1dbd28714edb9a205b44254b2b540c9b4b7",
+    "analysis_sha256": "7337b2e483a8cec1ddeeef3c9744085783015a743d60b486deb3d6c6c4113688"
+  },
+  "subject": {"stable_id": "D1GT:81/130.png", "modifier_token": "<S*>", "initializer_token": "mailbox", "training_prompt_template": "a photo of <S*> mailbox in {color} color"},
+  "training_data": {"record_count": 25, "color_names": ["red", "green", "cyan", "blue", "magenta"], "variant_ids": ["center_neutral", "left_sky", "right_cream_mirror", "upper_left_bluegray", "upper_right_warmgray_mirror"], "minimum_hue_separation_degrees": 30.0, "original_subject_color_record": "forbidden", "color_modifier_token": "forbidden", "uses_per_record_binary_instance_mask": true},
+  "caa": {"enabled": false, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"},
+  "training": {"seed": 42, "max_train_steps": 1000, "embedding_learning_rate": 1.0e-5, "kv_learning_rate": 1.0e-5, "full_kv": true, "hflip": false, "from_scratch": true},
+  "approval_state": {"subject_counterfactual_v2_training_approved": true, "joint_training_approved": false}
+}
