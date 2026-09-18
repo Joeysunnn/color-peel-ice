@@ -80,7 +80,8 @@ def _source_records(source_root: Path, protocol: dict[str, Any]) -> tuple[dict[s
     core.require(set(records) == set(expected), "Auxiliary color coverage differs")
     images = {}
     for name, color in expected.items():
-        record, image_path = records[name], source_root / record["image_relative_path"]
+        record = records[name]
+        image_path = source_root / record["image_relative_path"]
         core.require(record["hue_degrees"] == color["hue_degrees"] and sha256(image_path) == color["image_sha256"], f"Source image differs: {name}")
         images[name] = image_path
     mask = np.asarray(Image.open(mask_path).convert("L"), dtype=np.uint8)
