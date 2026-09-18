@@ -135,6 +135,15 @@ def test_mailbox_1000_step_protocols_keep_the_prompt_ablation_and_full_kv_contra
     assert category["caa"] == token_first["caa"] == {"enabled": False, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"}
 
 
+def test_mailbox_exposure_matched_control_locks_the_five_images_and_5000_steps():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_mailbox_category_exposure_matched_5000_training_protocol_v1.json"
+    )
+    assert value["training"]["authorized_steps"] == [5000]
+    assert value["subject"]["training_prompt_template"] == "a photo of <S*> mailbox in {color} color"
+    assert value["approval_state"]["exposure_matched_control_approved"] is True
+
+
 def test_no_gorilla_initializer_screen_protocol_locks_three_single_token_candidates():
     value = stage.protocol(
         ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_recolor_no_gorilla_initializer_screen_protocol_v5.json"

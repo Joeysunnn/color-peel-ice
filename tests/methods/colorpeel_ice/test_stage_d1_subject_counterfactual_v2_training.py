@@ -41,3 +41,12 @@ def test_stage_keeps_one_independent_image_mask_pair_for_every_v2_record(tmp_pat
     assert result["record_count"] == 4
     assert [Path(row["instance_data_dir"]).parent.name for row in concepts] == sorted(row["record_id"] for row in records)
     assert all(Path(row["instance_data_dir"]).joinpath("image.png").is_file() and Path(row["instance_mask_dir"]).joinpath("image.png").is_file() for row in concepts)
+
+
+def test_exposure_matched_v2_protocol_locks_25_records_and_5000_steps():
+    value = stage.protocol(
+        ROOT / "experiments" / "natural_image_subject_color_pilot" / "configs" / "d1_subject_counterfactual_v2_mailbox_category_exposure_matched_5000_training_protocol_v1.json"
+    )
+    assert value["training_data"]["record_count"] == 25
+    assert value["training"]["max_train_steps"] == 5000
+    assert value["approval_state"] == {"exposure_matched_control_approved": True, "joint_training_approved": False}

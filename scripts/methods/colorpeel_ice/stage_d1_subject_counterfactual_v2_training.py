@@ -45,17 +45,27 @@ def protocol(path: Path) -> dict[str, Any]:
         "initializer_token": "mailbox",
         "training_prompt_template": "a photo of <S*> mailbox in {color} color",
     }, "Subject contract differs")
-    require(value.get("training") == {
+    training = value.get("training")
+    require(isinstance(training, dict), "Training contract differs")
+    expected_training = {
         "seed": 42,
-        "max_train_steps": 1000,
         "embedding_learning_rate": 1.0e-5,
         "kv_learning_rate": 1.0e-5,
         "full_kv": True,
         "hflip": False,
         "from_scratch": True,
-    }, "Training contract differs")
+    }
+    require(
+        {key: training.get(key) for key in expected_training} == expected_training
+        and set(training) == set(expected_training) | {"max_train_steps"},
+        "Training contract differs",
+    )
+    require(training["max_train_steps"] in {1000, 5000}, "Training dose differs")
     require(value.get("caa") == {"enabled": False, "cos_weight": 0.0, "reason": "one learned modifier token cannot form a learned-token attention pair"}, "CAA contract differs")
-    require(value.get("approval_state") == {"subject_counterfactual_v2_training_approved": True, "joint_training_approved": False}, "Approval differs")
+    expected_approval = {"subject_counterfactual_v2_training_approved": True, "joint_training_approved": False}
+    if training["max_train_steps"] == 5000:
+        expected_approval = {"exposure_matched_control_approved": True, "joint_training_approved": False}
+    require(value.get("approval_state") == expected_approval, "Approval differs")
     return value
 
 
