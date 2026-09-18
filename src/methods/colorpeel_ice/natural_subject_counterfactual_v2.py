@@ -68,7 +68,6 @@ def apply_variant(
     background = np.asarray(variant["background_rgb"], dtype=np.uint8)
     require(background.shape == (3,), "Background must be RGB")
     scale, translate_x, translate_y, mirror = float(variant["scale"]), int(variant["translate_x"]), int(variant["translate_y"]), bool(variant["mirror"])
-    coefficients = _coefficients(binary_mask.shape, scale, translate_x, translate_y, mirror)
 
     alpha = alpha_u16.astype(np.float64) / 65535.0
     foreground = source_image.copy()
@@ -78,6 +77,9 @@ def apply_variant(
         0,
         255,
     ).astype(np.uint8)
+    if mirror:
+        foreground, binary_mask, alpha = np.fliplr(foreground), np.fliplr(binary_mask), np.fliplr(alpha)
+    coefficients = _coefficients(binary_mask.shape, scale, translate_x, translate_y, False)
     premultiplied = foreground.astype(np.float64) * alpha[..., None]
     premultiplied[binary_mask == 0] = 0.0
     transformed_mask = _transform(binary_mask, coefficients, Image.Resampling.NEAREST).astype(np.uint8)
