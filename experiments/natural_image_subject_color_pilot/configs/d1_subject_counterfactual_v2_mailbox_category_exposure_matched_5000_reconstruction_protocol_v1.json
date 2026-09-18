@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_counterfactual_v2_mailbox_category_exposure_matched_5000_reconstruction_protocol_v1",
+  "purpose": "Training-prompt reconstruction diagnostic for the completed exposure-matched deterministic counterfactual-v2 mailbox subject-only checkpoint.",
+  "source_checkpoints": [{"id": "counterfactual-v2-exposure-matched-5000", "steps": 5000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191100__natural_image_subject_color_pilot__subject_counterfactual_v2_mailbox_category_exposure_matched_5000__c3844f1__42", "run_manifest_sha256": "214745539d644d7fb75d79ce28cdf427f6f707cb985d8c36a9a6c6d5f5cae122", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191100__natural_image_subject_color_pilot__subject_counterfactual_v2_mailbox_category_exposure_matched_5000__c3844f1__42/checkpoints", "model_sha256": "2b247282abdb2732c9f903adaf4f4a285634743da119e768ae5be8e740422f18", "token_artifact_sha256": {"<S*>.bin": "a261b3442c187e088f956a2945867e0cb7c291b5a514eb781e854b88fde748bb"}}],
+  "required_token_artifacts": ["<S*>.bin"],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 25},
+  "prompts": [{"color": "seen_red", "prompt": "a photo of <S*> mailbox in red color"}, {"color": "seen_green", "prompt": "a photo of <S*> mailbox in green color"}, {"color": "seen_cyan", "prompt": "a photo of <S*> mailbox in cyan color"}, {"color": "seen_blue", "prompt": "a photo of <S*> mailbox in blue color"}, {"color": "seen_magenta", "prompt": "a photo of <S*> mailbox in magenta color"}],
+  "next_step": "human reconstruction review before transfer interpretation; joint training remains forbidden"
+}
