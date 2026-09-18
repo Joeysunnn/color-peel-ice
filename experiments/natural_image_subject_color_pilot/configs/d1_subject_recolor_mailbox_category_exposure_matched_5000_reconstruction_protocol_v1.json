@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_mailbox_category_exposure_matched_5000_reconstruction_protocol_v1",
+  "purpose": "Training-prompt reconstruction diagnostic for the completed exposure-matched five-image mailbox subject-only checkpoint.",
+  "source_checkpoints": [{"id": "base5-exposure-matched-5000", "steps": 5000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42", "run_manifest_sha256": "fef19cb7ab8e22be059daa2e234b4f7f1865a8a57d3258e0730c59b8ecf036d6", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42/checkpoints", "model_sha256": "0071de810ddb397d533ee9bca196fd06ede8c00df0d747e1dca2551db25fa86e", "token_artifact_sha256": {"<S*>.bin": "3590101e853e245e5da26ffa90c1564f649a5933d05695059aa8e837c8157a14"}}],
+  "required_token_artifacts": ["<S*>.bin"],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 6.0, "expected_image_count": 25},
+  "prompts": [{"color": "seen_red", "prompt": "a photo of <S*> mailbox in red color"}, {"color": "seen_green", "prompt": "a photo of <S*> mailbox in green color"}, {"color": "seen_cyan", "prompt": "a photo of <S*> mailbox in cyan color"}, {"color": "seen_blue", "prompt": "a photo of <S*> mailbox in blue color"}, {"color": "seen_magenta", "prompt": "a photo of <S*> mailbox in magenta color"}],
+  "next_step": "human reconstruction review before transfer interpretation; joint training remains forbidden"
+}

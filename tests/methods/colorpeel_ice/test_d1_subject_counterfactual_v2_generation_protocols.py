@@ -18,3 +18,14 @@ def test_v2_reconstruction_and_transfer_protocols_bind_the_completed_subject_onl
     assert reconstruction["source_checkpoints"] == transfer["source_checkpoints"]
     assert reconstruction["forbidden_token_artifacts"] == transfer["forbidden_token_artifacts"] == ["<C*>.bin"]
     assert "unseen_orange" in {row["color"] for row in transfer["prompts"]}
+
+
+def test_exposure_matched_generation_protocols_use_the_same_sampling_grid_and_distinct_bound_weights():
+    base_reconstruction = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_5000_reconstruction_protocol_v1.json").read_text(encoding="utf-8"))
+    base_transfer = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_5000_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    v2_reconstruction = json.loads((CONFIGS / "d1_subject_counterfactual_v2_mailbox_category_exposure_matched_5000_reconstruction_protocol_v1.json").read_text(encoding="utf-8"))
+    v2_transfer = json.loads((CONFIGS / "d1_subject_counterfactual_v2_mailbox_category_exposure_matched_5000_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    assert [len(generate.build_manifest(value)) for value in (base_reconstruction, v2_reconstruction, base_transfer, v2_transfer)] == [25, 25, 115, 115]
+    assert base_reconstruction["sampling"] == v2_reconstruction["sampling"]
+    assert base_transfer["sampling"] == v2_transfer["sampling"]
+    assert base_reconstruction["source_checkpoints"][0]["model_sha256"] != v2_reconstruction["source_checkpoints"][0]["model_sha256"]
