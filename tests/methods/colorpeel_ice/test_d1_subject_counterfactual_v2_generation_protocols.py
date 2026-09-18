@@ -29,3 +29,12 @@ def test_exposure_matched_generation_protocols_use_the_same_sampling_grid_and_di
     assert base_reconstruction["sampling"] == v2_reconstruction["sampling"]
     assert base_transfer["sampling"] == v2_transfer["sampling"]
     assert base_reconstruction["source_checkpoints"][0]["model_sha256"] != v2_reconstruction["source_checkpoints"][0]["model_sha256"]
+
+
+def test_exposure_matched_sampling_sweep_is_a_two_checkpoint_nine_setting_grid():
+    sweep = json.loads((CONFIGS / "d1_subject_exposure_matched_5000_sampling_sweep_protocol_v1.json").read_text(encoding="utf-8"))
+    rows = generate.build_manifest(sweep)
+    assert len(rows) == 108
+    assert {row["checkpoint_id"] for row in rows} == {"base5-exposure-matched-5000", "counterfactual-v2-exposure-matched-5000"}
+    assert {row["sampling_id"] for row in rows} == {item["id"] for item in sweep["sampling_variants"]}
+    assert {row["prompt"] for row in rows} == {item["prompt"] for item in sweep["prompts"]}

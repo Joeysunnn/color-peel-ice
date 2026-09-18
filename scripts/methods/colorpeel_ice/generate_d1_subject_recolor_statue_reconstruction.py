@@ -40,21 +40,31 @@ def write_jsonl(rows: Iterable[dict[str, Any]], path: Path) -> None:
 
 def build_manifest(protocol: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
+    sampling_variants = protocol.get("sampling_variants")
+    if sampling_variants is None:
+        sampling_variants = [{"id": None, **protocol["sampling"]}]
+    expected_count = protocol.get("expected_image_count")
+    if expected_count is None:
+        expected_count = protocol["sampling"]["expected_image_count"]
     for checkpoint in protocol["source_checkpoints"]:
-        for item in protocol["prompts"]:
-            for seed in protocol["sampling"]["seeds"]:
-                step = checkpoint["steps"]
-                checkpoint_id = checkpoint.get("id", f"step-{step}")
-                image_group = checkpoint.get("id", f"step_{step}")
-                rows.append({
-                    "id": f"{checkpoint_id}-{item['color']}-seed-{seed}", "checkpoint_steps": step,
-                    "checkpoint_id": checkpoint_id,
-                    "model_dir": checkpoint["model_dir"], "color": item["color"], "prompt": item["prompt"],
-                    "seed": seed, "num_inference_steps": protocol["sampling"]["num_inference_steps"],
-                    "guidance_scale": protocol["sampling"]["guidance_scale"],
-                    "image_path": f"images/{image_group}/{item['color']}-seed-{seed}.png",
-                })
-    if len(rows) != protocol["sampling"]["expected_image_count"]:
+        for sampling in sampling_variants:
+            for item in protocol["prompts"]:
+                for seed in sampling["seeds"]:
+                    step = checkpoint["steps"]
+                    checkpoint_id = checkpoint.get("id", f"step-{step}")
+                    image_group = checkpoint.get("id", f"step_{step}")
+                    sampling_id = sampling["id"]
+                    sampling_group = "" if sampling_id is None else f"/{sampling_id}"
+                    sampling_label = "" if sampling_id is None else f"-{sampling_id}"
+                    rows.append({
+                        "id": f"{checkpoint_id}{sampling_label}-{item['color']}-seed-{seed}", "checkpoint_steps": step,
+                        "checkpoint_id": checkpoint_id, "sampling_id": sampling_id,
+                        "model_dir": checkpoint["model_dir"], "color": item["color"], "prompt": item["prompt"],
+                        "seed": seed, "num_inference_steps": sampling["num_inference_steps"],
+                        "guidance_scale": sampling["guidance_scale"],
+                        "image_path": f"images/{image_group}{sampling_group}/{item['color']}-seed-{seed}.png",
+                    })
+    if len(rows) != expected_count:
         raise ValueError("protocol expected_image_count does not match its grid")
     return rows
 

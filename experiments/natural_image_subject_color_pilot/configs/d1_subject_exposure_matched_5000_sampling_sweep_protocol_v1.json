@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_exposure_matched_5000_sampling_sweep_protocol_v1",
+  "purpose": "Inference-only sampling diagnostic for the exposure-matched five-image and counterfactual-v2 5000-step mailbox checkpoints; no retraining or checkpoint modification.",
+  "source_checkpoints": [
+    {"id": "base5-exposure-matched-5000", "steps": 5000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42", "run_manifest_sha256": "fef19cb7ab8e22be059daa2e234b4f7f1865a8a57d3258e0730c59b8ecf036d6", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42/checkpoints", "model_sha256": "0071de810ddb397d533ee9bca196fd06ede8c00df0d747e1dca2551db25fa86e", "token_artifact_sha256": {"<S*>.bin": "3590101e853e245e5da26ffa90c1564f649a5933d05695059aa8e837c8157a14"}},
+    {"id": "counterfactual-v2-exposure-matched-5000", "steps": 5000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191100__natural_image_subject_color_pilot__subject_counterfactual_v2_mailbox_category_exposure_matched_5000__c3844f1__42", "run_manifest_sha256": "214745539d644d7fb75d79ce28cdf427f6f707cb985d8c36a9a6c6d5f5cae122", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191100__natural_image_subject_color_pilot__subject_counterfactual_v2_mailbox_category_exposure_matched_5000__c3844f1__42/checkpoints", "model_sha256": "2b247282abdb2732c9f903adaf4f4a285634743da119e768ae5be8e740422f18", "token_artifact_sha256": {"<S*>.bin": "a261b3442c187e088f956a2945867e0cb7c291b5a514eb781e854b88fde748bb"}}
+  ],
+  "required_token_artifacts": ["<S*>.bin"],
+  "forbidden_token_artifacts": ["<C*>.bin"],
+  "sampling_variants": [
+    {"id":"cfg3p5_steps30","seeds":[42,43,44],"num_inference_steps":30,"guidance_scale":3.5}, {"id":"cfg3p5_steps50","seeds":[42,43,44],"num_inference_steps":50,"guidance_scale":3.5}, {"id":"cfg3p5_steps100","seeds":[42,43,44],"num_inference_steps":100,"guidance_scale":3.5},
+    {"id":"cfg4p5_steps30","seeds":[42,43,44],"num_inference_steps":30,"guidance_scale":4.5}, {"id":"cfg4p5_steps50","seeds":[42,43,44],"num_inference_steps":50,"guidance_scale":4.5}, {"id":"cfg4p5_steps100","seeds":[42,43,44],"num_inference_steps":100,"guidance_scale":4.5},
+    {"id":"cfg6p0_steps30","seeds":[42,43,44],"num_inference_steps":30,"guidance_scale":6.0}, {"id":"cfg6p0_steps50","seeds":[42,43,44],"num_inference_steps":50,"guidance_scale":6.0}, {"id":"cfg6p0_steps100","seeds":[42,43,44],"num_inference_steps":100,"guidance_scale":6.0}
+  ],
+  "expected_image_count": 108,
+  "prompts": [{"color":"seen_blue","prompt":"a photo of <S*> mailbox in blue color"},{"color":"context_city_street","prompt":"a photo of <S*> mailbox on a city street"}],
+  "next_step": "compare sampling sensitivity before changing training; no checkpoint modification"
+}
