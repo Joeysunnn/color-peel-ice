@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from scripts.methods.colorpeel_ice import generate_d1_subject_recolor_statue_reconstruction as generate
+
+
+ROOT = Path(__file__).parents[3]
+CONFIGS = ROOT / "experiments/natural_image_subject_color_pilot/configs"
+
+
+def test_v2_reconstruction_and_transfer_protocols_bind_the_completed_subject_only_checkpoint():
+    reconstruction = json.loads((CONFIGS / "d1_subject_counterfactual_v2_mailbox_category_1000_reconstruction_protocol_v1.json").read_text(encoding="utf-8"))
+    transfer = json.loads((CONFIGS / "d1_subject_counterfactual_v2_mailbox_category_1000_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    assert len(generate.build_manifest(reconstruction)) == 25
+    assert len(generate.build_manifest(transfer)) == 115
+    assert reconstruction["source_checkpoints"] == transfer["source_checkpoints"]
+    assert reconstruction["forbidden_token_artifacts"] == transfer["forbidden_token_artifacts"] == ["<C*>.bin"]
+    assert "unseen_orange" in {row["color"] for row in transfer["prompts"]}
