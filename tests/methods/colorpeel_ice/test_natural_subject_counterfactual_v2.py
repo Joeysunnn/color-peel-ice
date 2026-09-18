@@ -40,7 +40,7 @@ def test_same_fixed_variant_is_byte_identical_and_background_is_exact_outside_ma
     assert hashlib.sha256(image.tobytes()).hexdigest() == hashlib.sha256(second[0].tobytes()).hexdigest()
     assert hashlib.sha256(mask.tobytes()).hexdigest() == hashlib.sha256(second[1].tobytes()).hexdigest()
     assert set(np.unique(mask).tolist()) <= {0, 255}
-    assert np.array_equal(image[mask == 0], np.array([100, 110, 120], dtype=np.uint8))
+    assert np.all(image[mask == 0] == np.array([100, 110, 120], dtype=np.uint8))
     assert metrics["bbox_xyxy_inclusive"] == [2, 3, 4, 5]
 
 
@@ -64,7 +64,7 @@ def test_soft_edge_is_recomposited_over_the_new_background_without_old_backgroun
     image, transformed_mask, _ = v2.apply_variant(recolored, source, mask, alpha, _variant(background_rgb=[90, 90, 90]))
     expected = np.floor(0.5 * foreground + 0.5 * np.array([90, 90, 90]) + 0.5).astype(np.uint8)
     assert np.array_equal(image[2, 2], expected)
-    assert np.array_equal(image[transformed_mask == 0], np.array([90, 90, 90], dtype=np.uint8))
+    assert np.all(image[transformed_mask == 0] == np.array([90, 90, 90], dtype=np.uint8))
 
 
 def test_protocol_has_a_finite_held_out_five_by_five_subject_grid():

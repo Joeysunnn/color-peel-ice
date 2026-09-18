@@ -91,7 +91,7 @@ def apply_variant(
         + 0.5
     ).astype(np.uint8)
     require(np.any(transformed_mask == 255), "Variant removed the complete subject")
-    require(np.array_equal(output[transformed_mask == 0], background), "Background changed outside transformed mask")
+    require(np.all(output[transformed_mask == 0] == background), "Background changed outside transformed mask")
     ys, xs = np.nonzero(transformed_mask == 255)
     metrics = {
         "background_rgb": background.tolist(),

@@ -166,7 +166,7 @@ def analyze(run_root: Path) -> dict[str, Any]:
         core.require(sha256(image_path) == row["image_sha256"] and sha256(mask_path) == row["mask_sha256"], "Output hash differs")
         image, mask = np.asarray(Image.open(image_path).convert("RGB"), dtype=np.uint8), np.asarray(Image.open(mask_path).convert("L"), dtype=np.uint8)
         background = np.asarray(row["variant"]["background_rgb"], dtype=np.uint8)
-        checks.append({"record_id": row["record_id"], "mask_binary": set(np.unique(mask).tolist()) <= {0, 255}, "mask_nonempty": bool(np.any(mask == 255)), "background_exact_outside_mask": bool(np.array_equal(image[mask == 0], background))})
+        checks.append({"record_id": row["record_id"], "mask_binary": set(np.unique(mask).tolist()) <= {0, 255}, "mask_nonempty": bool(np.any(mask == 255)), "background_exact_outside_mask": bool(np.all(image[mask == 0] == background))})
     safe = all(all(check.values()) for check in checks)
     value = {"schema": "natural_subject_counterfactual_v2_analysis/v1", "record_count": len(checks), "automatic_safety_pass": safe, "manual_review_required": ["mailbox identity preservation", "background seam and halo review", "scale/translation coverage"], "records": checks}
     write_json(run_root / ANALYSIS_NAME, value)
