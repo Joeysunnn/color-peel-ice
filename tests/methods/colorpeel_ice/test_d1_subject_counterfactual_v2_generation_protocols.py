@@ -38,3 +38,11 @@ def test_exposure_matched_sampling_sweep_is_a_two_checkpoint_nine_setting_grid()
     assert {row["checkpoint_id"] for row in rows} == {"base5-exposure-matched-5000", "counterfactual-v2-exposure-matched-5000"}
     assert {row["sampling_id"] for row in rows} == {item["id"] for item in sweep["sampling_variants"]}
     assert {row["prompt"] for row in rows} == {item["prompt"] for item in sweep["prompts"]}
+
+
+def test_base_best_sampling_protocols_lock_the_full_and_narrow_evaluation_grids():
+    full = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_5000_best_sampling_full_protocol_v1.json").read_text(encoding="utf-8"))
+    refinement = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_5000_best_sampling_refinement_protocol_v1.json").read_text(encoding="utf-8"))
+    assert len(generate.build_manifest(full)) == 140
+    assert len(generate.build_manifest(refinement)) == 54
+    assert full["sampling_variants"] == [{"id": "cfg3p5_steps100", "seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5}]
