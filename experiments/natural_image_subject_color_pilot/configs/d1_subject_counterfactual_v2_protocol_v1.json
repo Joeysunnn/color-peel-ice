@@ -1,0 +1,32 @@
+{
+  "schema": "natural_subject_counterfactual_v2_protocol/v1",
+  "protocol_id": "d1_subject_counterfactual_v2_protocol_v1",
+  "purpose": "Create a small, deterministic subject-only counterfactual set for D1GT:81/130.png; no training or joint staging is authorized by this protocol.",
+  "source_repaired_subject": {
+    "stable_id": "D1GT:81/130.png",
+    "analysis_relative_path": "subject_recolor_border_repair_analysis.json",
+    "analysis_sha256": "4e4940228a6081856c382f4a5f4dc7174cbd33cf83eb7f92c43478e9b8b3f2ed",
+    "results_relative_path": "subject_recolor_border_repair_results.json",
+    "results_sha256": "05d7d87a2eb3d26d8b5887c5a03f67beb2b845f0fa2d1d2572f531af7509caaa",
+    "repair_manifest_relative_path": "subject_recolor_border_repair_manifest.json",
+    "repaired_mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7",
+    "raw_image_sha256": "ba9c6624d9998cdfcd16308b0cf8fd8f3778909d8655efe2ba9cebba370483d0"
+  },
+  "held_out_guard": {"source_hue_degrees": 40.94992640208219, "minimum_hue_separation_degrees": 30.0, "original_subject_color_training_record": "forbidden"},
+  "auxiliary_colors": {
+    "red": {"hue_degrees": 0.0, "image_sha256": "4c62305b55f0e0aa494a402a643cec60897493fcdda25b802f7f3b4e81c6269b"},
+    "green": {"hue_degrees": 120.0, "image_sha256": "15b93e4e49502870daa3b71f524220943ccfaf2114f810c54da827e0a210aed0"},
+    "cyan": {"hue_degrees": 180.0, "image_sha256": "3a8114eb9738e655cbb47cdf088569cf02b1ae8e9fe9bb8f59015606f9ce1126"},
+    "blue": {"hue_degrees": 240.0, "image_sha256": "5475c02c3713ce6353bd262f584f16105d24c23285ec1312eb427fb87edd4dc5"},
+    "magenta": {"hue_degrees": 300.0, "image_sha256": "8fd34d57121ea58f89039e90badd3dd8c318ecf84d5c78158a048e5faf128ab8"}
+  },
+  "variants": [
+    {"id": "center_neutral", "background_rgb": [128, 132, 136], "scale": 0.90, "translate_x": 0, "translate_y": -20, "mirror": false},
+    {"id": "left_sky", "background_rgb": [190, 211, 225], "scale": 0.78, "translate_x": -64, "translate_y": -50, "mirror": false},
+    {"id": "right_cream_mirror", "background_rgb": [231, 221, 198], "scale": 0.78, "translate_x": 64, "translate_y": -50, "mirror": true},
+    {"id": "upper_left_bluegray", "background_rgb": [159, 177, 190], "scale": 0.70, "translate_x": -80, "translate_y": -90, "mirror": false},
+    {"id": "upper_right_warmgray_mirror", "background_rgb": [183, 170, 160], "scale": 0.70, "translate_x": 80, "translate_y": -90, "mirror": true}
+  ],
+  "expected_record_count": 25,
+  "approval_state": {"subject_counterfactual_v2_asset_generation_approved": true, "subject_training_approved": false, "joint_training_approved": false}
+}
