@@ -26,3 +26,12 @@ def test_followup_launch_configs_bind_the_same_frozen_concepts_and_declared_arm_
     assert step["args"]["max_train_steps"] == 3000 and step["args"]["kv_learning_rate"] == 1.0e-5
     assert low_kv["args"]["max_train_steps"] == 5000 and low_kv["args"]["kv_learning_rate"] == 1.0e-6
     assert step["args"]["hflip"] is low_kv["args"]["hflip"] is False
+
+
+def test_followup_generation_protocol_binds_both_completed_arms_to_the_same_reconstruction_and_transfer_grid():
+    value = json.loads((CONFIGS / "d1_subject_exposure_matched_followup_reconstruction_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    assert len(value["source_checkpoints"]) == 2
+    assert [item["id"] for item in value["source_checkpoints"]] == ["full-kv-3000", "low-kv-5000"]
+    assert value["sampling"] == {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 280}
+    assert len(value["prompts"]) == 28
+    assert {item["group"] for item in value["prompts"]} == {"reconstruction", "unseen_color", "context", "viewpoint", "composition", "hard_compositional"}
