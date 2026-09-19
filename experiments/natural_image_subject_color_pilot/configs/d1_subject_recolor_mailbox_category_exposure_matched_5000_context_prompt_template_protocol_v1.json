@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_mailbox_category_exposure_matched_5000_context_prompt_template_protocol_v1",
+  "purpose": "Inference-only prompt-template diagnostic for background semantics of the selected exposure-matched five-image mailbox checkpoint; no retraining or checkpoint modification.",
+  "source_checkpoints": [{"id": "base5-exposure-matched-5000", "steps": 5000, "run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42", "run_manifest_sha256": "fef19cb7ab8e22be059daa2e234b4f7f1865a8a57d3258e0730c59b8ecf036d6", "model_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42/checkpoints", "model_sha256": "0071de810ddb397d533ee9bca196fd06ede8c00df0d747e1dca2551db25fa86e", "token_artifact_sha256": {"<S*>.bin": "3590101e853e245e5da26ffa90c1564f649a5933d05695059aa8e837c8157a14"}}],
+  "required_token_artifacts": ["<S*>.bin"], "forbidden_token_artifacts": ["<C*>.bin"],
+  "sampling_variants": [{"id":"cfg3p5_steps100","seeds":[42,43,44,45,46],"num_inference_steps":100,"guidance_scale":3.5}],
+  "expected_image_count": 60,
+  "prompts": [
+    {"group":"snow_original","color":"snow_original","prompt":"a photo of <S*> mailbox in a snowy environment"},{"group":"snow_scene_first","color":"snow_scene_first","prompt":"a photo of a snowy street with a <S*> mailbox"},{"group":"snow_photographic","color":"snow_photographic","prompt":"a photograph taken on a snow-covered street, featuring a <S*> mailbox"},{"group":"snow_background_explicit","color":"snow_background_explicit","prompt":"a photo of a <S*> mailbox, with a snowy street clearly visible in the background"},
+    {"group":"street_original","color":"street_original","prompt":"a photo of <S*> mailbox on a city street"},{"group":"street_scene_first","color":"street_scene_first","prompt":"a photo of a city street with a <S*> mailbox"},{"group":"street_photographic","color":"street_photographic","prompt":"a photograph taken on a city street, featuring a <S*> mailbox"},{"group":"street_background_explicit","color":"street_background_explicit","prompt":"a photo of a <S*> mailbox, with a city street clearly visible in the background"},
+    {"group":"house_original","color":"house_original","prompt":"a photo of <S*> mailbox in front of a house"},{"group":"house_scene_first","color":"house_scene_first","prompt":"a photo of a house with a <S*> mailbox in front"},{"group":"house_photographic","color":"house_photographic","prompt":"a photograph taken in front of a house, featuring a <S*> mailbox"},{"group":"house_background_explicit","color":"house_background_explicit","prompt":"a photo of a <S*> mailbox, with a house clearly visible in the background"}
+  ],
+  "next_step": "select one prompt template only if it improves scene semantics without reducing identity or introducing multiplicity/fusion"
+}

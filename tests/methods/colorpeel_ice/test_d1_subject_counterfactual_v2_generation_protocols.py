@@ -46,3 +46,15 @@ def test_base_best_sampling_protocols_lock_the_full_and_narrow_evaluation_grids(
     assert len(generate.build_manifest(full)) == 140
     assert len(generate.build_manifest(refinement)) == 54
     assert full["sampling_variants"] == [{"id": "cfg3p5_steps100", "seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5}]
+
+
+def test_context_prompt_template_diagnostic_is_a_3_by_4_by_5_grid_at_the_selected_setting():
+    value = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_5000_context_prompt_template_protocol_v1.json").read_text(encoding="utf-8"))
+    rows = generate.build_manifest(value)
+    assert len(rows) == 60
+    assert value["sampling_variants"] == [{"id": "cfg3p5_steps100", "seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5}]
+    assert {row["group"] for row in value["prompts"]} == {
+        "snow_original", "snow_scene_first", "snow_photographic", "snow_background_explicit",
+        "street_original", "street_scene_first", "street_photographic", "street_background_explicit",
+        "house_original", "house_scene_first", "house_photographic", "house_background_explicit",
+    }
