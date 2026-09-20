@@ -53,3 +53,10 @@ def test_followup_generation_protocol_binds_both_completed_arms_to_the_same_reco
     assert value["sampling"] == {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 280}
     assert len(value["prompts"]) == 28
     assert {item["group"] for item in value["prompts"]} == {"reconstruction", "unseen_color", "context", "viewpoint", "composition", "hard_compositional"}
+
+
+def test_asymmetric_kv_generation_protocol_uses_the_same_fixed_reconstruction_and_transfer_grid():
+    value = json.loads((CONFIGS / "d1_subject_asymmetric_kv_5000_reconstruction_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    assert [item["id"] for item in value["source_checkpoints"]] == ["v-only-5000", "k-low-v-full-5000"]
+    assert value["sampling"] == {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 280}
+    assert len(value["prompts"]) == 28
