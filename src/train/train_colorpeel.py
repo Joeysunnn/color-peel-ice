@@ -573,6 +573,18 @@ def parse_args(input_args=None):
         help="Optional Custom Diffusion K/V learning rate; defaults to --learning_rate.",
     )
     parser.add_argument(
+        "--k_learning_rate",
+        type=float,
+        default=None,
+        help="Optional Custom Diffusion key learning rate; defaults to --kv_learning_rate.",
+    )
+    parser.add_argument(
+        "--v_learning_rate",
+        type=float,
+        default=None,
+        help="Optional Custom Diffusion value learning rate; defaults to --kv_learning_rate.",
+    )
+    parser.add_argument(
         "--scale_lr",
         action="store_true",
         default=False,
@@ -1026,6 +1038,10 @@ def main(args):
         args.learning_rate = args.learning_rate * scale
         if args.kv_learning_rate is not None:
             args.kv_learning_rate = args.kv_learning_rate * scale
+        if args.k_learning_rate is not None:
+            args.k_learning_rate = args.k_learning_rate * scale
+        if args.v_learning_rate is not None:
+            args.v_learning_rate = args.v_learning_rate * scale
         if args.with_prior_preservation:
             args.learning_rate = args.learning_rate * 2.0
 
@@ -1069,11 +1085,41 @@ def main(args):
 
     # Optimizer creation
     kv_learning_rate = args.learning_rate if args.kv_learning_rate is None else args.kv_learning_rate
+    if args.k_learning_rate is None and args.v_learning_rate is None:
+        custom_diffusion_optimizer_parameters = [
+            {"params": custom_diffusion_layers.parameters(), "lr": kv_learning_rate}
+        ]
+    else:
+        k_learning_rate = kv_learning_rate if args.k_learning_rate is None else args.k_learning_rate
+        v_learning_rate = kv_learning_rate if args.v_learning_rate is None else args.v_learning_rate
+        k_parameters = []
+        v_parameters = []
+        for name, parameter in custom_diffusion_layers.named_parameters():
+            if ".to_k_custom_diffusion." in name:
+                parameter.requires_grad_(k_learning_rate > 0)
+                if k_learning_rate > 0:
+                    k_parameters.append(parameter)
+            elif ".to_v_custom_diffusion." in name:
+                parameter.requires_grad_(v_learning_rate > 0)
+                if v_learning_rate > 0:
+                    v_parameters.append(parameter)
+            else:
+                raise ValueError(
+                    "Independent K/V learning rates require --freeze_model crossattn_kv; "
+                    f"unexpected Custom Diffusion parameter: {name}"
+                )
+        if not k_parameters and not v_parameters:
+            raise ValueError("At least one of --k_learning_rate or --v_learning_rate must be greater than zero.")
+        custom_diffusion_optimizer_parameters = []
+        if k_parameters:
+            custom_diffusion_optimizer_parameters.append({"params": k_parameters, "lr": k_learning_rate})
+        if v_parameters:
+            custom_diffusion_optimizer_parameters.append({"params": v_parameters, "lr": v_learning_rate})
     optimizer_parameters = (
-        [
-            {"params": text_encoder.get_input_embeddings().parameters(), "lr": args.learning_rate},
-            {"params": custom_diffusion_layers.parameters(), "lr": kv_learning_rate},
-        ] if args.modifier_token is not None else custom_diffusion_layers.parameters()
+        [{"params": text_encoder.get_input_embeddings().parameters(), "lr": args.learning_rate}]
+        + custom_diffusion_optimizer_parameters
+        if args.modifier_token is not None
+        else custom_diffusion_optimizer_parameters
     )
     optimizer = optimizer_class(
         optimizer_parameters,

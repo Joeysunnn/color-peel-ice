@@ -28,6 +28,24 @@ def test_followup_launch_configs_bind_the_same_frozen_concepts_and_declared_arm_
     assert step["args"]["hflip"] is low_kv["args"]["hflip"] is False
 
 
+def test_asymmetric_kv_arms_keep_the_base_five_image_protocol_and_split_only_kv_learning_rates():
+    vonly = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_vonly_5000_protocol_v1.json").read_text(encoding="utf-8"))
+    k_low_v_full = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_k_low_v_full_5000_protocol_v1.json").read_text(encoding="utf-8"))
+    assert vonly["source_training_data"] == k_low_v_full["source_training_data"]
+    assert vonly["subject"] == k_low_v_full["subject"]
+    assert vonly["training"] == {"seed": 42, "max_train_steps": 5000, "embedding_learning_rate": 1.0e-5, "k_learning_rate": 0.0, "v_learning_rate": 1.0e-5, "hflip": False, "from_scratch": True, "caa_cos_weight": 0.0}
+    assert k_low_v_full["training"] == {"seed": 42, "max_train_steps": 5000, "embedding_learning_rate": 1.0e-5, "k_learning_rate": 1.0e-6, "v_learning_rate": 1.0e-5, "hflip": False, "from_scratch": True, "caa_cos_weight": 0.0}
+
+
+def test_asymmetric_kv_launch_configs_bind_the_declared_learning_rates():
+    vonly = read_config(CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_vonly_5000.yaml")
+    k_low_v_full = read_config(CONFIGS / "d1_subject_recolor_mailbox_category_exposure_matched_k_low_v_full_5000.yaml")
+    assert vonly["args"]["concepts_list"] == k_low_v_full["args"]["concepts_list"]
+    assert vonly["args"]["k_learning_rate"] == 0.0 and vonly["args"]["v_learning_rate"] == 1.0e-5
+    assert k_low_v_full["args"]["k_learning_rate"] == 1.0e-6 and k_low_v_full["args"]["v_learning_rate"] == 1.0e-5
+    assert vonly["args"]["max_train_steps"] == k_low_v_full["args"]["max_train_steps"] == 5000
+
+
 def test_followup_generation_protocol_binds_both_completed_arms_to_the_same_reconstruction_and_transfer_grid():
     value = json.loads((CONFIGS / "d1_subject_exposure_matched_followup_reconstruction_transfer_protocol_v1.json").read_text(encoding="utf-8"))
     assert len(value["source_checkpoints"]) == 2

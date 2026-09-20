@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "protocol_id": "d1_subject_recolor_mailbox_category_exposure_matched_k_low_v_full_5000_protocol_v1",
+  "purpose": "Asymmetric K/V arm B: train Custom Diffusion key projections at 1e-6 and value projections at 1e-5 for 5000 steps on the frozen five-image mailbox subject-only dataset.",
+  "source_training_data": {"concepts_path": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-190000__natural_image_subject_color_pilot__subject_exposure_matched_base5_assets__c3844f1__42/concepts.json", "concepts_sha256": "798e198e966f503f9913a72cee0b3834d66eb1dd8ca02eb0d98cb45b5e408e17", "staging_manifest_sha256": "fe46578c4c306c11745d53a100c731a308b0e2c7d961f5c6032b14ee1756aa92", "record_count": 5},
+  "baseline": {"run_dir": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42", "max_train_steps": 5000, "embedding_learning_rate": 1.0e-5, "kv_learning_rate": 1.0e-5},
+  "subject": {"modifier_token": "<S*>", "initializer_token": "mailbox", "training_prompt_template": "a photo of <S*> mailbox in {color} color"},
+  "training": {"seed": 42, "max_train_steps": 5000, "embedding_learning_rate": 1.0e-5, "k_learning_rate": 1.0e-6, "v_learning_rate": 1.0e-5, "hflip": false, "from_scratch": true, "caa_cos_weight": 0.0},
+  "prohibitions": ["no changed training images", "no changed masks", "no changed initializer", "no color token", "no joint training"],
+  "next_step": "evaluate at CFG=3.5 and 100 inference steps against the 5000-step full-K/V baseline"
+}
