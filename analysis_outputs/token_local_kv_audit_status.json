@@ -1,0 +1,6 @@
+{
+  "status": "completed",
+  "mode": "read_only_audit",
+  "selected_implementation": "base K/V plus zero-initialized learned delta K/V gated by discrete modifier-token positions",
+  "historical_artifacts_modified": false
+}

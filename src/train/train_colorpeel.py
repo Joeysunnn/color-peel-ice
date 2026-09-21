@@ -53,7 +53,12 @@ from diffusers import (
 
 from custom_attention.unet_2d_condition_custom import UNet2DConditionModel
 from custom_attention.loaders_custom import AttnProcsLayers
-from custom_attention.attention_processor_custom import CustomDiffusionAttnProcessor, CustomDiffusionXFormersAttnProcessor
+from custom_attention.attention_processor_custom import (
+    CustomDiffusionAttnProcessor,
+    CustomDiffusionXFormersAttnProcessor,
+    TokenLocalKVAttnProcessor,
+    build_modifier_token_mask,
+)
 
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version, is_wandb_available
@@ -64,11 +69,28 @@ from IPython.display import display
 check_min_version("0.17.0.dev0")
 
 logger = get_logger(__name__)
+TOKEN_LOCAL_KV_WEIGHT_NAME = "pytorch_token_local_kv_weights.bin"
 
 
 def freeze_params(params):
     for param in params:
         param.requires_grad = False
+
+
+def token_local_kv_diagnostics(unet):
+    fields = (
+        "mean_abs_delta_k_subject",
+        "mean_abs_delta_v_subject",
+        "mean_abs_contribution_k_ordinary",
+        "mean_abs_contribution_v_ordinary",
+    )
+    values = {field: [] for field in fields}
+    for processor in unet.attn_processors.values():
+        stats = getattr(processor, "last_token_local_stats", None)
+        if stats is not None:
+            for field in fields:
+                values[field].append(float(stats[field].detach().float().cpu()))
+    return {field: (sum(items) / len(items) if items else 0.0) for field, items in values.items()}
 
 def text_under_image(image: np.ndarray, text: str, text_color: Tuple[int, int, int] = (0, 0, 0)) -> np.ndarray:
     h, w, c = image.shape
@@ -606,6 +628,11 @@ def parse_args(input_args=None):
         help="Optional Custom Diffusion K/V learning rate; defaults to --learning_rate.",
     )
     parser.add_argument(
+        "--token_local_kv",
+        action="store_true",
+        help="Learn zero-initialized K/V residuals gated only to explicit modifier-token positions.",
+    )
+    parser.add_argument(
         "--k_learning_rate",
         type=float,
         default=None,
@@ -986,6 +1013,13 @@ def main(args):
     vae.to(accelerator.device, dtype=weight_dtype)
 
     attention_class = CustomDiffusionAttnProcessor
+    if args.token_local_kv:
+        if args.enable_xformers_memory_efficient_attention:
+            raise ValueError("token-local K/V does not support xFormers attention processors")
+        if args.freeze_model != "crossattn_kv":
+            raise ValueError("token-local K/V requires --freeze_model crossattn_kv")
+        if len(modifier_token_id) != 1:
+            raise ValueError("token-local K/V currently supports exactly one modifier token")
     if args.enable_xformers_memory_efficient_attention:
         if is_xformers_available():
             import xformers
@@ -1029,22 +1063,27 @@ def main(args):
             block_id = int(name[len("down_blocks.")])
             hidden_size = unet.config.block_out_channels[block_id]
         layer_name = name.split(".processor")[0]
-        weights = {
-            "to_k_custom_diffusion.weight": st[layer_name + ".to_k.weight"],
-            "to_v_custom_diffusion.weight": st[layer_name + ".to_v.weight"],
-        }
-        if train_q_out:
-            weights["to_q_custom_diffusion.weight"] = st[layer_name + ".to_q.weight"]
-            weights["to_out_custom_diffusion.0.weight"] = st[layer_name + ".to_out.0.weight"]
-            weights["to_out_custom_diffusion.0.bias"] = st[layer_name + ".to_out.0.bias"]
         if cross_attention_dim is not None:
-            custom_diffusion_attn_procs[name] = attention_class(
-                train_kv=train_kv,
-                train_q_out=train_q_out,
-                hidden_size=hidden_size,
-                cross_attention_dim=cross_attention_dim,
-            ).to(unet.device)
-            custom_diffusion_attn_procs[name].load_state_dict(weights)
+            if args.token_local_kv:
+                custom_diffusion_attn_procs[name] = TokenLocalKVAttnProcessor(
+                    hidden_size=hidden_size, cross_attention_dim=cross_attention_dim
+                ).to(unet.device)
+            else:
+                weights = {
+                    "to_k_custom_diffusion.weight": st[layer_name + ".to_k.weight"],
+                    "to_v_custom_diffusion.weight": st[layer_name + ".to_v.weight"],
+                }
+                if train_q_out:
+                    weights["to_q_custom_diffusion.weight"] = st[layer_name + ".to_q.weight"]
+                    weights["to_out_custom_diffusion.0.weight"] = st[layer_name + ".to_out.0.weight"]
+                    weights["to_out_custom_diffusion.0.bias"] = st[layer_name + ".to_out.0.bias"]
+                custom_diffusion_attn_procs[name] = attention_class(
+                    train_kv=train_kv,
+                    train_q_out=train_q_out,
+                    hidden_size=hidden_size,
+                    cross_attention_dim=cross_attention_dim,
+                ).to(unet.device)
+                custom_diffusion_attn_procs[name].load_state_dict(weights)
         else:
             custom_diffusion_attn_procs[name] = attention_class(
                 train_kv=False,
@@ -1131,11 +1170,11 @@ def main(args):
         k_parameters = []
         v_parameters = []
         for name, parameter in custom_diffusion_layers.named_parameters():
-            if ".to_k_custom_diffusion." in name:
+            if ".to_k_custom_diffusion." in name or ".delta_k." in name:
                 parameter.requires_grad_(k_learning_rate > 0)
                 if k_learning_rate > 0:
                     k_parameters.append(parameter)
-            elif ".to_v_custom_diffusion." in name:
+            elif ".to_v_custom_diffusion." in name or ".delta_v." in name:
                 parameter.requires_grad_(v_learning_rate > 0)
                 if v_learning_rate > 0:
                     v_parameters.append(parameter)
@@ -1200,6 +1239,7 @@ def main(args):
     # does not change the official full-parameter AdamW optimizer above.
     training_metrics_path = None
     embedding_update_audit = None
+    token_local_audit = None
     if accelerator.is_main_process:
         training_metrics_path = Path(args.output_dir) / "training_metrics.jsonl"
         training_metrics_path.write_text("", encoding="utf-8")
@@ -1262,9 +1302,27 @@ def main(args):
 
                 # Get the text embedding for conditioning
                 encoder_hidden_states = text_encoder(batch["input_ids"])[0]
+                token_local_kwargs = {}
+                if args.token_local_kv:
+                    token_local_kwargs["cross_attention_kwargs"] = {
+                        "modifier_token_mask": build_modifier_token_mask(batch["input_ids"], modifier_token_id)
+                    }
                 
                 # Predict the noise residual
-                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states, **token_local_kwargs).sample
+                if args.token_local_kv and accelerator.is_main_process:
+                    token_local_audit = {
+                        "adaptation_mode": "token_local_kv",
+                        "modifier_token_ids": list(modifier_token_id),
+                        "input_ids": batch["input_ids"][0].detach().cpu().tolist(),
+                        "modifier_positions": build_modifier_token_mask(batch["input_ids"], modifier_token_id)[0]
+                        .nonzero(as_tuple=False)
+                        .flatten()
+                        .detach()
+                        .cpu()
+                        .tolist(),
+                        **token_local_kv_diagnostics(unet),
+                    }
                 
                 res = 16
                 all_attentions = []
@@ -1336,7 +1394,14 @@ def main(args):
                     ).long()
                     class_noisy_latents = noise_scheduler.add_noise(class_latents, class_noise, class_timesteps)
                     class_encoder_hidden_states = text_encoder(batch["class_input_ids"])[0]
-                    class_model_pred = unet(class_noisy_latents, class_timesteps, class_encoder_hidden_states).sample
+                    class_token_local_kwargs = {}
+                    if args.token_local_kv:
+                        class_token_local_kwargs["cross_attention_kwargs"] = {
+                            "modifier_token_mask": build_modifier_token_mask(batch["class_input_ids"], modifier_token_id)
+                        }
+                    class_model_pred = unet(
+                        class_noisy_latents, class_timesteps, class_encoder_hidden_states, **class_token_local_kwargs
+                    ).sample
                     if noise_scheduler.config.prediction_type == "epsilon":
                         class_target = class_noise
                     else:
@@ -1491,21 +1556,45 @@ def main(args):
                 "weight_decay": args.adam_weight_decay,
             }
             write_json(Path(args.output_dir) / "embedding_update_audit.json", embedding_audit_payload)
-        unet.save_attn_procs(args.output_dir)
+        if args.token_local_kv:
+            write_json(
+                Path(args.output_dir) / "adaptation_config.json",
+                {
+                    "adaptation_mode": "token_local_kv",
+                    "weight_name": TOKEN_LOCAL_KV_WEIGHT_NAME,
+                    "modifier_tokens": args.modifier_token,
+                    "invariant": "only explicit modifier-token positions receive learned delta K/V",
+                },
+            )
+            write_json(Path(args.output_dir) / "token_local_kv_audit.json", token_local_audit or {})
+            unet.save_attn_procs(args.output_dir, weight_name=TOKEN_LOCAL_KV_WEIGHT_NAME)
+        else:
+            unet.save_attn_procs(args.output_dir)
         save_new_embed(text_encoder, modifier_token_id, accelerator, args, args.output_dir)
 
         # Final inference
         # Load previous pipeline
-        pipeline = DiffusionPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, revision=args.revision, torch_dtype=weight_dtype
-        )
+        if args.token_local_kv:
+            pipeline = DiffusionPipeline.from_pretrained(
+                args.pretrained_model_name_or_path,
+                revision=args.revision,
+                torch_dtype=weight_dtype,
+                unet=unet,
+                text_encoder=accelerator.unwrap_model(text_encoder),
+                tokenizer=tokenizer,
+            )
+        else:
+            pipeline = DiffusionPipeline.from_pretrained(
+                args.pretrained_model_name_or_path, revision=args.revision, torch_dtype=weight_dtype
+            )
         pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
         pipeline = pipeline.to(accelerator.device)
 
         # load attention processors
-        pipeline.unet.load_attn_procs(args.output_dir, weight_name="pytorch_custom_diffusion_weights.bin")
-        for token in args.modifier_token:
-            pipeline.load_textual_inversion(args.output_dir, weight_name=f"{token}.bin")
+        if not args.token_local_kv:
+            pipeline.unet.load_attn_procs(args.output_dir, weight_name="pytorch_custom_diffusion_weights.bin")
+            for token in args.modifier_token:
+                pipeline.load_textual_inversion(args.output_dir, weight_name=f"{token}.bin")
 
         # run inference
         if args.validation_prompt and args.num_validation_images > 0:

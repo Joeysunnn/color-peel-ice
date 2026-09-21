@@ -1,0 +1,11 @@
+{
+  "schema": "natural_subject_token_local_kv_protocol/v1",
+  "protocol_id": "d1_subject_recolor_mailbox_category_token_local_kv_5000_protocol_v1",
+  "purpose": "Mechanism-only ablation: learned zero-initialized K/V residuals are gated exclusively to <S*> positions while all ordinary text positions use frozen base K/V.",
+  "source_training_data": {"record_count":5,"stable_id":"D1GT:81/130.png","concepts_env":"COLORPEEL_EXPOSURE_MATCHED_BASE5_CONCEPTS","original_orange_subject_record":"forbidden","new_counterfactual_data":"forbidden"},
+  "subject": {"modifier_token":"<S*>","initializer_token":"mailbox","color_modifier_token":"forbidden","joint_subject_color_training":"forbidden"},
+  "adaptation": {"mode":"token_local_kv","formula":"K=K_base+mask*delta_K; V=V_base+mask*delta_V","mask_source":"tokenizer input_ids == modifier_token_id","ordinary_token_invariant":"base K/V projection is numerically unchanged for mask=0 positions","self_attention":"base behavior","xformers":"forbidden"},
+  "training": {"seed":42,"max_train_steps":5000,"embedding_learning_rate":1.0e-5,"kv_residual_learning_rate":1.0e-5,"hflip":false,"caa_cos_weight":0.0,"from_scratch":true},
+  "sampling": {"guidance_scale":3.5,"num_inference_steps":100,"seeds":[42,43,44,45,46]},
+  "checkpoint": {"adaptation_mode":"token_local_kv","weight_name":"pytorch_token_local_kv_weights.bin","metadata_name":"adaptation_config.json"}
+}

@@ -717,6 +717,84 @@ class CustomDiffusionAttnProcessor(nn.Module):
         return hidden_states
 
 
+def build_modifier_token_mask(input_ids: torch.Tensor, modifier_token_ids) -> torch.Tensor:
+    """Return a discrete [batch, sequence] gate for the learned modifier tokens."""
+    if input_ids.ndim != 2:
+        raise ValueError("modifier-token input_ids must have shape [batch, sequence]")
+    token_ids = tuple(int(token_id) for token_id in modifier_token_ids)
+    if not token_ids:
+        raise ValueError("token-local K/V requires at least one modifier token id")
+    mask = torch.zeros_like(input_ids, dtype=torch.bool)
+    for token_id in token_ids:
+        mask |= input_ids == token_id
+    return mask
+
+
+class TokenLocalKVAttnProcessor(nn.Module):
+    """Frozen base K/V plus learned residuals gated to explicit modifier-token positions."""
+
+    def __init__(self, hidden_size=None, cross_attention_dim=None):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.cross_attention_dim = cross_attention_dim
+        if cross_attention_dim is not None:
+            self.delta_k = nn.Linear(cross_attention_dim, hidden_size, bias=False)
+            self.delta_v = nn.Linear(cross_attention_dim, hidden_size, bias=False)
+            nn.init.zeros_(self.delta_k.weight)
+            nn.init.zeros_(self.delta_v.weight)
+        self.last_token_local_stats = None
+
+    def project_kv(self, attn: Attention, encoder_hidden_states: torch.Tensor, modifier_token_mask: Optional[torch.Tensor]):
+        base_k = attn.to_k(encoder_hidden_states)
+        base_v = attn.to_v(encoder_hidden_states)
+        if modifier_token_mask is None:
+            raise ValueError("cross-attention token-local K/V requires modifier_token_mask")
+        if modifier_token_mask.shape != encoder_hidden_states.shape[:2]:
+            raise ValueError("modifier_token_mask must match encoder_hidden_states batch and sequence dimensions")
+        mask = modifier_token_mask.to(device=encoder_hidden_states.device, dtype=base_k.dtype).unsqueeze(-1)
+        delta_k = self.delta_k(encoder_hidden_states)
+        delta_v = self.delta_v(encoder_hidden_states)
+        key = base_k + mask * delta_k
+        value = base_v + mask * delta_v
+        subject = mask.expand_as(delta_k).bool()
+        ordinary = ~subject
+        self.last_token_local_stats = {
+            "mean_abs_delta_k_subject": delta_k[subject].abs().mean().detach() if subject.any() else delta_k.new_zeros(()),
+            "mean_abs_delta_v_subject": delta_v[subject].abs().mean().detach() if subject.any() else delta_v.new_zeros(()),
+            "mean_abs_contribution_k_ordinary": (mask * delta_k)[ordinary].abs().mean().detach() if ordinary.any() else delta_k.new_zeros(()),
+            "mean_abs_contribution_v_ordinary": (mask * delta_v)[ordinary].abs().mean().detach() if ordinary.any() else delta_v.new_zeros(()),
+        }
+        return key, value
+
+    def __call__(
+        self,
+        attn: Attention,
+        hidden_states,
+        encoder_hidden_states=None,
+        attention_mask=None,
+        modifier_token_mask=None,
+        **kwargs,
+    ):
+        batch_size, sequence_length, _ = hidden_states.shape
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
+        query = attn.to_q(hidden_states)
+        if encoder_hidden_states is None:
+            key = attn.to_k(hidden_states)
+            value = attn.to_v(hidden_states)
+            self.last_token_local_stats = None
+        else:
+            if attn.norm_cross:
+                encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+            key, value = self.project_kv(attn, encoder_hidden_states, modifier_token_mask)
+        query = attn.head_to_batch_dim(query)
+        key = attn.head_to_batch_dim(key)
+        value = attn.head_to_batch_dim(value)
+        attention_probs = attn.get_attention_scores(query, key, attention_mask)
+        hidden_states = torch.bmm(attention_probs, value)
+        hidden_states = attn.batch_to_head_dim(hidden_states)
+        return attn.to_out[1](attn.to_out[0](hidden_states))
+
+
 class AttnAddedKVProcessor:
     r"""
     Processor for performing attention-related computations with extra learnable key and value matrices for the text

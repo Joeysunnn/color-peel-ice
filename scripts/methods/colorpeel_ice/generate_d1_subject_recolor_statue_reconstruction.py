@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -13,6 +14,7 @@ from PIL import Image
 
 MODEL_ID = "CompVis/stable-diffusion-v1-4"
 WEIGHTS = "pytorch_custom_diffusion_weights.bin"
+TOKEN_LOCAL_KV_WEIGHTS = "pytorch_token_local_kv_weights.bin"
 
 
 def sha256(path: Path) -> str:
@@ -75,7 +77,8 @@ def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
     if checkpoint is None:
         raise ValueError("model directory is not bound by the protocol")
     token_artifacts = tuple(protocol.get("required_token_artifacts", ("<S*>.bin",)))
-    required = (*token_artifacts, WEIGHTS, "embedding_update_audit.json", "training_metrics.jsonl")
+    weights_name = checkpoint.get("weight_name", WEIGHTS)
+    required = (*token_artifacts, weights_name, "embedding_update_audit.json", "training_metrics.jsonl")
     missing = [name for name in required if not (path / name).is_file()]
     if missing:
         raise FileNotFoundError("missing checkpoint artifacts: " + ", ".join(missing))
@@ -83,7 +86,7 @@ def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
     if forbidden:
         raise ValueError("forbidden token artifacts: " + ", ".join(forbidden))
     hashes = {name: sha256(path / name) for name in required}
-    if checkpoint.get("model_sha256") and hashes[WEIGHTS] != checkpoint["model_sha256"]:
+    if checkpoint.get("model_sha256") and hashes[weights_name] != checkpoint["model_sha256"]:
         raise ValueError("checkpoint weights do not match the protocol hash")
     for name, expected in checkpoint.get("token_artifact_sha256", {}).items():
         if name not in token_artifacts or hashes.get(name) != expected:
@@ -95,6 +98,10 @@ def validate_model_dir(path: Path, protocol: dict[str, Any]) -> dict[str, str]:
         manifest = run_dir / "manifest.json"
         if not manifest.is_file() or sha256(manifest) != checkpoint["run_manifest_sha256"]:
             raise ValueError("run manifest does not match the protocol hash")
+    if checkpoint.get("adaptation_mode") == "token_local_kv":
+        adaptation = path / "adaptation_config.json"
+        if not adaptation.is_file() or read_json(adaptation).get("adaptation_mode") != "token_local_kv":
+            raise ValueError("token-local checkpoint is missing its adaptation metadata")
     return hashes
 
 
@@ -103,11 +110,46 @@ def load_pipeline(model_dir: Path, protocol: dict[str, Any], args: argparse.Name
     from diffusers import DiffusionPipeline
 
     dtype = torch.float16 if args.dtype == "float16" else torch.float32
-    pipe = DiffusionPipeline.from_pretrained(args.pretrained_model_name_or_path, low_cpu_mem_usage=False, torch_dtype=dtype, local_files_only=True).to(args.device)
-    pipe.unet.load_attn_procs(str(model_dir), weight_name=WEIGHTS)
+    checkpoint = next(item for item in protocol["source_checkpoints"] if Path(item["model_dir"]).resolve() == model_dir.resolve())
+    if checkpoint.get("adaptation_mode") == "token_local_kv":
+        train_root = str(Path(__file__).resolve().parents[3] / "src" / "train")
+        if train_root not in sys.path:
+            sys.path.insert(0, train_root)
+        from custom_attention.unet_2d_condition_custom import UNet2DConditionModel
+
+        unet = UNet2DConditionModel.from_pretrained(
+            args.pretrained_model_name_or_path, subfolder="unet", local_files_only=True, torch_dtype=dtype
+        )
+        unet.load_attn_procs(
+            str(model_dir),
+            weight_name=checkpoint.get("weight_name", TOKEN_LOCAL_KV_WEIGHTS),
+            adaptation_mode="token_local_kv",
+        )
+        pipe = DiffusionPipeline.from_pretrained(
+            args.pretrained_model_name_or_path, unet=unet, low_cpu_mem_usage=False, torch_dtype=dtype, local_files_only=True
+        ).to(args.device)
+    else:
+        pipe = DiffusionPipeline.from_pretrained(args.pretrained_model_name_or_path, low_cpu_mem_usage=False, torch_dtype=dtype, local_files_only=True).to(args.device)
+        pipe.unet.load_attn_procs(str(model_dir), weight_name=WEIGHTS)
     for token_artifact in protocol.get("required_token_artifacts", ("<S*>.bin",)):
         pipe.load_textual_inversion(str(model_dir), weight_name=token_artifact)
     return pipe
+
+
+def token_local_cross_attention_kwargs(pipe: Any, prompt: str, guidance_scale: float) -> dict[str, Any]:
+    import torch
+
+    modifier_id = pipe.tokenizer.convert_tokens_to_ids("<S*>")
+    conditional_ids = pipe.tokenizer(
+        prompt, padding="max_length", truncation=True, max_length=pipe.tokenizer.model_max_length, return_tensors="pt"
+    ).input_ids
+    conditional_mask = conditional_ids == modifier_id
+    if guidance_scale > 1.0:
+        unconditional_ids = pipe.tokenizer(
+            "", padding="max_length", truncation=True, max_length=pipe.tokenizer.model_max_length, return_tensors="pt"
+        ).input_ids
+        conditional_mask = torch.cat([unconditional_ids == modifier_id, conditional_mask], dim=0)
+    return {"modifier_token_mask": conditional_mask.to(pipe.unet.device)}
 
 
 def all_black(image: Image.Image) -> bool:
@@ -126,7 +168,13 @@ def generate(rows: list[dict[str, Any]], protocol: dict[str, Any], args: argpars
             path = args.output_dir / row["image_path"]
             status = {"id": row["id"], "image_path": str(path), "status": None, "failure_reason": None, "image_sha256": None, "nsfw_content_detected": None}
             try:
-                result = pipe(row["prompt"], num_inference_steps=row["num_inference_steps"], guidance_scale=row["guidance_scale"], generator=torch.Generator(device=args.device).manual_seed(row["seed"]))
+                checkpoint = next(item for item in protocol["source_checkpoints"] if item["model_dir"] == model_dir_text)
+                kwargs = {}
+                if checkpoint.get("adaptation_mode") == "token_local_kv":
+                    kwargs["cross_attention_kwargs"] = token_local_cross_attention_kwargs(
+                        pipe, row["prompt"], row["guidance_scale"]
+                    )
+                result = pipe(row["prompt"], num_inference_steps=row["num_inference_steps"], guidance_scale=row["guidance_scale"], generator=torch.Generator(device=args.device).manual_seed(row["seed"]), **kwargs)
                 image = result.images[0]
                 detected = getattr(result, "nsfw_content_detected", None)
                 status["nsfw_content_detected"] = bool(detected[0]) if isinstance(detected, (list, tuple)) and detected else False

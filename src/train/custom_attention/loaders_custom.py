@@ -21,7 +21,11 @@ import torch
 import torch.nn.functional as F
 from huggingface_hub import hf_hub_download
 
-from custom_attention.attention_processor_custom import CustomDiffusionAttnProcessor, CustomDiffusionXFormersAttnProcessor
+from custom_attention.attention_processor_custom import (
+    CustomDiffusionAttnProcessor,
+    CustomDiffusionXFormersAttnProcessor,
+    TokenLocalKVAttnProcessor,
+)
 
 from diffusers.models.attention_processor import (
     AttnAddedKVProcessor,
@@ -189,6 +193,7 @@ class UNet2DConditionLoadersMixin:
         # This value has the same meaning as the `--network_alpha` option in the kohya-ss trainer script.
         # See https://github.com/darkstorm2150/sd-scripts/blob/main/docs/train_network_README-en.md#execute-learning
         network_alpha = kwargs.pop("network_alpha", None)
+        adaptation_mode = kwargs.pop("adaptation_mode", None)
 
         if use_safetensors and not is_safetensors_available():
             raise ValueError(
@@ -254,6 +259,7 @@ class UNet2DConditionLoadersMixin:
 
         is_lora = all("lora" in k for k in state_dict.keys())
 
+        is_token_local_kv = any("delta_k.weight" in k or "delta_v.weight" in k for k in state_dict.keys())
         is_custom_diffusion = any("custom_diffusion" in k for k in state_dict.keys())
         # is_custom_diffusion = True
 
@@ -304,6 +310,26 @@ class UNet2DConditionLoadersMixin:
                     network_alpha=network_alpha,
                 )
                 attn_processors[key].load_state_dict(value_dict)
+        elif is_token_local_kv:
+            if adaptation_mode != "token_local_kv":
+                raise ValueError("token-local K/V weights require adaptation_mode='token_local_kv'")
+            token_local_grouped_dict = defaultdict(dict)
+            for key, value in state_dict.items():
+                if len(value) == 0:
+                    token_local_grouped_dict[key] = {}
+                else:
+                    attn_processor_key, sub_key = ".".join(key.split(".")[:-2]), ".".join(key.split(".")[-2:])
+                    token_local_grouped_dict[attn_processor_key][sub_key] = value
+            for key, value_dict in token_local_grouped_dict.items():
+                if len(value_dict) == 0:
+                    attn_processors[key] = TokenLocalKVAttnProcessor(hidden_size=None, cross_attention_dim=None)
+                else:
+                    cross_attention_dim = value_dict["delta_k.weight"].shape[1]
+                    hidden_size = value_dict["delta_k.weight"].shape[0]
+                    attn_processors[key] = TokenLocalKVAttnProcessor(
+                        hidden_size=hidden_size, cross_attention_dim=cross_attention_dim
+                    )
+                    attn_processors[key].load_state_dict(value_dict)
         elif is_custom_diffusion:
             custom_diffusion_grouped_dict = defaultdict(dict)
             for key, value in state_dict.items():
@@ -390,7 +416,7 @@ class UNet2DConditionLoadersMixin:
         os.makedirs(save_directory, exist_ok=True)
 
         is_custom_diffusion = any(
-            isinstance(x, (CustomDiffusionAttnProcessor, CustomDiffusionXFormersAttnProcessor))
+            isinstance(x, (CustomDiffusionAttnProcessor, CustomDiffusionXFormersAttnProcessor, TokenLocalKVAttnProcessor))
             for (_, x) in self.attn_processors.items()
         )
         # is_custom_diffusion=True
@@ -400,7 +426,7 @@ class UNet2DConditionLoadersMixin:
                 {
                     y: x
                     for (y, x) in self.attn_processors.items()
-                    if isinstance(x, (CustomDiffusionAttnProcessor, CustomDiffusionXFormersAttnProcessor))
+                    if isinstance(x, (CustomDiffusionAttnProcessor, CustomDiffusionXFormersAttnProcessor, TokenLocalKVAttnProcessor))
                 }
             )
             state_dict = model_to_save.state_dict()
