@@ -31,6 +31,7 @@ STAGES = {
     "generate_emission_transfer_quick": "scripts/methods/colorpeel_ice/generate_d1_emission_color_transfer_quick.py",
     "generate_emission_transfer_all": "scripts/methods/colorpeel_ice/generate_d1_emission_color_transfer_all.py",
     "generate_subject_statue_reconstruction": "scripts/methods/colorpeel_ice/generate_d1_subject_recolor_statue_reconstruction.py",
+    "generate_two_stage_subject_inpaint": "scripts/methods/colorpeel_ice/generate_d1_two_stage_subject_inpaint.py",
     "generate_mailbox_context_priors": "scripts/methods/colorpeel_ice/generate_d1_mailbox_context_priors.py",
     "generate_multiview": "scripts/methods/colorpeel_ice/generate_multiview_heldout.py",
     "generate_material_multiview": "scripts/methods/colorpeel_ice/generate_material_multiview.py",
@@ -186,7 +187,7 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "data")}
     if stage == "train":
         return {"output_dir": str(run_dir / "checkpoints")}
-    if stage in {"generate", "generate_emission_transfer", "generate_emission_transfer_quick", "generate_emission_transfer_all", "generate_subject_statue_reconstruction", "generate_multiview", "generate_material_multiview", "generate_two_object"}:
+    if stage in {"generate", "generate_emission_transfer", "generate_emission_transfer_quick", "generate_emission_transfer_all", "generate_subject_statue_reconstruction", "generate_two_stage_subject_inpaint", "generate_multiview", "generate_material_multiview", "generate_two_object"}:
         return {"output-dir": str(run_dir / "inference")}
     if stage == "generate_mailbox_context_priors":
         return {"output-dir": str(run_dir / "data")}

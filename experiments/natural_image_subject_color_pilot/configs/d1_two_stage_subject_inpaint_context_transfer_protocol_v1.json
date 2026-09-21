@@ -1,0 +1,20 @@
+{
+  "schema": "d1_two_stage_subject_inpaint/v1",
+  "protocol_id": "d1_two_stage_subject_inpaint_context_transfer_protocol_v1",
+  "purpose": "Scene-first transfer diagnostic: preserve a base-model scene outside a fixed foreground mask while generating the frozen mailbox identity only within the mask.",
+  "source_checkpoint": {"id":"base5-exposure-matched-5000","steps":5000,"run_dir":"/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42","run_manifest_sha256":"fef19cb7ab8e22be059daa2e234b4f7f1865a8a57d3258e0730c59b8ecf036d6","model_dir":"/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-191000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_exposure_matched_5000__c3844f1__42/checkpoints","model_sha256":"0071de810ddb397d533ee9bca196fd06ede8c00df0d747e1dca2551db25fa86e","token_artifact_sha256":{"<S*>.bin":"3590101e853e245e5da26ffa90c1564f649a5933d05695059aa8e837c8157a14"}},
+  "sampling": {"seeds":[42,43,44,45,46],"background_num_inference_steps":50,"background_guidance_scale":7.5,"subject_num_inference_steps":100,"subject_guidance_scale":3.5,"expected_image_count":45},
+  "mask": {"shape":"rounded_rectangle","bounds":[64,220,448,480],"radius":48,"semantics":"white is subject-generated; black preserves the stage-one scene at each denoising step"},
+  "prompts": [
+    {"id":"context_white","group":"context","background_prompt":"a photo of a plain white background with an empty foreground, no mailbox, no objects","subject_prompt":"a photo of <S*> mailbox on a plain white background"},
+    {"id":"context_city_street","group":"context","background_prompt":"a photo of an empty city street with an unobstructed foreground, no mailbox, no objects","subject_prompt":"a photo of <S*> mailbox on a city street"},
+    {"id":"context_house","group":"context","background_prompt":"a photo of the front of a house with an unobstructed foreground, no mailbox, no objects","subject_prompt":"a photo of <S*> mailbox in front of a house"},
+    {"id":"context_snow","group":"context","background_prompt":"a photo of a snowy environment with an unobstructed foreground, no mailbox, no objects","subject_prompt":"a photo of <S*> mailbox in a snowy environment"},
+    {"id":"context_museum","group":"context","background_prompt":"a photo of an empty museum interior with an unobstructed foreground, no mailbox, no objects","subject_prompt":"a photo of <S*> mailbox in a museum"},
+    {"id":"hard_purple_white","group":"hard_compositional","background_prompt":"a photo of a plain white background with an empty foreground, no mailbox, no objects","subject_prompt":"a photo of <S*> mailbox in purple color on a plain white background"},
+    {"id":"hard_side_orange_street","group":"hard_compositional","background_prompt":"a photo of an empty city street with an unobstructed foreground, no mailbox, no objects","subject_prompt":"a side view photo of <S*> mailbox in orange color on a city street"},
+    {"id":"hard_pink_snow","group":"hard_compositional","background_prompt":"a photo of a snowy environment with an unobstructed foreground, no mailbox, no objects","subject_prompt":"a photo of <S*> mailbox in pink color in a snowy environment"},
+    {"id":"hard_closeup_white_house","group":"hard_compositional","background_prompt":"a photo of the front of a house with an unobstructed foreground, no mailbox, no objects","subject_prompt":"a close-up photo of <S*> mailbox in white color in front of a house"}
+  ],
+  "next_step": "review background semantic adherence separately from subject identity and mask-boundary quality"
+}
