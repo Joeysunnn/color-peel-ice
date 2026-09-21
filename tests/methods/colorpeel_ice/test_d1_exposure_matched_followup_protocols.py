@@ -46,6 +46,18 @@ def test_asymmetric_kv_launch_configs_bind_the_declared_learning_rates():
     assert vonly["args"]["max_train_steps"] == k_low_v_full["args"]["max_train_steps"] == 5000
 
 
+def test_context_prior_arm_changes_only_the_paired_generic_mailbox_prior_loss():
+    value = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_context_prior_k_low_v_full_5000_protocol_v1.json").read_text(encoding="utf-8"))
+    config = read_config(CONFIGS / "d1_subject_recolor_mailbox_category_context_prior_k_low_v_full_5000.yaml")
+    assert value["source_instance_training_data"]["record_count"] == 5
+    assert value["class_prior_assets"]["record_count"] == 25
+    assert value["class_prior_assets"]["contains_modifier_token"] is False
+    assert value["training"] == {"seed": 42, "max_train_steps": 5000, "embedding_learning_rate": 1.0e-5, "k_learning_rate": 1.0e-6, "v_learning_rate": 1.0e-5, "with_prior_preservation": True, "prior_loss_weight": 1.0, "hflip": False, "from_scratch": True, "caa_cos_weight": 0.0}
+    assert config["args"]["with_prior_preservation"] is True
+    assert config["args"]["prior_loss_weight"] == 1.0
+    assert config["args"]["learning_rate"] == 1.0e-5
+
+
 def test_followup_generation_protocol_binds_both_completed_arms_to_the_same_reconstruction_and_transfer_grid():
     value = json.loads((CONFIGS / "d1_subject_exposure_matched_followup_reconstruction_transfer_protocol_v1.json").read_text(encoding="utf-8"))
     assert len(value["source_checkpoints"]) == 2
