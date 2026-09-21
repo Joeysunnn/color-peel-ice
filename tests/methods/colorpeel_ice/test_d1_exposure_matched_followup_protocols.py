@@ -81,3 +81,16 @@ def test_context_prior_generation_protocol_uses_the_fixed_reconstruction_and_tra
     assert value["sampling"] == {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 140}
     assert len(value["prompts"]) == 28
     assert config["args"]["protocol"] == "experiments/natural_image_subject_color_pilot/configs/d1_subject_context_prior_k_low_v_full_5000_reconstruction_transfer_protocol_v1.json"
+
+
+def test_token_local_kv_generation_protocol_binds_the_completed_token_local_checkpoint_to_the_fixed_grid():
+    value = json.loads((CONFIGS / "d1_subject_token_local_kv_5000_reconstruction_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    config = read_config(CONFIGS / "d1_subject_token_local_kv_5000_reconstruction_transfer_generate.yaml")
+    checkpoint = value["source_checkpoints"]
+    assert len(checkpoint) == 1
+    assert checkpoint[0]["id"] == "token-local-kv-5000"
+    assert checkpoint[0]["adaptation_mode"] == "token_local_kv"
+    assert checkpoint[0]["weight_name"] == "pytorch_token_local_kv_weights.bin"
+    assert value["sampling"] == {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 140}
+    assert len(value["prompts"]) == 28
+    assert config["args"]["protocol"] == "experiments/natural_image_subject_color_pilot/configs/d1_subject_token_local_kv_5000_reconstruction_transfer_protocol_v1.json"
