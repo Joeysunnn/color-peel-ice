@@ -665,7 +665,9 @@ class CustomDiffusionAttnProcessor(nn.Module):
             self.to_out_custom_diffusion.append(nn.Linear(hidden_size, hidden_size, bias=out_bias))
             self.to_out_custom_diffusion.append(nn.Dropout(dropout))
 
-    def __call__(self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None):
+    def __call__(
+        self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None, modifier_token_mask=None, **kwargs
+    ):
         batch_size, sequence_length, _ = hidden_states.shape
         attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
         if self.train_q_out:
@@ -801,7 +803,9 @@ class AttnAddedKVProcessor:
     encoder.
     """
 
-    def __call__(self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None):
+    def __call__(
+        self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None, modifier_token_mask=None, **kwargs
+    ):
         residual = hidden_states
         hidden_states = hidden_states.view(hidden_states.shape[0], hidden_states.shape[1], -1).transpose(1, 2)
         batch_size, sequence_length, _ = hidden_states.shape
@@ -1463,7 +1467,9 @@ class CustomDiffusionXFormersAttnProcessor(nn.Module):
             self.to_out_custom_diffusion.append(nn.Linear(hidden_size, hidden_size, bias=out_bias))
             self.to_out_custom_diffusion.append(nn.Dropout(dropout))
 
-    def __call__(self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None):
+    def __call__(
+        self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None, modifier_token_mask=None, **kwargs
+    ):
         batch_size, sequence_length, _ = (
             hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
         )
