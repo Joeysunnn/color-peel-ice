@@ -792,6 +792,7 @@ class TokenLocalKVAttnProcessor(nn.Module):
         key = attn.head_to_batch_dim(key)
         value = attn.head_to_batch_dim(value)
         attention_probs = attn.get_attention_scores(query, key, attention_mask)
+        attn.attn_probs = attention_probs
         hidden_states = torch.bmm(attention_probs, value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
         return attn.to_out[1](attn.to_out[0](hidden_states))
