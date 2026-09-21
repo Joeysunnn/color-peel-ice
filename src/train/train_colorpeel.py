@@ -26,6 +26,7 @@ from joint_binding_utils import (
     modifier_group_positions,
 )
 from token_gradient_utils import modifier_rows_to_zero
+from context_prior_utils import load_context_prior_records
 from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
 import numpy as np
 import torch
@@ -180,7 +181,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     else:
         raise ValueError(f"{model_class} is not supported.")
 
-def collate_fn(examples, with_prior_preservation):
+def collate_fn(examples, with_prior_preservation, modifier_token_ids=()):
     input_ids = [example["instance_prompt_ids"] for example in examples]
     pixel_values = [example["instance_images"] for example in examples]
     mask = [example["mask"] for example in examples]
@@ -194,6 +195,13 @@ def collate_fn(examples, with_prior_preservation):
     if mask.ndim == 3:
         mask = mask.unsqueeze(1)
     batch = {"input_ids": input_ids, "pixel_values": pixel_values, "mask": mask}
+    if with_prior_preservation:
+        batch["class_input_ids"] = torch.cat([example["class_prompt_ids"] for example in examples], dim=0)
+        batch["class_pixel_values"] = torch.stack([example["class_images"] for example in examples]).to(
+            memory_format=torch.contiguous_format
+        ).float()
+        if any((batch["class_input_ids"] == token_id).any().item() for token_id in modifier_token_ids):
+            raise ValueError("class prior batch contains a modifier token")
     token_groups = [example.get("modifier_token_groups") for example in examples]
     if any(groups is not None for groups in token_groups):
         if not all(groups is not None for groups in token_groups):
@@ -237,6 +245,7 @@ class CustomDiffusionDataset(Dataset):
         num_class_images=200,
         hflip=False,
         aug=False,
+        forbidden_tokens=(),
     ):
         self.size = size
         self.mask_size = mask_size
@@ -282,10 +291,19 @@ class CustomDiffusionDataset(Dataset):
                     (image, concept["instance_prompt"], mask, None) for image, mask in pairs
                 ]
             self.instance_images_path.extend(inst_img_path)
+            if with_prior_preservation:
+                class_manifest = concept.get("class_data_manifest")
+                if class_manifest is None:
+                    raise ValueError("with_prior_preservation requires class_data_manifest for every concept")
+                self.class_images_path.extend(
+                    load_context_prior_records(class_manifest, forbidden_tokens=forbidden_tokens)
+                )
 
         # random.shuffle(self.instance_images_path)
         self.num_instance_images = len(self.instance_images_path)
         self.num_class_images = len(self.class_images_path)
+        if self.with_prior_preservation and not self.num_class_images:
+            raise ValueError("with_prior_preservation requires at least one class prior image")
         self._length = max(self.num_class_images, self.num_instance_images)
         # self.flip = transforms.RandomHorizontalFlip(0.5 * hflip)
 
@@ -364,6 +382,21 @@ class CustomDiffusionDataset(Dataset):
             max_length=self.tokenizer.model_max_length,
             return_tensors="pt",
         ).input_ids
+
+        if self.with_prior_preservation:
+            class_image, class_prompt = self.class_images_path[index % self.num_class_images]
+            class_image = Image.open(class_image)
+            if class_image.mode != "RGB":
+                class_image = class_image.convert("RGB")
+            class_image, _ = self.preprocess(class_image, self.size, self.interpolation)
+            example["class_images"] = torch.from_numpy(class_image).permute(2, 0, 1)
+            example["class_prompt_ids"] = self.tokenizer(
+                class_prompt,
+                truncation=True,
+                padding="max_length",
+                max_length=self.tokenizer.model_max_length,
+                return_tensors="pt",
+            ).input_ids
 
         return example
 
@@ -861,6 +894,8 @@ def main(args):
             raise ValueError("joint_two_object_binding requires joint masks and token groups for every concept")
     elif args.lambda_attention != 0:
         raise ValueError("lambda_attention is only supported by joint_two_object_binding")
+    if args.with_prior_preservation and args.joint_two_object_binding:
+        raise ValueError("with_prior_preservation is only implemented for single-subject training")
 
     # Handle the repository creation
     if accelerator.is_main_process:
@@ -1042,8 +1077,6 @@ def main(args):
             args.k_learning_rate = args.k_learning_rate * scale
         if args.v_learning_rate is not None:
             args.v_learning_rate = args.v_learning_rate * scale
-        if args.with_prior_preservation:
-            args.learning_rate = args.learning_rate * 2.0
 
     # Dataset and DataLoaders creation:
     train_dataset = CustomDiffusionDataset(
@@ -1059,6 +1092,7 @@ def main(args):
         center_crop=args.center_crop,
         num_class_images=args.num_class_images,
         hflip=args.hflip,
+        forbidden_tokens=args.modifier_token or (),
         aug=not args.noaug,
     )
 
@@ -1066,7 +1100,9 @@ def main(args):
         train_dataset,
         batch_size=args.train_batch_size,
         shuffle=False,
-        collate_fn=lambda examples: collate_fn(examples, args.with_prior_preservation),
+        collate_fn=lambda examples: collate_fn(
+            examples, args.with_prior_preservation, modifier_token_ids=modifier_token_id
+        ),
         num_workers=args.dataloader_num_workers,
     )
 
@@ -1289,6 +1325,24 @@ def main(args):
                     raw_attention_loss = torch.zeros((), device=loss.device)
                     weighted_attention_loss = raw_attention_loss
                     leakage_mass = torch.zeros((), device=loss.device)
+                instance_loss_value = loss.detach().float().item()
+                prior_loss = torch.zeros((), device=loss.device)
+                if args.with_prior_preservation:
+                    class_latents = vae.encode(batch["class_pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
+                    class_latents = class_latents * vae.config.scaling_factor
+                    class_noise = torch.randn_like(class_latents)
+                    class_timesteps = torch.randint(
+                        0, noise_scheduler.config.num_train_timesteps, (class_latents.shape[0],), device=class_latents.device
+                    ).long()
+                    class_noisy_latents = noise_scheduler.add_noise(class_latents, class_noise, class_timesteps)
+                    class_encoder_hidden_states = text_encoder(batch["class_input_ids"])[0]
+                    class_model_pred = unet(class_noisy_latents, class_timesteps, class_encoder_hidden_states).sample
+                    if noise_scheduler.config.prediction_type == "epsilon":
+                        class_target = class_noise
+                    else:
+                        class_target = noise_scheduler.get_velocity(class_latents, class_noise, class_timesteps)
+                    prior_loss = F.mse_loss(class_model_pred.float(), class_target.float(), reduction="mean")
+                    loss = loss + args.prior_loss_weight * prior_loss
                 pil_imgs, split_imgs = show_cross_attention_blackwhite(prompts, attention_maps.detach().cpu(), display_image=False,)
                 
                 if(epoch%50 == 0):
@@ -1298,7 +1352,7 @@ def main(args):
                 else:
                     { }
 
-                reconstruction_loss_value = loss.detach().float().item()
+                reconstruction_loss_value = instance_loss_value
                 caa_loss_value = cos.detach().float().item()
                 loss += cos * args.cos_weight
                 loss += weighted_attention_loss
@@ -1372,6 +1426,8 @@ def main(args):
                         cross_object_attention_mass=(
                             cross_object_leakage_value if args.joint_two_object_binding else None
                         ),
+                        prior_loss=prior_loss.detach().float().item() if args.with_prior_preservation else None,
+                        prior_loss_weight=args.prior_loss_weight if args.with_prior_preservation else None,
                     ),
                 )
 

@@ -40,6 +40,8 @@ def build_training_metric(
     attention_loss=None,
     attention_weight=None,
     cross_object_attention_mass=None,
+    prior_loss=None,
+    prior_loss_weight=None,
 ):
     """Build one JSON-serializable observation of the existing training loss."""
     reconstruction_loss = float(reconstruction_loss)
@@ -85,6 +87,20 @@ def build_training_metric(
         )
         result["losses_finite"]["all"] = result["losses_finite"]["all"] and all(
             math.isfinite(value) for value in (attention_loss, attention_weighted_loss, leakage)
+        )
+    if prior_loss is not None:
+        prior_loss = float(prior_loss)
+        prior_loss_weight = float(prior_loss_weight)
+        result.update(
+            {
+                "class_prior_loss": prior_loss,
+                "class_prior_weight": prior_loss_weight,
+                "class_prior_weighted_loss": prior_loss * prior_loss_weight,
+            }
+        )
+        result["losses_finite"]["class_prior"] = math.isfinite(prior_loss)
+        result["losses_finite"]["all"] = result["losses_finite"]["all"] and math.isfinite(
+            prior_loss * prior_loss_weight
         )
     return result
 

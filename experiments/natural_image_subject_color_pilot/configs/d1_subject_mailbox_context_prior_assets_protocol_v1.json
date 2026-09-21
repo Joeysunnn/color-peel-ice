@@ -1,0 +1,13 @@
+{
+  "schema": "d1_mailbox_context_prior_assets_protocol/v1",
+  "purpose": "Freeze generic mailbox images for prompt-conditional class-prior preservation without the learned subject token.",
+  "source_instance_concepts": {"path": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-190000__natural_image_subject_color_pilot__subject_exposure_matched_base5_assets__c3844f1__42/concepts.json", "sha256": "798e198e966f503f9913a72cee0b3834d66eb1dd8ca02eb0d98cb45b5e408e17"},
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 25},
+  "prompts": [
+    {"id": "context_white", "prompt": "a photo of a mailbox on a plain white background"},
+    {"id": "context_city_street", "prompt": "a photo of a mailbox on a city street"},
+    {"id": "context_house", "prompt": "a photo of a mailbox in front of a house"},
+    {"id": "context_snow", "prompt": "a photo of a mailbox in a snowy environment"},
+    {"id": "context_museum", "prompt": "a photo of a mailbox in a museum"}
+  ]
+}
