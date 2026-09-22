@@ -94,3 +94,20 @@ def test_token_local_kv_generation_protocol_binds_the_completed_token_local_chec
     assert value["sampling"] == {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 140}
     assert len(value["prompts"]) == 28
     assert config["args"]["protocol"] == "experiments/natural_image_subject_color_pilot/configs/d1_subject_token_local_kv_5000_reconstruction_transfer_protocol_v1.json"
+
+
+def test_alignit_protocols_keep_the_same_token_local_checkpoint_and_differ_only_in_dummy_prompt_policy():
+    strict = json.loads((CONFIGS / "d1_subject_token_local_kv_5000_alignit_strict_reconstruction_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    phrase = json.loads((CONFIGS / "d1_subject_token_local_kv_5000_alignit_subject_phrase_reconstruction_transfer_protocol_v1.json").read_text(encoding="utf-8"))
+    strict_config = read_config(CONFIGS / "d1_subject_token_local_kv_5000_alignit_strict_reconstruction_transfer_generate.yaml")
+    phrase_config = read_config(CONFIGS / "d1_subject_token_local_kv_5000_alignit_subject_phrase_reconstruction_transfer_generate.yaml")
+    assert strict["sampling"] == phrase["sampling"] == {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5, "expected_image_count": 140}
+    assert strict["prompts"] == phrase["prompts"]
+    strict_checkpoint, phrase_checkpoint = strict["source_checkpoints"][0], phrase["source_checkpoints"][0]
+    assert strict_checkpoint["model_dir"] == phrase_checkpoint["model_dir"]
+    assert strict_checkpoint["model_sha256"] == phrase_checkpoint["model_sha256"]
+    assert strict_checkpoint["inference_mode"] == phrase_checkpoint["inference_mode"] == "alignit"
+    assert strict_checkpoint["alignit"] == {"modifier_token": "<S*>", "class_token": "mailbox", "dummy_policy": "strict"}
+    assert phrase_checkpoint["alignit"] == {"modifier_token": "<S*>", "class_token": "mailbox", "dummy_policy": "subject_phrase"}
+    assert strict_config["args"]["protocol"].endswith("alignit_strict_reconstruction_transfer_protocol_v1.json")
+    assert phrase_config["args"]["protocol"].endswith("alignit_subject_phrase_reconstruction_transfer_protocol_v1.json")

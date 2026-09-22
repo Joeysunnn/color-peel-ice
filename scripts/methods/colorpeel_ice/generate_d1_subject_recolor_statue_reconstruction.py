@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
+import torch
 from PIL import Image
 
 
@@ -152,29 +153,253 @@ def token_local_cross_attention_kwargs(pipe: Any, prompt: str, guidance_scale: f
     return {"modifier_token_mask": conditional_mask.to(pipe.unet.device)}
 
 
+def replace_alignit_subject_slot(key, value, source_key, source_value, subject_index: int, conditional_only: bool = True):
+    """Copy one source K/V token into base K/V without changing any other slot."""
+    if key.ndim != 3 or value.shape != key.shape:
+        raise ValueError("AlignIT base K/V must have matching [batch, sequence, feature] shapes")
+    if not 0 <= subject_index < key.shape[1]:
+        raise ValueError("AlignIT subject index is outside the base prompt sequence")
+    if source_key.shape != source_value.shape or source_key.ndim != 2 or source_key.shape[1] != key.shape[2]:
+        raise ValueError("AlignIT source K/V must have matching [batch, feature] shapes")
+    start = key.shape[0] // 2 if conditional_only and key.shape[0] > 1 else 0
+    copied_key, copied_value = key.clone(), value.clone()
+    copied_key[start:, subject_index] = source_key[:1].to(device=key.device, dtype=key.dtype).expand(key.shape[0] - start, -1)
+    copied_value[start:, subject_index] = source_value[:1].to(device=value.device, dtype=value.dtype).expand(value.shape[0] - start, -1)
+    return copied_key, copied_value
+
+
+class AlignITKVAttnProcessor:
+    """Base attention with one conditional cross-attention K/V token replaced at inference."""
+
+    def __init__(self):
+        self.source_key = None
+        self.source_value = None
+        self.subject_index = None
+        self.last_ordinary_slots_unchanged = None
+
+    def configure(self, source_key, source_value, subject_index: int) -> None:
+        self.source_key = source_key.detach()
+        self.source_value = source_value.detach()
+        self.subject_index = int(subject_index)
+
+    def __call__(self, attn, hidden_states, encoder_hidden_states=None, attention_mask=None, temb=None):
+        residual = hidden_states
+        if attn.spatial_norm is not None:
+            hidden_states = attn.spatial_norm(hidden_states, temb)
+        input_ndim = hidden_states.ndim
+        if input_ndim == 4:
+            batch_size, channel, height, width = hidden_states.shape
+            hidden_states = hidden_states.view(batch_size, channel, height * width).transpose(1, 2)
+        batch_size, sequence_length, _ = (
+            hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
+        )
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
+        if attn.group_norm is not None:
+            hidden_states = attn.group_norm(hidden_states.transpose(1, 2)).transpose(1, 2)
+        query = attn.to_q(hidden_states)
+        if encoder_hidden_states is None:
+            encoder_hidden_states = hidden_states
+        elif attn.norm_cross:
+            encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+        key = attn.to_k(encoder_hidden_states)
+        value = attn.to_v(encoder_hidden_states)
+        if self.source_key is not None:
+            if encoder_hidden_states is hidden_states:
+                raise ValueError("AlignIT K/V replacement is valid only for cross-attention")
+            base_key, base_value = key, value
+            key, value = replace_alignit_subject_slot(key, value, self.source_key, self.source_value, self.subject_index)
+            ordinary = [slot for slot in range(key.shape[1]) if slot != self.subject_index]
+            self.last_ordinary_slots_unchanged = bool(
+                (key[:, ordinary] == base_key[:, ordinary]).all() and (value[:, ordinary] == base_value[:, ordinary]).all()
+            )
+        query = attn.head_to_batch_dim(query)
+        key = attn.head_to_batch_dim(key)
+        value = attn.head_to_batch_dim(value)
+        attention_probs = attn.get_attention_scores(query, key, attention_mask)
+        hidden_states = torch.bmm(attention_probs, value)
+        hidden_states = attn.batch_to_head_dim(hidden_states)
+        hidden_states = attn.to_out[1](attn.to_out[0](hidden_states))
+        if input_ndim == 4:
+            hidden_states = hidden_states.transpose(-1, -2).reshape(batch_size, channel, height, width)
+        if attn.residual_connection:
+            hidden_states = hidden_states + residual
+        return hidden_states / attn.rescale_output_factor
+
+
+def _single_token_id(tokenizer, text: str, field: str) -> int:
+    token_ids = tokenizer(text, add_special_tokens=False).input_ids
+    if len(token_ids) != 1:
+        raise ValueError(f"AlignIT {field} must tokenize to exactly one token: {text!r}")
+    return int(token_ids[0])
+
+
+def build_alignit_input_ids(tokenizer, prompt: str, modifier_token: str, class_token: str, dummy_policy: str):
+    """Build target-base and source-dummy token sequences with an identical subject slot."""
+    import torch
+
+    target_ids = tokenizer(
+        prompt, padding="max_length", truncation=True, max_length=tokenizer.model_max_length, return_tensors="pt"
+    ).input_ids
+    subject_id = tokenizer.convert_tokens_to_ids(modifier_token)
+    positions = (target_ids[0] == subject_id).nonzero(as_tuple=False).flatten().tolist()
+    if len(positions) != 1:
+        raise ValueError("AlignIT requires exactly one explicit modifier-token position in every prompt")
+    subject_index = int(positions[0])
+    class_id = _single_token_id(tokenizer, class_token, "class token")
+    filler_id = _single_token_id(tokenizer, "*", "dummy placeholder")
+    base_ids = target_ids.clone()
+    base_ids[0, subject_index] = class_id
+    dummy_ids = base_ids.clone()
+    protected_ids = {int(value) for value in (tokenizer.bos_token_id, tokenizer.eos_token_id, tokenizer.pad_token_id) if value is not None}
+    for index, token_id in enumerate(dummy_ids[0].tolist()):
+        if index != subject_index and token_id not in protected_ids:
+            dummy_ids[0, index] = filler_id
+    dummy_ids[0, subject_index] = subject_id
+    if dummy_policy == "subject_phrase":
+        phrase_index = subject_index + 1
+        if phrase_index >= dummy_ids.shape[1] or base_ids[0, phrase_index].item() != class_id:
+            raise ValueError("subject_phrase AlignIT requires the class token immediately after the modifier token")
+        dummy_ids[0, phrase_index] = class_id
+    elif dummy_policy != "strict":
+        raise ValueError(f"unknown AlignIT dummy policy: {dummy_policy}")
+    return base_ids, dummy_ids, subject_index
+
+
+def encode_input_ids(pipe: Any, input_ids):
+    import torch
+
+    with torch.no_grad():
+        return pipe.text_encoder(input_ids.to(pipe.unet.device))[0]
+
+
+def collect_alignit_source_kv(custom_pipe: Any, dummy_ids, subject_index: int) -> dict[str, tuple[Any, Any]]:
+    from custom_attention.attention_processor_custom import TokenLocalKVAttnProcessor
+
+    source_hidden_states = encode_input_ids(custom_pipe, dummy_ids)
+    modifier_id = custom_pipe.tokenizer.convert_tokens_to_ids("<S*>")
+    modifier_mask = dummy_ids.to(custom_pipe.unet.device) == modifier_id
+    source = {}
+    for name, processor in custom_pipe.unet.attn_processors.items():
+        if name.endswith("attn1.processor"):
+            continue
+        if not isinstance(processor, TokenLocalKVAttnProcessor):
+            raise TypeError(f"AlignIT source requires token-local cross-attention processors: {name}")
+        attention = custom_pipe.unet.get_submodule(name.removesuffix(".processor"))
+        hidden_states = attention.norm_encoder_hidden_states(source_hidden_states) if attention.norm_cross else source_hidden_states
+        key, value = processor.project_kv(attention, hidden_states, modifier_mask)
+        source[name] = (key[:, subject_index].detach(), value[:, subject_index].detach())
+    return source
+
+
+def configure_alignit_base_unet(base_unet, source_kv: dict[str, tuple[Any, Any]], subject_index: int) -> None:
+    for name, (source_key, source_value) in source_kv.items():
+        processor = base_unet.attn_processors.get(name)
+        if not isinstance(processor, AlignITKVAttnProcessor):
+            raise TypeError(f"AlignIT base processor is missing for cross-attention layer: {name}")
+        processor.configure(source_key, source_value, subject_index)
+
+
+def load_alignit_base_pipeline(args: argparse.Namespace) -> Any:
+    import torch
+    from diffusers import DiffusionPipeline
+
+    train_root = str(Path(__file__).resolve().parents[3] / "src" / "train")
+    if train_root not in sys.path:
+        sys.path.insert(0, train_root)
+    from custom_attention.attention_processor_custom import AttnProcessor
+    from custom_attention.unet_2d_condition_custom import UNet2DConditionModel
+
+    dtype = torch.float16 if args.dtype == "float16" else torch.float32
+    unet = UNet2DConditionModel.from_pretrained(
+        args.pretrained_model_name_or_path, subfolder="unet", local_files_only=True, torch_dtype=dtype
+    )
+    processors = {
+        name: AttnProcessor() if name.endswith("attn1.processor") else AlignITKVAttnProcessor()
+        for name in unet.attn_processors
+    }
+    unet.set_attn_processor(processors)
+    return DiffusionPipeline.from_pretrained(
+        args.pretrained_model_name_or_path, unet=unet, low_cpu_mem_usage=False, torch_dtype=dtype, local_files_only=True
+    ).to(args.device)
+
+
+def alignit_prompt_embeds(base_pipe: Any, base_ids, guidance_scale: float):
+    prompt_embeds = encode_input_ids(base_pipe, base_ids)
+    if guidance_scale <= 1.0:
+        return prompt_embeds, None
+    unconditioned_ids = base_pipe.tokenizer(
+        "", padding="max_length", truncation=True, max_length=base_pipe.tokenizer.model_max_length, return_tensors="pt"
+    ).input_ids
+    return prompt_embeds, encode_input_ids(base_pipe, unconditioned_ids)
+
+
+def generate_alignit_image(custom_pipe: Any, base_pipe: Any, checkpoint: dict[str, Any], row: dict[str, Any], args: argparse.Namespace):
+    alignit = checkpoint.get("alignit")
+    if not isinstance(alignit, dict):
+        raise ValueError("AlignIT checkpoint metadata is required")
+    base_ids, dummy_ids, subject_index = build_alignit_input_ids(
+        custom_pipe.tokenizer,
+        row["prompt"],
+        modifier_token=alignit.get("modifier_token", "<S*>"),
+        class_token=alignit.get("class_token", "mailbox"),
+        dummy_policy=alignit["dummy_policy"],
+    )
+    source_kv = collect_alignit_source_kv(custom_pipe, dummy_ids, subject_index)
+    configure_alignit_base_unet(base_pipe.unet, source_kv, subject_index)
+    prompt_embeds, negative_prompt_embeds = alignit_prompt_embeds(base_pipe, base_ids, row["guidance_scale"])
+    result = base_pipe(
+        prompt_embeds=prompt_embeds,
+        negative_prompt_embeds=negative_prompt_embeds,
+        num_inference_steps=row["num_inference_steps"],
+        guidance_scale=row["guidance_scale"],
+        generator=torch.Generator(device=args.device).manual_seed(row["seed"]),
+    )
+    ordinary_slots_unchanged = [
+        processor.last_ordinary_slots_unchanged
+        for name, processor in base_pipe.unet.attn_processors.items()
+        if not name.endswith("attn1.processor")
+    ]
+    if not ordinary_slots_unchanged or not all(ordinary_slots_unchanged):
+        raise RuntimeError("AlignIT invariant failed: a non-subject base K/V slot changed")
+    return result, {
+        "class_token": alignit.get("class_token", "mailbox"),
+        "dummy_policy": alignit["dummy_policy"],
+        "subject_index": subject_index,
+        "base_token_ids": base_ids[0].tolist(),
+        "dummy_token_ids": dummy_ids[0].tolist(),
+        "cross_attention_layer_count": len(source_kv),
+        "ordinary_base_kv_exact": True,
+    }
+
+
 def all_black(image: Image.Image) -> bool:
     return image.convert("RGB").getextrema() == ((0, 0), (0, 0), (0, 0))
 
 
 def generate(rows: list[dict[str, Any]], protocol: dict[str, Any], args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
-    import torch
-
     statuses, artifacts = [], {}
     for model_dir_text in dict.fromkeys(row["model_dir"] for row in rows):
         model_dir = Path(model_dir_text)
         artifacts[str(model_dir)] = validate_model_dir(model_dir, protocol)
+        checkpoint = next(item for item in protocol["source_checkpoints"] if item["model_dir"] == model_dir_text)
+        inference_mode = checkpoint.get("inference_mode", "token_local")
         pipe = load_pipeline(model_dir, protocol, args)
+        base_pipe = load_alignit_base_pipeline(args) if inference_mode == "alignit" else None
         for row in (item for item in rows if item["model_dir"] == model_dir_text):
             path = args.output_dir / row["image_path"]
-            status = {"id": row["id"], "image_path": str(path), "status": None, "failure_reason": None, "image_sha256": None, "nsfw_content_detected": None}
+            status = {"id": row["id"], "image_path": str(path), "status": None, "failure_reason": None, "image_sha256": None, "nsfw_content_detected": None, "alignit": None}
             try:
-                checkpoint = next(item for item in protocol["source_checkpoints"] if item["model_dir"] == model_dir_text)
-                kwargs = {}
-                if checkpoint.get("adaptation_mode") == "token_local_kv":
-                    kwargs["cross_attention_kwargs"] = token_local_cross_attention_kwargs(
-                        pipe, row["prompt"], row["guidance_scale"]
-                    )
-                result = pipe(row["prompt"], num_inference_steps=row["num_inference_steps"], guidance_scale=row["guidance_scale"], generator=torch.Generator(device=args.device).manual_seed(row["seed"]), **kwargs)
+                if inference_mode == "alignit":
+                    result, status["alignit"] = generate_alignit_image(pipe, base_pipe, checkpoint, row, args)
+                elif inference_mode == "token_local":
+                    kwargs = {}
+                    if checkpoint.get("adaptation_mode") == "token_local_kv":
+                        kwargs["cross_attention_kwargs"] = token_local_cross_attention_kwargs(
+                            pipe, row["prompt"], row["guidance_scale"]
+                        )
+                    result = pipe(row["prompt"], num_inference_steps=row["num_inference_steps"], guidance_scale=row["guidance_scale"], generator=torch.Generator(device=args.device).manual_seed(row["seed"]), **kwargs)
+                else:
+                    raise ValueError(f"unknown inference_mode: {inference_mode}")
                 image = result.images[0]
                 detected = getattr(result, "nsfw_content_detected", None)
                 status["nsfw_content_detected"] = bool(detected[0]) if isinstance(detected, (list, tuple)) and detected else False
@@ -192,6 +417,8 @@ def generate(rows: list[dict[str, Any]], protocol: dict[str, Any], args: argpars
             except Exception as error:
                 status.update(status="failure", failure_reason=f"generation_error:{type(error).__name__}:{error}")
             statuses.append(status)
+        if base_pipe is not None:
+            del base_pipe
         del pipe
         torch.cuda.empty_cache()
     return statuses, artifacts

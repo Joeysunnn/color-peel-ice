@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+import torch
 
 ROOT = Path(__file__).parents[3]
 SCRIPT = ROOT / "scripts" / "methods" / "colorpeel_ice" / "generate_d1_subject_recolor_statue_reconstruction.py"
@@ -53,6 +54,20 @@ SPEC = importlib.util.spec_from_file_location("statue_reconstruction", SCRIPT)
 module = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(module)
+
+
+def test_alignit_replaces_only_the_conditional_subject_slot_and_keeps_base_kv_exact_elsewhere():
+    key = torch.arange(2 * 5 * 3, dtype=torch.float32).reshape(2, 5, 3)
+    value = key + 100
+    source_key = torch.tensor([[1000.0, 1001.0, 1002.0]])
+    source_value = torch.tensor([[2000.0, 2001.0, 2002.0]])
+    copied_key, copied_value = module.replace_alignit_subject_slot(key, value, source_key, source_value, subject_index=2)
+    assert torch.equal(copied_key[0], key[0])
+    assert torch.equal(copied_value[0], value[0])
+    assert torch.equal(copied_key[1, [0, 1, 3, 4]], key[1, [0, 1, 3, 4]])
+    assert torch.equal(copied_value[1, [0, 1, 3, 4]], value[1, [0, 1, 3, 4]])
+    assert torch.equal(copied_key[1, 2], source_key[0])
+    assert torch.equal(copied_value[1, 2], source_value[0])
 
 
 def test_reconstruction_grid_is_45_training_prompt_images():
