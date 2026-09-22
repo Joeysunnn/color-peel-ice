@@ -111,3 +111,16 @@ def test_alignit_protocols_keep_the_same_token_local_checkpoint_and_differ_only_
     assert phrase_checkpoint["alignit"] == {"modifier_token": "<S*>", "class_token": "mailbox", "dummy_policy": "subject_phrase"}
     assert strict_config["args"]["protocol"].endswith("alignit_strict_reconstruction_transfer_protocol_v1.json")
     assert phrase_config["args"]["protocol"].endswith("alignit_subject_phrase_reconstruction_transfer_protocol_v1.json")
+
+
+def test_subject_only_token_local_arm_changes_only_instance_prompts_and_uses_gpu_two():
+    value = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_token_local_kv_subject_only_5000_protocol_v1.json").read_text(encoding="utf-8"))
+    config = read_config(CONFIGS / "d1_subject_recolor_mailbox_category_token_local_kv_subject_only_5000.yaml")
+    assert value["source_training_data"]["record_count"] == 5
+    assert value["source_training_data"]["source_concepts_path"].endswith("subject_exposure_matched_base5_assets__c3844f1__42/concepts.json")
+    assert value["source_training_data"]["pixel_assets"] == value["source_training_data"]["masks"] == "unchanged"
+    assert value["prompt_ablation"] == {"original_instance_prompts": "a photo of <S*> mailbox in {color} color", "replacement_instance_prompt": "a photo of <S*>", "removed_terms": ["mailbox", "color"], "initializer_token": "mailbox", "only_changed_training_factor": "instance_prompt"}
+    assert value["training"] == {"seed": 42, "max_train_steps": 5000, "embedding_learning_rate": 1.0e-5, "kv_residual_learning_rate": 1.0e-5, "hflip": False, "caa_cos_weight": 0.0, "from_scratch": True}
+    assert config["environment"] == {"CUDA_VISIBLE_DEVICES": "2"}
+    assert config["args"]["concepts_list"] == "${COLORPEEL_SUBJECT_ONLY_BASE5_CONCEPTS}"
+    assert config["args"]["token_local_kv"] is True
