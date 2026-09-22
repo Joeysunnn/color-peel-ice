@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,43 @@ def test_alignit_replaces_only_the_conditional_subject_slot_and_keeps_base_kv_ex
     assert torch.equal(copied_value[1, [0, 1, 3, 4]], value[1, [0, 1, 3, 4]])
     assert torch.equal(copied_key[1, 2], source_key[0])
     assert torch.equal(copied_value[1, 2], source_value[0])
+
+
+def test_alignit_collects_the_subject_slot_from_a_full_kv_custom_diffusion_processor():
+    train_root = str(ROOT / "src" / "train")
+    if train_root not in sys.path:
+        sys.path.insert(0, train_root)
+    from custom_attention.attention_processor_custom import CustomDiffusionAttnProcessor
+
+    processor = CustomDiffusionAttnProcessor(train_kv=True, train_q_out=False, hidden_size=2, cross_attention_dim=4)
+    with torch.no_grad():
+        processor.to_k_custom_diffusion.weight.copy_(torch.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]))
+        processor.to_v_custom_diffusion.weight.copy_(torch.tensor([[0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]))
+
+    class TextEncoder:
+        def __call__(self, input_ids):
+            return (input_ids.float().unsqueeze(-1).repeat(1, 1, 4),)
+
+    class Attention:
+        norm_cross = False
+
+    class UNet:
+        device = torch.device("cpu")
+        attn_processors = {"cross.processor": processor}
+
+        @staticmethod
+        def get_submodule(name):
+            assert name == "cross"
+            return Attention()
+
+    class Pipe:
+        text_encoder = TextEncoder()
+        unet = UNet()
+
+    dummy_ids = torch.tensor([[1, 2, 3]], dtype=torch.long)
+    source = module.collect_alignit_source_kv(Pipe(), dummy_ids, subject_index=1)
+    assert torch.equal(source["cross.processor"][0], torch.tensor([[2.0, 2.0]]))
+    assert torch.equal(source["cross.processor"][1], torch.tensor([[2.0, 2.0]]))
 
 
 def test_reconstruction_grid_is_45_training_prompt_images():

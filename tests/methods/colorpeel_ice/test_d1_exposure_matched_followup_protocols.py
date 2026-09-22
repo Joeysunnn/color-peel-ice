@@ -124,3 +124,17 @@ def test_subject_only_token_local_arm_changes_only_instance_prompts_and_uses_gpu
     assert config["environment"] == {"CUDA_VISIBLE_DEVICES": "2"}
     assert config["args"]["concepts_list"] == "${COLORPEEL_SUBJECT_ONLY_BASE5_CONCEPTS}"
     assert config["args"]["token_local_kv"] is True
+
+
+def test_subject_only_full_kv_arm_changes_only_instance_prompts_and_updates_shared_kv_for_every_token():
+    value = json.loads((CONFIGS / "d1_subject_recolor_mailbox_category_full_kv_subject_only_5000_protocol_v1.json").read_text(encoding="utf-8"))
+    config = read_config(CONFIGS / "d1_subject_recolor_mailbox_category_full_kv_subject_only_5000.yaml")
+    assert value["source_training_data"]["record_count"] == 5
+    assert value["source_training_data"]["pixel_assets"] == value["source_training_data"]["masks"] == "unchanged"
+    assert value["prompt_ablation"]["replacement_instance_prompt"] == "a photo of <S*>"
+    assert value["adaptation"]["mode"] == "full_kv_custom_diffusion"
+    assert value["adaptation"]["ordinary_token_invariant"] == "forbidden: every token uses the learned shared K/V projections"
+    assert value["training"] == {"seed": 42, "max_train_steps": 5000, "embedding_learning_rate": 1.0e-5, "kv_learning_rate": 1.0e-5, "hflip": False, "caa_cos_weight": 0.0, "from_scratch": True}
+    assert config["environment"] == {"CUDA_VISIBLE_DEVICES": "2"}
+    assert config["args"]["concepts_list"] == "${COLORPEEL_SUBJECT_ONLY_BASE5_CONCEPTS}"
+    assert "token_local_kv" not in config["args"]

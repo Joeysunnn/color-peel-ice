@@ -273,20 +273,27 @@ def encode_input_ids(pipe: Any, input_ids):
 
 
 def collect_alignit_source_kv(custom_pipe: Any, dummy_ids, subject_index: int) -> dict[str, tuple[Any, Any]]:
-    from custom_attention.attention_processor_custom import TokenLocalKVAttnProcessor
+    train_root = str(Path(__file__).resolve().parents[3] / "src" / "train")
+    if train_root not in sys.path:
+        sys.path.insert(0, train_root)
+    from custom_attention.attention_processor_custom import CustomDiffusionAttnProcessor, TokenLocalKVAttnProcessor
 
     source_hidden_states = encode_input_ids(custom_pipe, dummy_ids)
-    modifier_id = custom_pipe.tokenizer.convert_tokens_to_ids("<S*>")
-    modifier_mask = dummy_ids.to(custom_pipe.unet.device) == modifier_id
     source = {}
     for name, processor in custom_pipe.unet.attn_processors.items():
         if name.endswith("attn1.processor"):
             continue
-        if not isinstance(processor, TokenLocalKVAttnProcessor):
-            raise TypeError(f"AlignIT source requires token-local cross-attention processors: {name}")
         attention = custom_pipe.unet.get_submodule(name.removesuffix(".processor"))
         hidden_states = attention.norm_encoder_hidden_states(source_hidden_states) if attention.norm_cross else source_hidden_states
-        key, value = processor.project_kv(attention, hidden_states, modifier_mask)
+        if isinstance(processor, TokenLocalKVAttnProcessor):
+            modifier_id = custom_pipe.tokenizer.convert_tokens_to_ids("<S*>")
+            modifier_mask = dummy_ids.to(custom_pipe.unet.device) == modifier_id
+            key, value = processor.project_kv(attention, hidden_states, modifier_mask)
+        elif isinstance(processor, CustomDiffusionAttnProcessor) and processor.train_kv:
+            key = processor.to_k_custom_diffusion(hidden_states)
+            value = processor.to_v_custom_diffusion(hidden_states)
+        else:
+            raise TypeError(f"AlignIT source requires token-local or full-K/V cross-attention processors: {name}")
         source[name] = (key[:, subject_index].detach(), value[:, subject_index].detach())
     return source
 

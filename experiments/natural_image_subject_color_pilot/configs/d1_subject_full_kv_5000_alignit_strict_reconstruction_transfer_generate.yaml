@@ -1,0 +1,7 @@
+schema_version: 1
+status: authorized_full_kv_alignit_strict_reconstruction_transfer
+stage: generate_subject_statue_reconstruction
+run: {study: natural_image_subject_color_pilot, variant: subject_full_kv_5000_alignit_strict_reconstruction_transfer, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "2"}
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_subject_full_kv_5000_alignit_strict_reconstruction_transfer_protocol_v1.json
+args: {protocol: experiments/natural_image_subject_color_pilot/configs/d1_subject_full_kv_5000_alignit_strict_reconstruction_transfer_protocol_v1.json, device: cuda:0, dtype: float16, pretrained-model-name-or-path: CompVis/stable-diffusion-v1-4}

@@ -1,0 +1,12 @@
+{
+  "schema": "natural_subject_full_kv_subject_only_protocol/v1",
+  "protocol_id": "d1_subject_recolor_mailbox_category_full_kv_subject_only_5000_protocol_v1",
+  "purpose": "All-token full-K/V counterpart to the subject-only token-local arm: retain the frozen original five-image mailbox set and replace only every instance caption with a photo of <S*>.",
+  "source_training_data": {"record_count":5,"source_concepts_path":"/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-190000__natural_image_subject_color_pilot__subject_exposure_matched_base5_assets__c3844f1__42/concepts.json","source_concepts_sha256":"798e198e966f503f9913a72cee0b3834d66eb1dd8ca02eb0d98cb45b5e408e17","subject_only_concepts_env":"COLORPEEL_SUBJECT_ONLY_BASE5_CONCEPTS","stable_id":"D1GT:81/130.png","pixel_assets":"unchanged","masks":"unchanged","original_orange_subject_record":"forbidden","new_counterfactual_data":"forbidden"},
+  "prompt_ablation": {"original_instance_prompts":"a photo of <S*> mailbox in {color} color","replacement_instance_prompt":"a photo of <S*>","removed_terms":["mailbox","color"],"initializer_token":"mailbox","only_changed_training_factor":"instance_prompt"},
+  "subject": {"modifier_token":"<S*>","initializer_token":"mailbox","color_modifier_token":"forbidden","joint_subject_color_training":"forbidden"},
+  "adaptation": {"mode":"full_kv_custom_diffusion","formula":"K=W_K^full h; V=W_V^full h for every cross-attention text-token position","trainable_cross_attention":"K,V only","ordinary_token_invariant":"forbidden: every token uses the learned shared K/V projections","self_attention":"base behavior","xformers":"forbidden"},
+  "training": {"seed":42,"max_train_steps":5000,"embedding_learning_rate":1.0e-5,"kv_learning_rate":1.0e-5,"hflip":false,"caa_cos_weight":0.0,"from_scratch":true},
+  "planned_sampling": {"direct_prompt":"a photo of <S*>","transfer_template":"a photo of <S*> {attribute_or_context}","alignit_base_template":"a photo of mailbox {attribute_or_context}","alignit_dummy_prompt":"strict: only the aligned <S*> slot is retained; all other content slots are *","guidance_scale":3.5,"num_inference_steps":100,"seeds":[42,43,44,45,46]},
+  "checkpoint": {"adaptation_mode":"full_kv_custom_diffusion","weight_name":"pytorch_custom_diffusion_weights.bin"}
+}
