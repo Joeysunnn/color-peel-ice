@@ -1,0 +1,13 @@
+{
+  "schema": "material_token_local_pilot_evaluation/v1",
+  "protocol_id": "material_token_local_pilot_v1_evaluation",
+  "checkpoint": {"adaptation_mode": "token_local_kv", "required_token": "<M*>"},
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "groups": [
+    {"id": "seen_reconstruction", "prompts": ["a red cube made of <M*>"]},
+    {"id": "color_invariance", "prompts": ["a red sphere made of <M*>", "a blue sphere made of <M*>", "a green sphere made of <M*>", "a yellow sphere made of <M*>"]},
+    {"id": "unseen_object_transfer", "prompts": ["a mug made of <M*>", "a vase made of <M*>", "a chair made of <M*>", "a mailbox made of <M*>"]},
+    {"id": "lighting_robustness", "prompts": ["a red sphere made of <M*> under soft studio lighting", "a red sphere made of <M*> under strong side lighting", "a red sphere made of <M*> under warm indoor lighting"]}
+  ],
+  "failure_modes": ["color_leakage", "shape_leakage", "lighting_leakage", "material_collapse", "prompt_suppression", "multi_object_or_fusion", "style_leakage"]
+}

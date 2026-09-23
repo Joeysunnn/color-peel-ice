@@ -1,0 +1,36 @@
+{
+  "schema": "material_token_local_pilot/v1",
+  "protocol_id": "material_token_local_pilot_v1",
+  "purpose": "Standalone material-factor pilot: learn one token from fixed native metal while color, shape, lighting, and viewpoint vary.",
+  "target_material": {
+    "name": "metal",
+    "token": "<M*>",
+    "initializer_token": "metal",
+    "renderer_asset": "MyMetal",
+    "scope": "controlled metallic surface appearance; no texture token and no natural-image BRDF claim"
+  },
+  "renderer_profile": "experiments/material_token_local_pilot_v1/configs/render_profile.json",
+  "shapes": ["cube", "sphere", "cylinder"],
+  "colors": {
+    "red": [173, 35, 35],
+    "blue": [42, 75, 215],
+    "green": [29, 105, 20],
+    "yellow": [255, 238, 51]
+  },
+  "preview_colors": ["red", "blue"],
+  "lighting_conditions": ["soft_front", "side_directional", "warm_top"],
+  "viewpoints": ["frontish", "oblique_45"],
+  "rendering": {
+    "preview_image_count": 36,
+    "full_image_count": 72,
+    "render_seed_formula": "730000 + cell_index * 10 + view_index",
+    "training_authorization": "blocked_pending_preview_human_review"
+  },
+  "training": {
+    "adaptation_mode": "token_local_kv",
+    "modifier_token": "<M*>",
+    "initializer_token": "metal",
+    "caption": "a photo of an object made of <M*>",
+    "forbidden": ["subject_token", "color_token", "joint_training", "AlignIT", "texture_token", "additional_semantic_loss"]
+  }
+}

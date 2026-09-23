@@ -99,6 +99,9 @@ def read_config(path: Path) -> dict[str, Any]:
     for key in ("study", "variant", "seed"):
         if key not in config["run"]:
             raise ValueError(f"missing run.{key}")
+    if (config["stage"] == "train" and config["run"]["study"] == "material_token_local_pilot_v1"
+            and config.get("status") != "authorized_after_preview_review"):
+        raise ValueError("material pilot training remains blocked until a new reviewed config is authorized")
     stage_managed_arguments = set(MANAGED_ARGUMENTS)
     if config["stage"] == "segment":
         stage_managed_arguments.add("mask-dir")
@@ -160,6 +163,54 @@ def expand_value(value: Any, environment: dict[str, str]) -> Any:
     if isinstance(value, list):
         return [expand_value(item, environment) for item in value]
     return value
+
+
+def validate_material_pilot_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> None:
+    if config["stage"] != "train" or config["run"]["study"] != "material_token_local_pilot_v1":
+        return
+    authorization = config.get("material_pilot_authorization")
+    if not isinstance(authorization, dict) or not all(
+        authorization.get(key) for key in ("preview_root", "review_record", "staging_root", "staging_provenance_sha256")
+    ):
+        raise ValueError("authorized material training requires preview and staging provenance")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from src.methods.colorpeel_ice import prepare_material_token_local_pilot as pilot
+
+    preview_root = Path(expand_value(authorization["preview_root"], environment)).resolve()
+    review_record = Path(expand_value(authorization["review_record"], environment)).resolve()
+    staging_root = Path(expand_value(authorization["staging_root"], environment)).resolve()
+    protocol = pilot.validate_protocol(pilot.read_json(pilot.DEFAULT_PROTOCOL))
+    approval_hash = pilot.validate_preview_approval(protocol, preview_root, review_record)
+    provenance_path = staging_root / "staging_provenance.json"
+    if pilot.sha256(provenance_path) != authorization["staging_provenance_sha256"]:
+        raise ValueError("material staging provenance hash differs from authorized config")
+    provenance = pilot.read_json(provenance_path)
+    concepts_path = staging_root / "concepts.json"
+    manifest_path = staging_root / "training_assets_manifest.jsonl"
+    if (provenance.get("protocol_sha256") != pilot.canonical_sha256(protocol)
+            or provenance.get("preview_approval_sha256") != approval_hash
+            or provenance.get("concepts_sha256") != pilot.sha256(concepts_path)
+            or provenance.get("training_assets_manifest_sha256") != pilot.sha256(manifest_path)):
+        raise ValueError("material staging no longer matches the reviewed protocol and data")
+    if (Path(expand_value(config["args"]["concepts_list"], environment)).resolve() != concepts_path
+            or Path(expand_value(config["data_manifest"], environment)).resolve() != manifest_path):
+        raise ValueError("material training config must use the approved staged concepts and manifest")
+    expected_concepts = [{
+        "instance_prompt": [protocol["training"]["caption"]],
+        "instance_data_dir": str((staging_root / "images").resolve()),
+        "instance_mask_dir": str((staging_root / "masks").resolve()),
+    }]
+    if pilot.read_json(concepts_path) != expected_concepts:
+        raise ValueError("material training concepts differ from the locked caption and mask layout")
+    records = pilot.read_jsonl(manifest_path)
+    if len(records) != 72:
+        raise ValueError("material training requires all 72 staged images and masks")
+    for record in records:
+        for field in ("image", "mask"):
+            path = Path(record[f"staged_{field}"]).resolve()
+            if not path.is_relative_to(staging_root) or pilot.sha256(path) != record[f"{field}_sha256"]:
+                raise ValueError(f"material staged {field} differs from its approved hash")
 
 
 def argument_tokens(arguments: dict[str, Any], environment: dict[str, str]) -> list[str]:
@@ -261,6 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("environment must contain string keys and scalar values")
         environment[key] = str(value)
     environment["COLORPEEL_RUN_DIR"] = str(run_dir)
+    validate_material_pilot_train_inputs(config, environment)
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"

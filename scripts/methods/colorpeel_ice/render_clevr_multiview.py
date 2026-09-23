@@ -59,6 +59,11 @@ REQUEST_FIELDS = (
     "renderer_profile_id", "renderer_profile_sha256",
 )
 MATERIAL_REQUEST_FIELDS = REQUEST_FIELDS + ("shape_color_index", "material_token")
+PILOT_REQUEST_FIELDS = (
+    "cell_id", "cell_index", "shape", "color", "material", "material_token", "nominal_rgb",
+    "view_index", "lighting_condition", "viewpoint", "dataset_split", "render_seed",
+    "renderer_profile_id", "renderer_profile_sha256",
+)
 RENDERER_OWNED_FIELDS = (
     "camera", "light", "background", "scene_json", "image", "mask", "background_mask",
 )
@@ -161,20 +166,43 @@ def validate_requests(
     profile: dict[str, Any] = EXPECTED_PROFILE,
 ) -> list[dict[str, Any]]:
     material_profile = profile["profile_id"] == "multiview_render_v3_material"
-    expected_count = 360 if material_profile else 180
-    required_fields = MATERIAL_REQUEST_FIELDS if material_profile else REQUEST_FIELDS
-    require(len(records) == expected_count,
-            f"Expected {expected_count} render requests, got {len(records)}")
+    pilot_profile = profile["profile_id"] == "material_token_local_pilot_v1"
+    expected_count = 360 if material_profile else (None if pilot_profile else 180)
+    required_fields = PILOT_REQUEST_FIELDS if pilot_profile else (MATERIAL_REQUEST_FIELDS if material_profile else REQUEST_FIELDS)
+    if pilot_profile:
+        preview_colors = {"red", "blue"}
+        full_colors = {"red", "blue", "green", "yellow"}
+        observed_colors = {record.get("color") for record in records}
+        expected_count = 36 if observed_colors == preview_colors else 72 if observed_colors == full_colors else None
+    require(expected_count is not None and len(records) == expected_count,
+            f"Invalid render request count: {len(records)}")
     seen: set[tuple[str, int]] = set()
     for record in records:
         require(all(field in record for field in required_fields), "Render request is missing locked fields")
         key = (record["cell_id"], record["view_index"])
         require(key not in seen, f"Duplicate render request: {key}")
         seen.add(key)
-        require(record["cell_index"] in range(18 if material_profile else 9),
+        require(record["cell_index"] in range(12 if pilot_profile else (18 if material_profile else 9)),
                 f"Invalid cell_index for {key}")
-        require(record["view_index"] in range(20), f"Invalid view_index for {key}")
-        if material_profile:
+        require(record["view_index"] in range(6 if pilot_profile else 20), f"Invalid view_index for {key}")
+        require(record["shape"] in {"cube", "sphere", "cylinder"}, f"Invalid shape for {key}")
+        if pilot_profile:
+            require(record["material"] == "metal" and record["material_token"] == "<M*>",
+                    f"Invalid fixed material for {key}")
+            require(record["color"] in {"red", "blue", "green", "yellow"}, f"Invalid color for {key}")
+            shape_index = ("cube", "sphere", "cylinder").index(record["shape"])
+            color_index = ("red", "blue", "green", "yellow").index(record["color"])
+            require(record["cell_id"] == f"{record['shape']}_{record['color']}_metal" and
+                    record["cell_index"] == shape_index * 4 + color_index, f"Invalid pilot cell for {key}")
+            require(record["lighting_condition"] == ("soft_front", "side_directional", "warm_top")[record["view_index"] // 2],
+                    f"Invalid lighting condition for {key}")
+            require(record["viewpoint"] == ("frontish", "oblique_45")[record["view_index"] % 2],
+                    f"Invalid viewpoint for {key}")
+            expected_split = "preview" if observed_colors == preview_colors else "full"
+            require(record["dataset_split"] == expected_split, f"Invalid dataset split for {key}")
+            expected_seed = 730000 + record["cell_index"] * 10 + record["view_index"]
+            require(record["render_seed"] == expected_seed, f"Invalid render_seed for {key}")
+        elif material_profile:
             require(record["shape_color_index"] in range(9),
                     f"Invalid shape_color_index for {key}")
             require(record["material"] in {"metal", "rubber"}, f"Invalid material for {key}")
@@ -186,19 +214,28 @@ def validate_requests(
             )
         else:
             require(record["material"] == "metal", f"Non-metal request: {key}")
-        require(record["split"] == ("train" if record["view_index"] < 16 else "audit"),
-                f"Invalid split for {key}")
-        seed_index = record["shape_color_index"] if material_profile else record["cell_index"]
-        expected_seed = 420000 + seed_index * 100 + record["view_index"]
-        require(record["render_seed"] == expected_seed, f"Invalid render_seed for {key}")
+        if not pilot_profile:
+            require(record["split"] == ("train" if record["view_index"] < 16 else "audit"),
+                    f"Invalid split for {key}")
+            seed_index = record["shape_color_index"] if material_profile else record["cell_index"]
+            expected_seed = 420000 + seed_index * 100 + record["view_index"]
+            require(record["render_seed"] == expected_seed, f"Invalid render_seed for {key}")
         require(record["renderer_profile_id"] == profile["profile_id"],
                 f"Invalid renderer profile for {key}")
         require(record["renderer_profile_sha256"] == canonical_sha256(profile),
                 f"Invalid renderer profile hash for {key}")
-        require(record["shape"] in {"cube", "sphere", "cylinder"}, f"Invalid shape for {key}")
-        require(record["color"] in {"red", "cyan", "gray"}, f"Invalid color for {key}")
+        if not pilot_profile:
+            require(record["color"] in {"red", "cyan", "gray"}, f"Invalid color for {key}")
         for field in RENDERER_OWNED_FIELDS:
             require(record.get(field) is None, f"Request fabricates renderer field {field}: {key}")
+    if pilot_profile:
+        expected_keys = {
+            (f"{shape}_{color}_metal", view_index)
+            for shape in ("cube", "sphere", "cylinder")
+            for color in observed_colors
+            for view_index in range(6)
+        }
+        require(seen == expected_keys, "Pilot render grid is incomplete")
     return records
 
 
@@ -285,9 +322,9 @@ def verify_completed_record(
     contract: dict[str, Any],
 ) -> None:
     request_fields = (
-        MATERIAL_REQUEST_FIELDS
-        if contract["profile_id"] == "multiview_render_v3_material"
-        else REQUEST_FIELDS
+        PILOT_REQUEST_FIELDS if contract["profile_id"] == "material_token_local_pilot_v1" else (
+            MATERIAL_REQUEST_FIELDS if contract["profile_id"] == "multiview_render_v3_material" else REQUEST_FIELDS
+        )
     )
     for field in request_fields:
         require(record.get(field) == expected[field], f"Resume record changed {field}")
@@ -506,9 +543,9 @@ def apply_view_jitter(profile: dict[str, Any], render_seed: int) -> tuple[dict[s
     return camera_metadata, light_metadata
 
 
-def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[dict[str, Any], dict[str, Any]]:
+def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj, viewpoint: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     require(profile["profile_id"] in {
-        "multiview_render_v2", "multiview_render_v3_material", "multiview_render_v4_two_object",
+        "multiview_render_v2", "multiview_render_v3_material", "multiview_render_v4_two_object", "material_token_local_pilot_v1",
     }, "Orbit camera requires a locked orbit renderer profile")
     offsets = orbit_jitter_metadata(render_seed, profile)
     camera = bpy.data.objects.get(profile["camera"]["name"])
@@ -541,10 +578,14 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
     base_spherical = spherical_pose(base_location, target)
     jitter = offsets["camera_orbit_jitter"]
     final_radius = base_spherical["radius"] * (1.0 + jitter["distance_fraction"])
+    viewpoint_values = {"azimuth_offset_degrees": 0.0, "elevation_offset_degrees": 0.0}
+    if profile["profile_id"] == "material_token_local_pilot_v1":
+        require(viewpoint in profile["camera"]["viewpoints"], "Pilot viewpoint is missing or invalid")
+        viewpoint_values = profile["camera"]["viewpoints"][viewpoint]
     final_azimuth = (
-        base_spherical["azimuth_degrees"] + jitter["azimuth_degrees"] + 180.0
+        base_spherical["azimuth_degrees"] + jitter["azimuth_degrees"] + viewpoint_values["azimuth_offset_degrees"] + 180.0
     ) % 360.0 - 180.0
-    final_elevation = base_spherical["elevation_degrees"] + jitter["elevation_degrees"]
+    final_elevation = base_spherical["elevation_degrees"] + jitter["elevation_degrees"] + viewpoint_values["elevation_offset_degrees"]
     require(final_radius > 0.0, "Orbit camera radius must remain positive")
     require(-89.0 < final_elevation < 89.0, "Orbit camera elevation is too close to a pole")
     requested_location = orbit_location(target, final_radius, final_azimuth, final_elevation)
@@ -616,6 +657,8 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
         "sensor_width": float(camera.data.sensor_width),
         "shift_xy": [float(camera.data.shift_x), float(camera.data.shift_y)],
     }
+    if profile["profile_id"] == "material_token_local_pilot_v1":
+        camera_metadata["viewpoint"] = viewpoint
 
     light_metadata: dict[str, Any] = {
         "order": profile["lights"]["order"],
@@ -651,6 +694,28 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj) -> tuple[di
             "energy": float(light.data.energy),
         }
     return camera_metadata, light_metadata
+
+
+def apply_pilot_lighting(profile: dict[str, Any], lighting_condition: str) -> dict[str, Any]:
+    condition = profile["lights"]["conditions"].get(lighting_condition)
+    require(condition is not None, "Pilot lighting condition is missing or invalid")
+    metadata: dict[str, Any] = {"condition": lighting_condition, "rgb": condition["rgb"], "lights": {}}
+    for name in [*profile["lights"]["order"], *profile["lights"]["fixed_order"]]:
+        light = bpy.data.objects.get(name)
+        require(light is not None and light.type == "LIGHT", f"Base scene is missing light {name}")
+        base_location = _tuple(light.location)
+        offset = condition["position_offsets"][name]
+        for axis, value in enumerate(offset):
+            light.location[axis] += value
+        base_energy = float(light.data.energy)
+        light.data.energy = base_energy * condition["energy_scales"][name]
+        light.data.color = tuple(condition["rgb"])
+        metadata["lights"][name] = {
+            "base_location": base_location, "position_offset": offset,
+            "final_location": _tuple(light.location), "base_energy": base_energy,
+            "energy_scale": condition["energy_scales"][name], "energy": float(light.data.energy),
+        }
+    return metadata
 
 
 def configure_mask_outputs(sample_dir: Path, obj) -> None:
@@ -741,7 +806,11 @@ def render_one(
             request, profile, properties, args.shape_dir, args.material_dir
         )
         bpy.context.view_layer.update()
-        camera_metadata, light_metadata = apply_orbit_view(profile, request["render_seed"], obj)
+        camera_metadata, light_metadata = apply_orbit_view(
+            profile, request["render_seed"], obj, request.get("viewpoint")
+        )
+        if profile["profile_id"] == "material_token_local_pilot_v1":
+            light_metadata = apply_pilot_lighting(profile, request["lighting_condition"])
 
     final_dir = args.output_root / request["cell_id"] / f"view_{request['view_index']:02d}"
     require(not final_dir.exists(), f"Final output already exists without a valid resume record: {final_dir}")
@@ -785,7 +854,10 @@ def render_one(
             "pixel_coords": camera_pixel_coords(bpy.data.objects[profile["camera"]["name"]], obj),
         }],
     }
-    if profile["profile_id"] == "multiview_render_v3_material":
+    if profile["profile_id"] == "material_token_local_pilot_v1":
+        scene["lighting_condition"] = request["lighting_condition"]
+        scene["viewpoint"] = request["viewpoint"]
+    if profile["profile_id"] in {"multiview_render_v3_material", "material_token_local_pilot_v1"}:
         material_key = f"material_{request['material']}"
         scene["objects"][0]["material_asset_name"] = material_asset_name
         scene["objects"][0]["material_asset_sha256"] = contract["asset_sha256"][material_key]

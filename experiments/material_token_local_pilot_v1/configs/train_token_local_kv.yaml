@@ -1,0 +1,33 @@
+schema_version: 1
+status: blocked_pending_preview_human_review
+stage: train
+run: {study: material_token_local_pilot_v1, variant: standalone_metal_token_local_kv_5000, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: ${COLORPEEL_MATERIAL_TOKEN_LOCAL_PILOT_DATA_MANIFEST}
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_MATERIAL_TOKEN_LOCAL_PILOT_CONCEPTS}
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  kv_learning_rate: 1.0e-5
+  token_local_kv: true
+  freeze_model: crossattn_kv
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 5000
+  checkpointing_steps: 1000
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.0
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.0
+  adam_epsilon: 1.0e-8
+  hflip: false
+  modifier_token: "<M*>"
+  initializer_token: metal

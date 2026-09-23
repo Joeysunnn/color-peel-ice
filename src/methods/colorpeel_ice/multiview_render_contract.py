@@ -142,6 +142,58 @@ EXPECTED_PROFILE_V4 = {
     "rng": deepcopy(EXPECTED_PROFILE_V2["rng"]),
 }
 
+# This profile is intentionally separate from the historical CLEVR studies.
+# It fixes the material to the native metal asset while making the camera and
+# illumination factors explicit, rather than hiding them in random jitter.
+EXPECTED_PROFILE_V5 = {
+    "schema_version": 1,
+    "profile_id": "material_token_local_pilot_v1",
+    "blender": deepcopy(EXPECTED_PROFILE_V2["blender"]),
+    "object": {
+        "scale": 1.3,
+        "rotation_z_degrees": 0.0,
+        "position_xy": [0.0, 0.0],
+        "material_policy": "fixed_native_metal",
+        "allowed_materials": ["metal"],
+    },
+    "camera": {
+        **deepcopy(EXPECTED_PROFILE_V2["camera"]),
+        "azimuth_jitter_degrees": 0.0,
+        "elevation_jitter_degrees": 0.0,
+        "distance_jitter_fraction": 0.0,
+        "viewpoints": {
+            "frontish": {"azimuth_offset_degrees": 0.0, "elevation_offset_degrees": 0.0},
+            "oblique_45": {"azimuth_offset_degrees": 45.0, "elevation_offset_degrees": 0.0},
+        },
+    },
+    "lights": {
+        "order": ["Lamp_Key", "Lamp_Back", "Lamp_Fill"],
+        "fixed_order": ["Area"],
+        "jitter_distribution": "none",
+        "jitter_magnitude": 0.0,
+        "rgb": [1.0, 1.0, 1.0],
+        "conditions": {
+            "soft_front": {
+                "rgb": [1.0, 1.0, 1.0],
+                "position_offsets": {"Lamp_Key": [0.0, 0.0, 0.0], "Lamp_Back": [0.0, 0.0, 0.0], "Lamp_Fill": [0.0, 0.0, 0.0], "Area": [0.0, 0.0, 0.0]},
+                "energy_scales": {"Lamp_Key": 0.7, "Lamp_Back": 0.5, "Lamp_Fill": 0.8, "Area": 1.0},
+            },
+            "side_directional": {
+                "rgb": [1.0, 1.0, 1.0],
+                "position_offsets": {"Lamp_Key": [4.0, 0.0, 1.0], "Lamp_Back": [0.0, 0.0, 0.0], "Lamp_Fill": [-1.0, 0.0, 0.0], "Area": [0.0, 0.0, 0.0]},
+                "energy_scales": {"Lamp_Key": 1.4, "Lamp_Back": 0.3, "Lamp_Fill": 0.25, "Area": 0.5},
+            },
+            "warm_top": {
+                "rgb": [1.0, 0.78, 0.55],
+                "position_offsets": {"Lamp_Key": [0.0, 0.0, 4.0], "Lamp_Back": [0.0, 0.0, 1.0], "Lamp_Fill": [0.0, 0.0, 0.0], "Area": [0.0, 0.0, 2.0]},
+                "energy_scales": {"Lamp_Key": 1.0, "Lamp_Back": 0.4, "Lamp_Fill": 0.35, "Area": 0.8},
+            },
+        },
+    },
+    "background": deepcopy(EXPECTED_PROFILE_V2["background"]),
+    "rng": deepcopy(EXPECTED_PROFILE_V2["rng"]),
+}
+
 # Backwards-compatible alias: v1 callers and its canonical fingerprint remain unchanged.
 EXPECTED_PROFILE = EXPECTED_PROFILE_V1
 EXPECTED_PROFILES = {
@@ -149,6 +201,7 @@ EXPECTED_PROFILES = {
     EXPECTED_PROFILE_V2["profile_id"]: EXPECTED_PROFILE_V2,
     EXPECTED_PROFILE_V3["profile_id"]: EXPECTED_PROFILE_V3,
     EXPECTED_PROFILE_V4["profile_id"]: EXPECTED_PROFILE_V4,
+    EXPECTED_PROFILE_V5["profile_id"]: EXPECTED_PROFILE_V5,
 }
 
 
@@ -162,7 +215,7 @@ def validate_profile(profile: Any) -> dict[str, Any]:
         raise ValueError("Renderer profile must be an object")
     expected = EXPECTED_PROFILES.get(profile.get("profile_id"))
     if expected is None or profile != expected:
-        raise ValueError("Renderer profile differs from locked multiview_render_v1/v2/v3/v4")
+        raise ValueError("Renderer profile differs from locked multiview renderer profiles")
     return profile
 
 
