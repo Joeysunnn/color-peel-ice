@@ -65,9 +65,10 @@ the completed full render with `--stage-training-from "$FULL_RENDER"`,
 `--preview-root "$PREVIEW_RENDER"`, and `--review-record "$REVIEW_RECORD"`.
 Staging copies images and paired object masks, validates their hashes, and
 writes `concepts.json` with a one-item prompt list, plus a provenance manifest.
-The tracked training YAML stays blocked pending separate training approval.
-Any later authorized YAML must set `status: authorized_after_preview_review`
-and `material_pilot_authorization` with `preview_root`, `review_record`,
+The project owner separately authorized the standalone 5,000-step training
+after this full grid was staged. The tracked training YAML is bound to that
+specific run with `status: authorized_after_preview_review` and
+`material_pilot_authorization` containing `preview_root`, `review_record`,
 `staging_root`, and `staging_provenance_sha256`. The launcher rechecks the
 preview approval, the staged concepts and manifest, and all 72 image/mask
 hashes before it creates a training run.

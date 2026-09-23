@@ -1,12 +1,17 @@
 schema_version: 1
-status: blocked_pending_preview_human_review
+status: authorized_after_preview_review
 stage: train
 run: {study: material_token_local_pilot_v1, variant: standalone_metal_token_local_kv_5000, seed: 42}
 environment: {CUDA_VISIBLE_DEVICES: "3"}
-data_manifest: ${COLORPEEL_MATERIAL_TOKEN_LOCAL_PILOT_DATA_MANIFEST}
+data_manifest: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260923-233410__material_token_local_pilot_v1__metal_full_72__30121e7__42/staging/training_assets_manifest.jsonl
+material_pilot_authorization:
+  preview_root: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260923-232251__material_token_local_pilot_v1__metal_preview_36__86d16c3__42/render_preview
+  review_record: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260923-233410__material_token_local_pilot_v1__metal_full_72__30121e7__42/review_record.json
+  staging_root: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260923-233410__material_token_local_pilot_v1__metal_full_72__30121e7__42/staging
+  staging_provenance_sha256: 346a08edaa48ebf94835234bdf0fc1b0a551e534dde85d7db72261c2b994044f
 args:
   pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
-  concepts_list: ${COLORPEEL_MATERIAL_TOKEN_LOCAL_PILOT_CONCEPTS}
+  concepts_list: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260923-233410__material_token_local_pilot_v1__metal_full_72__30121e7__42/staging/concepts.json
   resolution: 512
   train_batch_size: 1
   learning_rate: 1.0e-5
