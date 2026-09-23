@@ -126,7 +126,10 @@ class MaterialTokenLocalPilotTests(unittest.TestCase):
                                               "renderer_realization_sha256": "0" * 64})
             with self.assertRaises(prepare.ProtocolError):
                 prepare.plan(self.protocol, "full", root / "unapproved_full", preview_root, bad_approval)
-            self.assertEqual(prepare.plan(self.protocol, "full", root / "approved_full", preview_root, approval)["request_count"], 72)
+            full_status = prepare.plan(self.protocol, "full", root / "approved_full", preview_root, approval)
+            self.assertEqual(full_status["request_count"], 72)
+            self.assertEqual(full_status["status"], "planned_after_preview_approval")
+            self.assertEqual(full_status["training_authorization"], "blocked_pending_separate_training_authorization")
             self.mock_render(render_root, requests)
             mask_module = types.ModuleType("src.train.instance_mask_utils")
             mask_module.load_latent_instance_mask = lambda *args: None

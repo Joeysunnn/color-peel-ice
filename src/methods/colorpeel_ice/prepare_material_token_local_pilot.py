@@ -190,12 +190,13 @@ def plan(protocol: dict[str, Any], mode: str, output_dir: Path,
             "renderer_realization_sha256": None,
         })
     status = {
-        "status": "planned_pending_human_preview" if mode == "preview" else "planned_pending_preview_approval",
+        "status": "planned_pending_human_preview" if mode == "preview" else "planned_after_preview_approval",
         "mode": mode,
         "request_count": len(rows),
         "renderer_profile_id": EXPECTED_PROFILE_V5["profile_id"],
         "renderer_profile_sha256": canonical_sha256(EXPECTED_PROFILE_V5),
-        "training_authorization": protocol["rendering"]["training_authorization"],
+        "training_authorization": (protocol["rendering"]["training_authorization"] if mode == "preview"
+                                   else "blocked_pending_separate_training_authorization"),
         "preview_approval_sha256": approval_sha256,
     }
     write_json(output_dir / "protocol_status.json", status)

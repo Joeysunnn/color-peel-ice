@@ -82,4 +82,34 @@ matched all 144 artifact hashes and found all object masks nonempty and clear
 of image edges (foreground range 11,866–22,504 pixels). The corrected
 `preview_contact_sheet.png` shows no horizontal sphere band; red/blue and
 lighting/viewpoint changes remain visible. Human approval of this *new*
-preview is still pending; full-grid rendering and training remain blocked.
+preview was pending at that point; the later approval is recorded below.
+
+## Approved full grid and training asset staging
+
+The project owner accepted the corrected preview in the current Codex
+conversation and requested the next step. A `pass` review record was written
+for that 36-image realization only; its SHA-256 is
+`12d709e99de1666aab75d838419878819e56c7606c623237cc40a3e96dffb8d3`.
+The full-grid planner validated the preview, all 36 artifact hashes, and the
+review record before issuing 72 requests. Its original status file used the
+stale label `planned_pending_preview_approval` despite a valid nonnull
+`preview_approval_sha256`; the planner label was corrected after this run.
+
+At execution commit `30121e7`, Blender 4.2.11 on research12 GPU 3 rendered
+72/72 images successfully. The isolated run root is
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/material_token_local_pilot_v1/20260923-233410__material_token_local_pilot_v1__metal_full_72__30121e7__42`.
+The `renderer_realization.jsonl` SHA-256 is
+`8bc0897788ac6daf02151226be17b2b5833064de29146e4a89ad7d886062e07a`.
+The grid has 18 views per color and 24 per shape; all 72 object masks are
+nonempty and clear of image edges (foreground range 11,866–22,504 pixels).
+The `full_contact_sheet.png` visibly separates red, blue, green, and yellow;
+the sphere has no upper/lower reflection band.
+
+The staging step checked the preview approval, every full-render image, mask,
+background mask, and scene JSON hash, plus every copied image and mask hash.
+It produced 72 paired training images/masks and a one-item `concepts.json`
+with the prompt `a photo of an object made of <M*>`. Its status is
+`staged_pending_separate_training_authorization`; the
+`staging_provenance.json` SHA-256 is
+`346a08edaa48ebf94835234bdf0fc1b0a551e534dde85d7db72261c2b994044f`.
+Standalone 5,000-step training and evaluation have not begun.
