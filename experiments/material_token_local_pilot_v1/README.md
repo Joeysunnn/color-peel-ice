@@ -20,6 +20,13 @@ lights × 2 views = 36 images. Following visual approval, the full grid adds
 green and yellow for 72 images. The external CLEVR `properties.json` must
 confirm the four nominal RGB values before rendering.
 
+The locked pilot profile hides the ground from glossy reflection rays while
+keeping it visible to the camera and shadows, and supplies a uniform world
+light. This avoids the horizontal upper/lower reflection boundary observed
+on the sphere in the first preview. The same environment is applied to every
+shape; `MyMetal` itself is unchanged. Review records must refer to the current
+profile hash and its newly rendered 36-image preview.
+
 ## Preview gate
 
 Use fresh directories below `$COLORPEEL_RUN_ROOT/material_token_local_pilot_v1/`.

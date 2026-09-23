@@ -47,10 +47,9 @@ This is a controlled material-factor test, not a natural-image material claim.
   An independent check matched all 144 image, object mask, background mask,
   and scene JSON hashes; all 36 object masks are nonempty and touch no image
   edge (foreground range 11,866–22,504 pixels).
-- **Visual observation, not approval:** The contact sheet shows distinct red
-  and blue objects, lighting changes, and viewpoint changes. Sphere highlights
-  are pronounced; cube and cylinder metal appearance still needs human review.
-  The run stores `preview_contact_sheet.png` beside `render_preview/`.
+- **Human feedback on the first preview:** Cube and cylinder were accepted;
+  the sphere showed an unwanted upper/lower band. This preview is superseded
+  and must not supply the approval record for the full grid.
 - **Pending:** Human review of all 36 preview images, the 72-row full render,
   training, and evaluation. No material-learning result or success claim exists.
 - **Gate:** A human pass tied to the completed preview realization hash is
@@ -61,3 +60,26 @@ Success requires recognizable metal appearance, visible color changes without
 loss of material, transfer to unseen object nouns, lighting-responsive
 highlights, and no strong color/shape/background/style leakage. Record each
 failure mode separately and preserve every rendered sample and status row.
+
+## Corrected preview after sphere feedback
+
+The sphere has one mesh and one material assignment. In a single-image
+diagnostic, removing the ground from glossy reflection rays removed the band;
+with the original unlit world, the sphere became too dark. The pilot-only
+profile now uses `ground_visible_glossy: false`, world RGB `[0.2, 0.2, 0.2]`,
+and world strength `0.5` for every shape. The native `MyMetal` asset and all
+object colors remain fixed. Historical render profiles are unchanged.
+
+At commit `86d16c3`, research12 pulled this change, passed all 7 pilot tests,
+and rendered a fresh 36-image preview on GPU 3 under
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/material_token_local_pilot_v1/20260923-232251__material_token_local_pilot_v1__metal_preview_36__86d16c3__42`.
+The locked profile SHA-256 is
+`821f6d2e4be14f4ac43643e38d1609fe43bcf46eff1bce25311769c2aea062972`;
+the completed `renderer_realization.jsonl` SHA-256 is
+`8b2979903ca54a81b5ea48bb6ac646be073dce64abe07365cd244bc70cb6fcc6`.
+The renderer reports `succeeded` with 36/36 completed. An independent check
+matched all 144 artifact hashes and found all object masks nonempty and clear
+of image edges (foreground range 11,866–22,504 pixels). The corrected
+`preview_contact_sheet.png` shows no horizontal sphere band; red/blue and
+lighting/viewpoint changes remain visible. Human approval of this *new*
+preview is still pending; full-grid rendering and training remain blocked.
