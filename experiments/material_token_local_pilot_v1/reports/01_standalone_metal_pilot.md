@@ -37,8 +37,22 @@ This is a controlled material-factor test, not a natural-image material claim.
   `87d6f9199f5d45f11dec82069ee5f4ba861aeccf27c9467d72dc22a233980011`;
   the locked profile SHA-256 is
   `caefa8485ca280f6867fbccae82720a57e27332303224e2a207a5336c31570b5`.
-- **Pending:** Blender rendering, all-image visual review, the 72-row full
-  render, training, and evaluation. No result or success claim exists yet.
+- **Confirmed on research12:** `colorpeel017` passed all 7 pilot tests, and
+  Blender 4.2.11 validated and rendered all 36 preview requests on GPU 3 at
+  commit `ee06dce`. The isolated run is
+  `/home/r12user5/Documents/Jiawei/colorpeel-runs/material_token_local_pilot_v1/20260923-211902__material_token_local_pilot_v1__metal_preview_36__ee06dce__42`.
+  `renderer_status.json` reports `succeeded` with 36/36 completed. The
+  `renderer_realization.jsonl` SHA-256 is
+  `e2811a09eb8c93d529d8ba46d4f56541d106ba59059529af5b414537869391bf`.
+  An independent check matched all 144 image, object mask, background mask,
+  and scene JSON hashes; all 36 object masks are nonempty and touch no image
+  edge (foreground range 11,866–22,504 pixels).
+- **Visual observation, not approval:** The contact sheet shows distinct red
+  and blue objects, lighting changes, and viewpoint changes. Sphere highlights
+  are pronounced; cube and cylinder metal appearance still needs human review.
+  The run stores `preview_contact_sheet.png` beside `render_preview/`.
+- **Pending:** Human review of all 36 preview images, the 72-row full render,
+  training, and evaluation. No material-learning result or success claim exists.
 - **Gate:** A human pass tied to the completed preview realization hash is
   required before full-grid planning or staging. The tracked training config
   is blocked, and the launcher rejects it until a new reviewed config is made.
