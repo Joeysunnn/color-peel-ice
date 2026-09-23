@@ -82,6 +82,13 @@ def test_alignit_collects_the_subject_slot_from_a_full_kv_custom_diffusion_proce
         processor.to_k_custom_diffusion.weight.copy_(torch.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]))
         processor.to_v_custom_diffusion.weight.copy_(torch.tensor([[0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]))
 
+    class ForeignCustomDiffusionProcessor:
+        train_kv = True
+
+    foreign_processor = ForeignCustomDiffusionProcessor()
+    foreign_processor.to_k_custom_diffusion = processor.to_k_custom_diffusion
+    foreign_processor.to_v_custom_diffusion = processor.to_v_custom_diffusion
+
     class TextEncoder:
         def __call__(self, input_ids):
             return (input_ids.float().unsqueeze(-1).repeat(1, 1, 4),)
@@ -91,12 +98,13 @@ def test_alignit_collects_the_subject_slot_from_a_full_kv_custom_diffusion_proce
 
     class UNet:
         device = torch.device("cpu")
-        attn_processors = {"cross.processor": processor}
 
         @staticmethod
         def get_submodule(name):
             assert name == "cross"
             return Attention()
+
+    UNet.attn_processors = {"cross.processor": foreign_processor}
 
     class Pipe:
         text_encoder = TextEncoder()

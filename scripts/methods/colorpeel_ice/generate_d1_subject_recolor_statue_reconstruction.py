@@ -276,7 +276,7 @@ def collect_alignit_source_kv(custom_pipe: Any, dummy_ids, subject_index: int) -
     train_root = str(Path(__file__).resolve().parents[3] / "src" / "train")
     if train_root not in sys.path:
         sys.path.insert(0, train_root)
-    from custom_attention.attention_processor_custom import CustomDiffusionAttnProcessor, TokenLocalKVAttnProcessor
+    from custom_attention.attention_processor_custom import TokenLocalKVAttnProcessor
 
     source_hidden_states = encode_input_ids(custom_pipe, dummy_ids)
     source = {}
@@ -289,7 +289,7 @@ def collect_alignit_source_kv(custom_pipe: Any, dummy_ids, subject_index: int) -
             modifier_id = custom_pipe.tokenizer.convert_tokens_to_ids("<S*>")
             modifier_mask = dummy_ids.to(custom_pipe.unet.device) == modifier_id
             key, value = processor.project_kv(attention, hidden_states, modifier_mask)
-        elif isinstance(processor, CustomDiffusionAttnProcessor) and processor.train_kv:
+        elif hasattr(processor, "to_k_custom_diffusion") and hasattr(processor, "to_v_custom_diffusion") and processor.train_kv:
             key = processor.to_k_custom_diffusion(hidden_states)
             value = processor.to_v_custom_diffusion(hidden_states)
         else:
