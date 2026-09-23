@@ -190,7 +190,12 @@ EXPECTED_PROFILE_V5 = {
             },
         },
     },
-    "background": deepcopy(EXPECTED_PROFILE_V2["background"]),
+    "background": {
+        **deepcopy(EXPECTED_PROFILE_V2["background"]),
+        "world_rgba": [0.2, 0.2, 0.2, 1.0],
+        "world_strength": 0.5,
+        "ground_visible_glossy": False,
+    },
     "rng": deepcopy(EXPECTED_PROFILE_V2["rng"]),
 }
 

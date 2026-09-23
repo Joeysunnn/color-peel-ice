@@ -418,6 +418,8 @@ def neutralize_scene(profile: dict[str, Any]) -> None:
     if background is None:
         background = world.node_tree.nodes.new("ShaderNodeBackground")
     background.inputs["Color"].default_value = tuple(background_profile["world_rgba"])
+    if "world_strength" in background_profile:
+        background.inputs["Strength"].default_value = background_profile["world_strength"]
 
     ground = bpy.data.objects.get("Ground")
     require(ground is not None and ground.type == "MESH", "Base scene is missing mesh Ground")
@@ -430,6 +432,8 @@ def neutralize_scene(profile: dict[str, Any]) -> None:
     principled.inputs["Roughness"].default_value = 1.0
     ground.data.materials.clear()
     ground.data.materials.append(material)
+    if "ground_visible_glossy" in background_profile:
+        ground.visible_glossy = background_profile["ground_visible_glossy"]
 
 
 def clear_base_scene_geometry() -> None:
