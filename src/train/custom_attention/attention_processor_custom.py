@@ -798,6 +798,36 @@ class TokenLocalKVAttnProcessor(nn.Module):
         return attn.to_out[1](attn.to_out[0](hidden_states))
 
 
+class DualTokenLocalKVAttnProcessor(TokenLocalKVAttnProcessor):
+    """Sum two independently trained token-local K/V residuals at disjoint positions."""
+
+    def __init__(self, hidden_size=None, cross_attention_dim=None):
+        super().__init__(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
+        if cross_attention_dim is not None:
+            self.material_delta_k = nn.Linear(cross_attention_dim, hidden_size, bias=False)
+            self.material_delta_v = nn.Linear(cross_attention_dim, hidden_size, bias=False)
+            nn.init.zeros_(self.material_delta_k.weight)
+            nn.init.zeros_(self.material_delta_v.weight)
+
+    def project_kv(self, attn: Attention, encoder_hidden_states: torch.Tensor, modifier_token_mask):
+        if not isinstance(modifier_token_mask, dict) or set(modifier_token_mask) != {"color", "material"}:
+            raise ValueError("dual token-local K/V requires separate color and material masks")
+        color_mask = modifier_token_mask["color"]
+        material_mask = modifier_token_mask["material"]
+        expected_shape = encoder_hidden_states.shape[:2]
+        if (color_mask.shape != expected_shape or material_mask.shape != expected_shape
+                or color_mask.dtype != torch.bool or material_mask.dtype != torch.bool
+                or torch.any(color_mask & material_mask)):
+            raise ValueError("color and material masks must be Boolean, disjoint, and match text positions")
+        base_k = attn.to_k(encoder_hidden_states)
+        base_v = attn.to_v(encoder_hidden_states)
+        c = color_mask.to(device=base_k.device, dtype=base_k.dtype).unsqueeze(-1)
+        m = material_mask.to(device=base_k.device, dtype=base_k.dtype).unsqueeze(-1)
+        key = base_k + c * self.delta_k(encoder_hidden_states) + m * self.material_delta_k(encoder_hidden_states)
+        value = base_v + c * self.delta_v(encoder_hidden_states) + m * self.material_delta_v(encoder_hidden_states)
+        return key, value
+
+
 class AttnAddedKVProcessor:
     r"""
     Processor for performing attention-related computations with extra learnable key and value matrices for the text

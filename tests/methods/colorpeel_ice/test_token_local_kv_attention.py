@@ -7,7 +7,10 @@ from torch import nn
 
 TRAIN_ROOT = Path(__file__).parents[3] / "src" / "train"
 sys.path.insert(0, str(TRAIN_ROOT))
-from custom_attention.attention_processor_custom import TokenLocalKVAttnProcessor, build_modifier_token_mask
+from custom_attention.attention_processor_custom import (
+    DualTokenLocalKVAttnProcessor, TokenLocalKVAttnProcessor, build_modifier_token_mask,
+)
+from src.methods.colorpeel_ice.dual_token_local_kv import install_dual_token_local_kv
 
 
 class FakeAttention:
@@ -63,3 +66,79 @@ def test_token_local_state_dict_round_trip_preserves_residuals():
     target.load_state_dict(source.state_dict())
     assert torch.equal(target.delta_k.weight, source.delta_k.weight)
     assert torch.equal(target.delta_v.weight, source.delta_v.weight)
+
+
+def test_dual_token_local_kv_matches_each_single_branch_and_base_positions():
+    torch.manual_seed(2)
+    attn = FakeAttention()
+    color = TokenLocalKVAttnProcessor(hidden_size=4, cross_attention_dim=3)
+    material = TokenLocalKVAttnProcessor(hidden_size=4, cross_attention_dim=3)
+    dual = DualTokenLocalKVAttnProcessor(hidden_size=4, cross_attention_dim=3)
+    with torch.no_grad():
+        color.delta_k.weight.fill_(0.1)
+        color.delta_v.weight.fill_(0.2)
+        material.delta_k.weight.fill_(-0.3)
+        material.delta_v.weight.fill_(-0.4)
+        dual.delta_k.weight.copy_(color.delta_k.weight)
+        dual.delta_v.weight.copy_(color.delta_v.weight)
+        dual.material_delta_k.weight.copy_(material.delta_k.weight)
+        dual.material_delta_v.weight.copy_(material.delta_v.weight)
+    hidden = torch.randn(1, 5, 3)
+    c = torch.tensor([[False, True, False, False, False]])
+    m = torch.tensor([[False, False, False, True, False]])
+    zero = torch.zeros_like(c)
+    assert all(torch.allclose(a, b, atol=0, rtol=0) for a, b in zip(
+        dual.project_kv(attn, hidden, {"color": c, "material": zero}),
+        color.project_kv(attn, hidden, c),
+    ))
+    assert all(torch.allclose(a, b, atol=0, rtol=0) for a, b in zip(
+        dual.project_kv(attn, hidden, {"color": zero, "material": m}),
+        material.project_kv(attn, hidden, m),
+    ))
+    key, value = dual.project_kv(attn, hidden, {"color": c, "material": m})
+    ordinary = ~(c | m)
+    assert torch.equal(key[:, ordinary[0]], attn.to_k(hidden)[:, ordinary[0]])
+    assert torch.equal(value[:, ordinary[0]], attn.to_v(hidden)[:, ordinary[0]])
+
+
+def test_dual_token_local_kv_rejects_overlapping_masks():
+    dual = DualTokenLocalKVAttnProcessor(hidden_size=4, cross_attention_dim=3)
+    mask = torch.tensor([[False, True, False]])
+    try:
+        dual.project_kv(FakeAttention(), torch.randn(1, 3, 3), {"color": mask, "material": mask})
+    except ValueError as error:
+        assert "disjoint" in str(error)
+    else:
+        raise AssertionError("overlapping color and material positions were accepted")
+
+
+def test_install_dual_token_local_kv_preserves_both_independent_weights():
+    class FakeUnet:
+        device = torch.device("cpu")
+        dtype = torch.float32
+
+        def __init__(self):
+            self.attn_processors = {
+                "block.attn1.processor": TokenLocalKVAttnProcessor(),
+                "block.attn2.processor": TokenLocalKVAttnProcessor(4, 3),
+            }
+
+        def set_attn_processor(self, processors):
+            self.attn_processors = processors
+
+    unet = FakeUnet()
+    color = unet.attn_processors["block.attn2.processor"]
+    with torch.no_grad():
+        color.delta_k.weight.fill_(0.2)
+        color.delta_v.weight.fill_(0.3)
+    material = {
+        "block.attn1.processor": {},
+        "block.attn2.processor.delta_k.weight": torch.full((4, 3), -0.4),
+        "block.attn2.processor.delta_v.weight": torch.full((4, 3), -0.5),
+    }
+    install_dual_token_local_kv(unet, material)
+    dual = unet.attn_processors["block.attn2.processor"]
+    assert torch.equal(dual.delta_k.weight, color.delta_k.weight)
+    assert torch.equal(dual.delta_v.weight, color.delta_v.weight)
+    assert torch.equal(dual.material_delta_k.weight, material["block.attn2.processor.delta_k.weight"])
+    assert torch.equal(dual.material_delta_v.weight, material["block.attn2.processor.delta_v.weight"])
