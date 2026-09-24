@@ -1,0 +1,38 @@
+schema_version: 1
+status: authorized_for_ground_reflection_comparison
+stage: train
+run: {study: material_token_local_pilot_v1, variant: standalone_metal_ground_reflection_token_local_kv_5000, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260924-113702__material_token_local_pilot_v1__metal_ground_reflection_full_72__30dc547__42/staging/training_assets_manifest.jsonl
+material_pilot_authorization:
+  preview_root: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260923-211902__material_token_local_pilot_v1__metal_preview_36__ee06dce__42/render_preview
+  review_record: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260924-113702__material_token_local_pilot_v1__metal_ground_reflection_full_72__30dc547__42/comparison_authorization.json
+  staging_root: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260924-113702__material_token_local_pilot_v1__metal_ground_reflection_full_72__30dc547__42/staging
+  staging_provenance_sha256: a89485b466861dae4826c051b6616ae70f4daec9a7b47053b277d1989476c866
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_RUN_ROOT}/material_token_local_pilot_v1/20260924-113702__material_token_local_pilot_v1__metal_ground_reflection_full_72__30dc547__42/staging/concepts.json
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  kv_learning_rate: 1.0e-5
+  token_local_kv: true
+  freeze_model: crossattn_kv
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 5000
+  checkpointing_steps: 1000
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.0
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.0
+  adam_epsilon: 1.0e-8
+  hflip: false
+  modifier_token: "<M*>"
+  initializer_token: metal
