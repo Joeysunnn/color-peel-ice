@@ -158,6 +158,9 @@ def test_archived_full_color_is_preserved_with_material_only_at_its_token():
     torch.manual_seed(3)
     attn = FakeAttention()
     mixed = FullColorMaterialKVAttnProcessor(hidden_size=4, cross_attention_dim=3)
+    with torch.no_grad():
+        mixed.delta_k.weight.fill_(0.2)
+        mixed.delta_v.weight.fill_(-0.3)
     hidden = torch.randn(1, 4, 3)
     empty = torch.zeros((1, 4), dtype=torch.bool)
     material = torch.tensor([[False, False, True, False]])
