@@ -801,8 +801,11 @@ class TokenLocalKVAttnProcessor(nn.Module):
 class DualTokenLocalKVAttnProcessor(TokenLocalKVAttnProcessor):
     """Sum two independently trained token-local K/V residuals at disjoint positions."""
 
-    def __init__(self, hidden_size=None, cross_attention_dim=None):
+    def __init__(self, hidden_size=None, cross_attention_dim=None, primary_label="color"):
         super().__init__(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
+        if primary_label not in {"color", "subject"}:
+            raise ValueError("primary token must be color or subject")
+        self.primary_label = primary_label
         if cross_attention_dim is not None:
             self.material_delta_k = nn.Linear(cross_attention_dim, hidden_size, bias=False)
             self.material_delta_v = nn.Linear(cross_attention_dim, hidden_size, bias=False)
@@ -810,9 +813,9 @@ class DualTokenLocalKVAttnProcessor(TokenLocalKVAttnProcessor):
             nn.init.zeros_(self.material_delta_v.weight)
 
     def project_kv(self, attn: Attention, encoder_hidden_states: torch.Tensor, modifier_token_mask):
-        if not isinstance(modifier_token_mask, dict) or set(modifier_token_mask) != {"color", "material"}:
-            raise ValueError("dual token-local K/V requires separate color and material masks")
-        color_mask = modifier_token_mask["color"]
+        if not isinstance(modifier_token_mask, dict) or set(modifier_token_mask) != {self.primary_label, "material"}:
+            raise ValueError("dual token-local K/V requires separate primary and material masks")
+        color_mask = modifier_token_mask[self.primary_label]
         material_mask = modifier_token_mask["material"]
         expected_shape = encoder_hidden_states.shape[:2]
         if (color_mask.shape != expected_shape or material_mask.shape != expected_shape

@@ -1,0 +1,36 @@
+{
+  "schema": "subject_material_diagnostic/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "subject_training_run_relative_to_COLORPEEL_RUN_ROOT": "20260921-160000__natural_image_subject_color_pilot__subject_recolor_mailbox_category_token_local_kv_5000__4cb03ef__42",
+  "subject_training_manifest_sha256": "d406bd8490cb120a53830b4c87b238baa3192dee4d763e6ee5207e1b7bae8960",
+  "subject_checkpoint_sha256": {
+    "weights": "a3144ab95bb12d458871ccbe42ca040559b62a568bfa94425474c209f617c744",
+    "adaptation": "b355938f9ba048cad27347a4f7262fe3857eeba463979604406c2cd8e0173b27",
+    "token": "8c2eb98caad7408cc5aecd7cf29d43167adf48c507667e904a0d8c631b40d842"
+  },
+  "material_selection_path": "experiments/material_token_local_pilot_v1/configs/selected_material_source.json",
+  "material_selection_sha256": "1aefb6c8d941e73b369cfee2301429046c970c8786158b94e9b9452289bd1d90",
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "groups": [
+    {"id": "red", "prompts": {
+      "subject_only": "a photo of <S*> mailbox in red color",
+      "material_only": "a photo of a mailbox in red color made of <M*>",
+      "subject_material": "a photo of <S*> mailbox in red color made of <M*>",
+      "literal_metal": "a photo of <S*> mailbox in red color made of metal"
+    }},
+    {"id": "blue", "prompts": {
+      "subject_only": "a photo of <S*> mailbox in blue color",
+      "material_only": "a photo of a mailbox in blue color made of <M*>",
+      "subject_material": "a photo of <S*> mailbox in blue color made of <M*>",
+      "literal_metal": "a photo of <S*> mailbox in blue color made of metal"
+    }},
+    {"id": "city_street", "prompts": {
+      "subject_only": "a photo of <S*> mailbox on a city street",
+      "material_only": "a photo of a mailbox made of <M*> on a city street",
+      "subject_material": "a photo of <S*> mailbox made of <M*> on a city street",
+      "literal_metal": "a photo of <S*> mailbox made of metal on a city street"
+    }}
+  ],
+  "safety_checker": "enabled",
+  "interpretation": "Inference-only diagnostic; condition wording varies and no S/M joint training occurs."
+}

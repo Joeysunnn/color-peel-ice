@@ -112,6 +112,15 @@ def test_dual_token_local_kv_rejects_overlapping_masks():
         raise AssertionError("overlapping color and material positions were accepted")
 
 
+def test_dual_token_local_kv_accepts_separate_subject_and_material_masks():
+    dual = DualTokenLocalKVAttnProcessor(hidden_size=4, cross_attention_dim=3, primary_label="subject")
+    subject = torch.tensor([[False, True, False]])
+    material = torch.tensor([[False, False, True]])
+    key, value = dual.project_kv(
+        FakeAttention(), torch.randn(1, 3, 3), {"subject": subject, "material": material})
+    assert key.shape == value.shape == (1, 3, 4)
+
+
 def test_install_dual_token_local_kv_preserves_both_independent_weights():
     class FakeUnet:
         device = torch.device("cpu")

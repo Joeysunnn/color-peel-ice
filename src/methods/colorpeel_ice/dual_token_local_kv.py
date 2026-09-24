@@ -9,14 +9,14 @@ from custom_attention.attention_processor_custom import (
 )
 
 
-def install_dual_token_local_kv(unet, material_state: dict[str, torch.Tensor]) -> None:
-    """The UNet must already have the color adapter loaded via load_attn_procs."""
+def install_dual_token_local_kv(unet, material_state: dict[str, torch.Tensor], primary_label: str = "color") -> None:
+    """The UNet must already have the primary adapter loaded via load_attn_procs."""
     expected_keys = set()
     combined = {}
     for name, color in unet.attn_processors.items():
         if not isinstance(color, TokenLocalKVAttnProcessor):
             raise ValueError(f"color processor is not token-local: {name}")
-        dual = DualTokenLocalKVAttnProcessor(color.hidden_size, color.cross_attention_dim)
+        dual = DualTokenLocalKVAttnProcessor(color.hidden_size, color.cross_attention_dim, primary_label)
         if color.cross_attention_dim is None:
             expected_keys.add(name)
             if material_state.get(name) != {}:
