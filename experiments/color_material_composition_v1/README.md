@@ -15,6 +15,12 @@ this is a new diagnostic color branch, not a continuation of the old shared
 K/V checkpoint. Check color-only transfer before drawing conclusions from
 composition.
 
+The completed orange short run is fixed by
+`protocols/orange_metal_diagnostic_v1.json`. Its first comparison requests
+36 images: cube, sphere, and mug; base, color-only, material-only, and paired
+conditions; seeds 42–44. Every image uses 100 steps, CFG 3.5, and the enabled
+safety checker. The generator records each image hash and safety status.
+
 After color training, compose the two frozen adapters at inference with
 separate `<C*>` and `<M*>` token-position masks. Compare base, color-only,
 material-only, and paired prompts at identical seeds and sampling settings.

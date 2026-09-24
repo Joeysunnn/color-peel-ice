@@ -1,0 +1,23 @@
+{
+  "schema": "color_material_diagnostic/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "color_training_run_relative_to_COLORPEEL_RUN_ROOT": "color_material_composition_v1/20260924-195852__color_material_composition_v1__orange_token_local_color_short100__e606386__42",
+  "color_training_manifest_sha256": "a0f4518a219c7b73803caac9ce09727ab2c7a76246382e6ca5514e8701715baf",
+  "color_checkpoint_sha256": {
+    "weights": "50a7235b9d7730b61d2e88b93c1a18fc2af13c22a7a4da7011949f9024ebe6a8",
+    "adaptation": "0aaffb3730fd34ab6d92599b738c8d1e4d29e4ef23c3a875fc4445f2f57aa8d0",
+    "token": "007b4a5087e78e39531d5c5300414b9a46540fda5d107e0e2f260b6c7c24cf7b"
+  },
+  "material_selection_path": "experiments/material_token_local_pilot_v1/configs/selected_material_source.json",
+  "material_selection_sha256": "1aefb6c8d941e73b369cfee2301429046c970c8786158b94e9b9452289bd1d90",
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "objects": ["cube", "sphere", "mug"],
+  "prompts": {
+    "base": "a photo of a {object}",
+    "color_only": "a photo of a {object} with <C*> color",
+    "material_only": "a photo of a {object} with <M*> material",
+    "color_material": "a photo of a {object} with <C*> color and <M*> material"
+  },
+  "safety_checker": "enabled",
+  "interpretation": "Diagnostic composition without joint training; prompt wording differs by condition."
+}
