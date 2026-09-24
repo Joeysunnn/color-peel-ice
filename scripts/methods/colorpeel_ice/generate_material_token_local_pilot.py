@@ -118,7 +118,10 @@ def validate_checkpoint_lock(lock_path: Path, protocol_path: Path, model_dir: Pa
     manifest = read_json(manifest_path)
     if (manifest.get("status") != "succeeded" or manifest.get("stage") != "train"
             or manifest.get("run", {}).get("study") != "material_token_local_pilot_v1"
-            or manifest.get("run", {}).get("variant") != "standalone_metal_token_local_kv_5000"):
+            or manifest.get("run", {}).get("variant") not in {
+                "standalone_metal_token_local_kv_5000",
+                "standalone_metal_ground_reflection_token_local_kv_5000",
+            }):
         raise ValueError("Checkpoint source is not a completed standalone material training run")
     return sha256(lock_path)
 

@@ -99,9 +99,11 @@ def read_config(path: Path) -> dict[str, Any]:
     for key in ("study", "variant", "seed"):
         if key not in config["run"]:
             raise ValueError(f"missing run.{key}")
-    if (config["stage"] == "train" and config["run"]["study"] == "material_token_local_pilot_v1"
-            and config.get("status") != "authorized_after_preview_review"):
-        raise ValueError("material pilot training remains blocked until a new reviewed config is authorized")
+    if config["stage"] == "train" and config["run"]["study"] == "material_token_local_pilot_v1":
+        comparison = config["run"]["variant"] == "standalone_metal_ground_reflection_token_local_kv_5000"
+        required = "authorized_for_ground_reflection_comparison" if comparison else "authorized_after_preview_review"
+        if config.get("status") != required:
+            raise ValueError("material pilot training remains blocked until a new reviewed config is authorized")
     stage_managed_arguments = set(MANAGED_ARGUMENTS)
     if config["stage"] == "segment":
         stage_managed_arguments.add("mask-dir")
@@ -180,7 +182,10 @@ def validate_material_pilot_train_inputs(config: dict[str, Any], environment: di
     preview_root = Path(expand_value(authorization["preview_root"], environment)).resolve()
     review_record = Path(expand_value(authorization["review_record"], environment)).resolve()
     staging_root = Path(expand_value(authorization["staging_root"], environment)).resolve()
-    protocol = pilot.validate_protocol(pilot.read_json(pilot.DEFAULT_PROTOCOL))
+    comparison = config["run"]["variant"] == "standalone_metal_ground_reflection_token_local_kv_5000"
+    protocol_path = (pilot.EXPERIMENT_ROOT / "protocols" / "material_token_local_pilot_v1_ground_reflection.json"
+                     if comparison else pilot.DEFAULT_PROTOCOL)
+    protocol = pilot.validate_protocol(pilot.read_json(protocol_path))
     approval_hash = pilot.validate_preview_approval(protocol, preview_root, review_record)
     provenance_path = staging_root / "staging_provenance.json"
     if pilot.sha256(provenance_path) != authorization["staging_provenance_sha256"]:

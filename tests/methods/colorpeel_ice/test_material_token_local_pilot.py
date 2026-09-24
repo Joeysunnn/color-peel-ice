@@ -10,7 +10,7 @@ from unittest.mock import patch
 from src.methods.colorpeel_ice import prepare_material_token_local_pilot as prepare
 from src.methods.colorpeel_ice.multiview_render_contract import (
     EXPECTED_PROFILE, EXPECTED_PROFILE_V2, EXPECTED_PROFILE_V3, EXPECTED_PROFILE_V4,
-    EXPECTED_PROFILE_V5, canonical_sha256,
+    EXPECTED_PROFILE_V5, EXPECTED_PROFILE_V5_GROUND_REFLECTION, canonical_sha256,
 )
 from scripts.launch import colorpeel_run
 
@@ -19,6 +19,8 @@ ROOT = Path(__file__).parents[3]
 EXPERIMENT = ROOT / "experiments" / "material_token_local_pilot_v1"
 PROTOCOL = EXPERIMENT / "protocols" / "material_token_local_pilot_v1.json"
 PROFILE = EXPERIMENT / "configs" / "render_profile.json"
+GROUND_REFLECTION_PROFILE = EXPERIMENT / "configs" / "render_profile_ground_reflection.json"
+GROUND_REFLECTION_PROTOCOL = EXPERIMENT / "protocols" / "material_token_local_pilot_v1_ground_reflection.json"
 RENDERER_PATH = ROOT / "scripts" / "methods" / "colorpeel_ice" / "render_clevr_multiview.py"
 GENERATOR_PATH = ROOT / "scripts" / "methods" / "colorpeel_ice" / "generate_material_token_local_pilot.py"
 EVALUATION = EXPERIMENT / "protocols" / "material_token_local_pilot_v1_evaluation.json"
@@ -44,6 +46,61 @@ class MaterialTokenLocalPilotTests(unittest.TestCase):
         self.assertEqual(RENDERER.validate_profile(EXPECTED_PROFILE_V5), EXPECTED_PROFILE_V5)
         for historical in (EXPECTED_PROFILE, EXPECTED_PROFILE_V2, EXPECTED_PROFILE_V3, EXPECTED_PROFILE_V4):
             self.assertEqual(RENDERER.validate_profile(historical), historical)
+
+    def test_original_ground_reflection_profile_and_grid_are_locked(self):
+        profile = json.loads(GROUND_REFLECTION_PROFILE.read_text(encoding="utf-8"))
+        protocol = prepare.validate_protocol(prepare.read_json(GROUND_REFLECTION_PROTOCOL))
+        self.assertEqual(profile, EXPECTED_PROFILE_V5_GROUND_REFLECTION)
+        self.assertEqual(canonical_sha256(profile), "caefa8485ca280f6867fbccae82720a57e27332303224e2a207a5336c31570b5")
+        self.assertEqual(RENDERER.validate_profile(profile), profile)
+        preview = prepare.build_render_requests(protocol, "preview")
+        full = prepare.build_render_requests(protocol, "full")
+        self.assertEqual((len(preview), len(full)), (36, 72))
+        self.assertTrue(all(row["renderer_profile_sha256"] == canonical_sha256(profile) for row in full))
+        RENDERER.validate_requests(preview, profile)
+        RENDERER.validate_requests(full, profile)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            preview_root = root / "preview"
+            self.mock_render(preview_root, preview, profile)
+            authorization = root / "authorization.json"
+            prepare.write_json(authorization, {
+                "verdict": "comparison_authorized", "authorized_by": "project_owner",
+                "authorized_at": "2026-09-24", "known_issue": "sphere_ground_reflection_band",
+                "renderer_profile_sha256": canonical_sha256(profile),
+                "renderer_realization_sha256": prepare.sha256(preview_root / "renderer_realization.jsonl"),
+            })
+            plan_status = prepare.plan(protocol, "full", root / "full", preview_root, authorization)
+            self.assertEqual(plan_status["request_count"], 72)
+            self.assertEqual(plan_status["status"], "planned_after_comparison_authorization")
+            render_root, staging = root / "render", root / "staging"
+            self.mock_render(render_root, full, profile)
+            mask_module = types.ModuleType("src.train.instance_mask_utils")
+            mask_module.load_latent_instance_mask = lambda *args: None
+            with patch.dict(sys.modules, {"src.train.instance_mask_utils": mask_module}):
+                prepare.stage_training_assets(protocol, render_root, staging, preview_root, authorization)
+            train_config = {
+                "stage": "train", "status": "authorized_for_ground_reflection_comparison",
+                "run": {"study": "material_token_local_pilot_v1",
+                        "variant": "standalone_metal_ground_reflection_token_local_kv_5000", "seed": 42},
+                "args": {"concepts_list": str(staging / "concepts.json")},
+                "data_manifest": str(staging / "training_assets_manifest.jsonl"),
+                "material_pilot_authorization": {
+                    "preview_root": str(preview_root), "review_record": str(authorization),
+                    "staging_root": str(staging),
+                    "staging_provenance_sha256": prepare.sha256(staging / "staging_provenance.json"),
+                },
+            }
+            config_path = root / "train.json"
+            prepare.write_json(config_path, train_config)
+            self.assertEqual(colorpeel_run.read_config(config_path), train_config)
+            colorpeel_run.validate_material_pilot_train_inputs(train_config, {})
+            record = prepare.read_json(authorization)
+            record["verdict"] = "pass"
+            prepare.write_json(authorization, record)
+            with self.assertRaises(prepare.ProtocolError):
+                prepare.validate_preview_approval(protocol, preview_root, authorization)
 
     def test_preview_and_full_grids_are_complete_and_renderer_valid(self):
         preview = prepare.build_render_requests(self.protocol, "preview")
@@ -83,9 +140,9 @@ class MaterialTokenLocalPilotTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "remains blocked"):
                 colorpeel_run.read_config(path)
 
-    def mock_render(self, root, requests):
+    def mock_render(self, root, requests, profile=EXPECTED_PROFILE_V5):
         root.mkdir()
-        contract = {"profile_id": EXPECTED_PROFILE_V5["profile_id"],
+        contract = {"profile_id": profile["profile_id"], "profile_sha256": canonical_sha256(profile),
                     "requests_sha256": canonical_sha256(requests)}
         prepare.write_json(root / "render_contract.json", contract)
         records = []

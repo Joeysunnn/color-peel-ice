@@ -9,12 +9,19 @@ from pathlib import Path
 import shutil
 from typing import Any, Iterable
 
-from src.methods.colorpeel_ice.multiview_render_contract import EXPECTED_PROFILE_V5, canonical_sha256
+from src.methods.colorpeel_ice.multiview_render_contract import (
+    EXPECTED_PROFILE_V5, EXPECTED_PROFILE_V5_GROUND_REFLECTION, canonical_sha256,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPERIMENT_ROOT = REPO_ROOT / "experiments" / "material_token_local_pilot_v1"
 DEFAULT_PROTOCOL = EXPERIMENT_ROOT / "protocols" / "material_token_local_pilot_v1.json"
+RENDER_PROFILES = {
+    "experiments/material_token_local_pilot_v1/configs/render_profile.json": EXPECTED_PROFILE_V5,
+    "experiments/material_token_local_pilot_v1/configs/render_profile_ground_reflection.json":
+        EXPECTED_PROFILE_V5_GROUND_REFLECTION,
+}
 SHAPES = ("cube", "sphere", "cylinder")
 FULL_COLORS = ("red", "blue", "green", "yellow")
 LIGHTING = ("soft_front", "side_directional", "warm_top")
@@ -65,11 +72,20 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def locked_render_profile(protocol: dict[str, Any]) -> dict[str, Any]:
+    path = protocol.get("renderer_profile")
+    expected = RENDER_PROFILES.get(path)
+    if expected is None or read_json(REPO_ROOT / path) != expected:
+        raise ProtocolError("Pilot renderer profile differs from a locked profile")
+    return expected
+
+
 def validate_protocol(protocol: dict[str, Any]) -> dict[str, Any]:
     if protocol.get("schema") != "material_token_local_pilot/v1":
         raise ProtocolError("Unexpected protocol schema")
     if protocol.get("protocol_id") != "material_token_local_pilot_v1":
         raise ProtocolError("Unexpected protocol ID")
+    locked_render_profile(protocol)
     target = protocol.get("target_material")
     if target != {
         "name": "metal", "token": "<M*>", "initializer_token": "metal", "renderer_asset": "MyMetal",
@@ -103,6 +119,7 @@ def validate_protocol(protocol: dict[str, Any]) -> dict[str, Any]:
 
 def build_render_requests(protocol: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     validate_protocol(protocol)
+    profile = locked_render_profile(protocol)
     if mode not in {"preview", "full"}:
         raise ProtocolError("mode must be preview or full")
     colors = tuple(protocol["preview_colors"] if mode == "preview" else FULL_COLORS)
@@ -128,8 +145,8 @@ def build_render_requests(protocol: dict[str, Any], mode: str) -> list[dict[str,
                         "viewpoint": viewpoint,
                         "dataset_split": mode,
                         "render_seed": 730000 + cell_index * 10 + view_index,
-                        "renderer_profile_id": EXPECTED_PROFILE_V5["profile_id"],
-                        "renderer_profile_sha256": canonical_sha256(EXPECTED_PROFILE_V5),
+                        "renderer_profile_id": profile["profile_id"],
+                        "renderer_profile_sha256": canonical_sha256(profile),
                         **{field: None for field in RENDERER_FIELDS},
                     })
     expected = 36 if mode == "preview" else 72
@@ -143,9 +160,12 @@ def preview_checklist() -> str:
 
 
 def validate_preview_approval(protocol: dict[str, Any], preview_root: Path, approval_path: Path) -> str:
+    profile = locked_render_profile(protocol)
     requests = build_render_requests(protocol, "preview")
     contract = read_json(preview_root / "render_contract.json")
-    if contract.get("profile_id") != EXPECTED_PROFILE_V5["profile_id"] or contract.get("requests_sha256") != canonical_sha256(requests):
+    if (contract.get("profile_id") != profile["profile_id"]
+            or contract.get("profile_sha256") != canonical_sha256(profile)
+            or contract.get("requests_sha256") != canonical_sha256(requests)):
         raise ProtocolError("Preview render contract does not match this pilot")
     manifest_path = preview_root / "renderer_realization.jsonl"
     realized = read_jsonl(manifest_path)
@@ -165,14 +185,23 @@ def validate_preview_approval(protocol: dict[str, Any], preview_root: Path, appr
             if row.get("artifact_sha256", {}).get(field) != sha256(path):
                 raise ProtocolError(f"Preview artifact hash differs: {field}")
     approval = read_json(approval_path)
-    if (approval.get("verdict") != "pass" or not approval.get("reviewer") or not approval.get("reviewed_at")
-            or approval.get("renderer_realization_sha256") != sha256(manifest_path)):
-        raise ProtocolError("Human preview approval is absent or does not match rendered images")
+    if profile == EXPECTED_PROFILE_V5_GROUND_REFLECTION:
+        authorized = (approval.get("verdict") == "comparison_authorized"
+                      and approval.get("authorized_by") == "project_owner"
+                      and approval.get("authorized_at")
+                      and approval.get("known_issue") == "sphere_ground_reflection_band"
+                      and approval.get("renderer_profile_sha256") == canonical_sha256(profile))
+    else:
+        authorized = (approval.get("verdict") == "pass" and approval.get("reviewer")
+                      and approval.get("reviewed_at"))
+    if not authorized or approval.get("renderer_realization_sha256") != sha256(manifest_path):
+        raise ProtocolError("Preview review or comparison authorization does not match rendered images")
     return sha256(approval_path)
 
 
 def plan(protocol: dict[str, Any], mode: str, output_dir: Path,
          preview_root: Path | None = None, approval_path: Path | None = None) -> dict[str, Any]:
+    profile = locked_render_profile(protocol)
     approval_sha256 = None
     if mode == "full":
         if preview_root is None or approval_path is None:
@@ -190,11 +219,13 @@ def plan(protocol: dict[str, Any], mode: str, output_dir: Path,
             "renderer_realization_sha256": None,
         })
     status = {
-        "status": "planned_pending_human_preview" if mode == "preview" else "planned_after_preview_approval",
+        "status": ("planned_pending_human_preview" if mode == "preview" else
+                   "planned_after_comparison_authorization" if profile == EXPECTED_PROFILE_V5_GROUND_REFLECTION
+                   else "planned_after_preview_approval"),
         "mode": mode,
         "request_count": len(rows),
-        "renderer_profile_id": EXPECTED_PROFILE_V5["profile_id"],
-        "renderer_profile_sha256": canonical_sha256(EXPECTED_PROFILE_V5),
+        "renderer_profile_id": profile["profile_id"],
+        "renderer_profile_sha256": canonical_sha256(profile),
         "training_authorization": (protocol["rendering"]["training_authorization"] if mode == "preview"
                                    else "blocked_pending_separate_training_authorization"),
         "preview_approval_sha256": approval_sha256,
@@ -214,10 +245,13 @@ def stage_training_assets(protocol: dict[str, Any], render_root: Path, output_di
     from src.train.instance_mask_utils import load_latent_instance_mask
 
     validate_protocol(protocol)
+    profile = locked_render_profile(protocol)
     approval_sha256 = validate_preview_approval(protocol, preview_root, approval_path)
     requests = build_render_requests(protocol, "full")
     contract = read_json(render_root / "render_contract.json")
-    if contract.get("profile_id") != EXPECTED_PROFILE_V5["profile_id"] or contract.get("requests_sha256") != canonical_sha256(requests):
+    if (contract.get("profile_id") != profile["profile_id"]
+            or contract.get("profile_sha256") != canonical_sha256(profile)
+            or contract.get("requests_sha256") != canonical_sha256(requests)):
         raise ProtocolError("Full render contract does not match this pilot")
     realized = read_jsonl(render_root / "renderer_realization.jsonl")
     by_key = {(row.get("cell_id"), row.get("view_index")): row for row in realized}

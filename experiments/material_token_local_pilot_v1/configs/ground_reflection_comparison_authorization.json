@@ -1,0 +1,9 @@
+{
+  "verdict": "comparison_authorized",
+  "authorized_by": "project_owner",
+  "authorized_at": "2026-09-24",
+  "purpose": "Retrain and infer from the first metal preview's ground-reflection condition for comparison with the corrected pilot",
+  "known_issue": "sphere_ground_reflection_band",
+  "renderer_profile_sha256": "caefa8485ca280f6867fbccae82720a57e27332303224e2a207a5336c31570b5",
+  "renderer_realization_sha256": "e2811a09eb8c93d529d8ba46d4f56541d106ba59059529af5b414537869391bf"
+}

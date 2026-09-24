@@ -75,6 +75,15 @@ hashes before it creates a training run.
 
 ## Evaluation and scope
 
+The project owner also requested a separate comparison against the first
+preview, whose sphere showed the ground reflection band. That preview had only
+36 red/blue images and was not approved as the main pilot. The comparison uses
+`material_token_local_pilot_v1_ground_reflection.json` and its locked original
+render profile to make a separate 72-image grid. Its
+`comparison_authorized` record acknowledges the known visual issue; it is not
+a `pass` review for the main pilot. The comparison keeps training settings and
+the 60-image evaluation protocol fixed, and writes to distinct run directories.
+
 The standalone evaluation protocol fixes five seeds and four groups: material
 reconstruction, color changes, unseen objects, and lighting changes. Record
 color/shape/lighting leakage, material collapse, prompt suppression, object

@@ -199,6 +199,13 @@ EXPECTED_PROFILE_V5 = {
     "rng": deepcopy(EXPECTED_PROFILE_V2["rng"]),
 }
 
+# Exact first material preview profile from ee06dce. It is retained only for
+# the user-requested ground-reflection comparison, not as the pilot default.
+EXPECTED_PROFILE_V5_GROUND_REFLECTION = deepcopy(EXPECTED_PROFILE_V5)
+EXPECTED_PROFILE_V5_GROUND_REFLECTION["background"]["world_rgba"] = [0.05, 0.05, 0.05, 1.0]
+del EXPECTED_PROFILE_V5_GROUND_REFLECTION["background"]["world_strength"]
+del EXPECTED_PROFILE_V5_GROUND_REFLECTION["background"]["ground_visible_glossy"]
+
 # Backwards-compatible alias: v1 callers and its canonical fingerprint remain unchanged.
 EXPECTED_PROFILE = EXPECTED_PROFILE_V1
 EXPECTED_PROFILES = {
@@ -218,6 +225,8 @@ def canonical_sha256(value: Any) -> str:
 def validate_profile(profile: Any) -> dict[str, Any]:
     if not isinstance(profile, dict):
         raise ValueError("Renderer profile must be an object")
+    if profile == EXPECTED_PROFILE_V5_GROUND_REFLECTION:
+        return profile
     expected = EXPECTED_PROFILES.get(profile.get("profile_id"))
     if expected is None or profile != expected:
         raise ValueError("Renderer profile differs from locked multiview renderer profiles")
