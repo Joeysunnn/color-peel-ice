@@ -831,6 +831,24 @@ class DualTokenLocalKVAttnProcessor(TokenLocalKVAttnProcessor):
         return key, value
 
 
+class FullColorMaterialKVAttnProcessor(TokenLocalKVAttnProcessor):
+    """Old full-position color K/V with a frozen material residual at M positions."""
+
+    def __init__(self, hidden_size=None, cross_attention_dim=None):
+        super().__init__(hidden_size, cross_attention_dim)
+        if cross_attention_dim is not None:
+            self.color_k = nn.Linear(cross_attention_dim, hidden_size, bias=False)
+            self.color_v = nn.Linear(cross_attention_dim, hidden_size, bias=False)
+
+    def project_kv(self, attn: Attention, encoder_hidden_states: torch.Tensor, modifier_token_mask):
+        if modifier_token_mask is None or modifier_token_mask.shape != encoder_hidden_states.shape[:2] or modifier_token_mask.dtype != torch.bool:
+            raise ValueError("material mask must be Boolean and match text positions")
+        mask = modifier_token_mask.to(device=encoder_hidden_states.device, dtype=encoder_hidden_states.dtype).unsqueeze(-1)
+        key = self.color_k(encoder_hidden_states) + mask * self.delta_k(encoder_hidden_states)
+        value = self.color_v(encoder_hidden_states) + mask * self.delta_v(encoder_hidden_states)
+        return key, value
+
+
 class AttnAddedKVProcessor:
     r"""
     Processor for performing attention-related computations with extra learnable key and value matrices for the text

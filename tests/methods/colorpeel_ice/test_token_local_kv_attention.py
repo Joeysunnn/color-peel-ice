@@ -8,7 +8,8 @@ from torch import nn
 TRAIN_ROOT = Path(__file__).parents[3] / "src" / "train"
 sys.path.insert(0, str(TRAIN_ROOT))
 from custom_attention.attention_processor_custom import (
-    DualTokenLocalKVAttnProcessor, TokenLocalKVAttnProcessor, build_modifier_token_mask,
+    DualTokenLocalKVAttnProcessor, FullColorMaterialKVAttnProcessor,
+    TokenLocalKVAttnProcessor, build_modifier_token_mask,
 )
 from src.methods.colorpeel_ice.dual_token_local_kv import install_dual_token_local_kv
 
@@ -151,3 +152,20 @@ def test_install_dual_token_local_kv_preserves_both_independent_weights():
     assert torch.equal(dual.delta_v.weight, color.delta_v.weight)
     assert torch.equal(dual.material_delta_k.weight, material["block.attn2.processor.delta_k.weight"])
     assert torch.equal(dual.material_delta_v.weight, material["block.attn2.processor.delta_v.weight"])
+
+
+def test_archived_full_color_is_preserved_with_material_only_at_its_token():
+    torch.manual_seed(3)
+    attn = FakeAttention()
+    mixed = FullColorMaterialKVAttnProcessor(hidden_size=4, cross_attention_dim=3)
+    hidden = torch.randn(1, 4, 3)
+    empty = torch.zeros((1, 4), dtype=torch.bool)
+    material = torch.tensor([[False, False, True, False]])
+    archived = (mixed.color_k(hidden), mixed.color_v(hidden))
+    assert all(torch.equal(actual, expected) for actual, expected in zip(
+        mixed.project_kv(attn, hidden, empty), archived))
+    key, value = mixed.project_kv(attn, hidden, material)
+    assert torch.equal(key[:, ~material[0]], archived[0][:, ~material[0]])
+    assert torch.equal(value[:, ~material[0]], archived[1][:, ~material[0]])
+    assert not torch.equal(key[:, material[0]], archived[0][:, material[0]])
+    assert not torch.equal(value[:, material[0]], archived[1][:, material[0]])
