@@ -27,3 +27,6 @@ material-only, and paired prompts at identical seeds and sampling settings.
 Record color, metallic appearance, object identity, safety filtering, extra
 objects, and framing separately. The orange fruit artifact seen previously
 must remain visible. This stage does not train a joint checkpoint.
+
+The completed first diagnostic and its limitations are in
+`reports/01_orange_metal_diagnostic.md`.
