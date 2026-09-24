@@ -174,9 +174,14 @@ def generate(rows: Iterable[dict[str, Any]], args: argparse.Namespace, checkpoin
             generator=generator,
             cross_attention_kwargs=token_local_cross_attention_kwargs(pipe, row["prompt"], row["guidance_scale"]),
         )
+        nsfw_flags = getattr(result, "nsfw_content_detected", None)
+        if nsfw_flags is not None and len(nsfw_flags) != 1:
+            raise ValueError("Expected one safety-checker result per evaluation image")
+        safety_filtered = bool(nsfw_flags[0]) if nsfw_flags is not None else False
         result.images[0].save(image_path)
         append_jsonl(args.output_dir / "generation_status.jsonl", {
-            **row, "status": "ok", "image_sha256": sha256(image_path),
+            **row, "status": "safety_filtered" if safety_filtered else "ok",
+            "nsfw_content_detected": safety_filtered, "image_sha256": sha256(image_path),
             "checkpoint_sha256": checkpoint_hashes,
         })
 
