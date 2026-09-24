@@ -112,4 +112,67 @@ with the prompt `a photo of an object made of <M*>`. Its status is
 `staged_pending_separate_training_authorization`; the
 `staging_provenance.json` SHA-256 is
 `346a08edaa48ebf94835234bdf0fc1b0a551e534dde85d7db72261c2b994044f`.
-Standalone 5,000-step training and evaluation have not begun.
+Standalone 5,000-step training and evaluation had not begun at this staging point.
+
+## Authorized standalone training
+
+The project owner separately authorized the 5,000-step run. The local
+authorization config was pushed and the server pulled execution commit
+`ceffc7f`. A launcher dry run revalidated the review record, staging
+provenance, concepts, and all 72 staged image/mask hashes. The actual run is
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/material_token_local_pilot_v1/20260924-000114__material_token_local_pilot_v1__standalone_metal_token_local_kv_5000__ceffc7f__42`.
+Its manifest records `succeeded`, return code 0, seed 42, and 5,000/5,000
+steps on GPU 3. Checkpoints exist at steps 1,000 through 5,000. All 5,000
+logged losses were finite; mean total loss was 0.38352 for the first 100
+steps and 0.25532 for the last 100. This is optimization evidence, not a
+material-quality metric. No validation metric or best checkpoint was selected.
+
+The final token-local K/V weights SHA-256 is
+`b947b94ab2b82d45a6ea45c681cee8d374b703ce1049c6f6d4e29fb04fa971b8`;
+the `<M*>` embedding SHA-256 is
+`4fef8d87f96b99a34dd80d9dad1c3642d4bf846ee48f9245fbdb3e92ef9c7b2e`.
+The embedding audit found 5,000 nonzero-gradient steps for `<M*>` and zero
+changed ordinary embedding rows. Structured training evidence is in the
+run's `train_outputs/` directory.
+
+## Locked evaluation and visual inspection
+
+The fixed evaluation protocol (`bd136a8f379c65c9b512d366f80a7f9f1d62dd51b43f275f9d62fe092c6c57b2`)
+requested 12 prompts at seeds 42–46: five seen-cube, 20 sphere-color,
+20 unseen-object, and 15 sphere-lighting samples. Each used 100 denoising
+steps and guidance 3.5. The evaluation was locked to the completed training
+checkpoint by `checkpoint_lock.json` SHA-256
+`e0f2bb0266cc205fbc06636f3955fb2a67cf893a5ff3e14b5390915303cf600b`.
+
+The first run generated all 60 images but its status file called six black
+safety-checker outputs `ok`. The generator was changed only to record the
+pipeline's `nsfw_content_detected` flag and label these rows
+`safety_filtered`. Research12 pulled commit `b04d92e` and reran the same
+checkpoint and protocol, with the safety checker enabled, in
+`/home/r12user5/Documents/Jiawei/colorpeel-runs/material_token_local_pilot_v1/20260924-105204__material_token_local_pilot_v1__metal_evaluation_60__b04d92e__42`.
+All 60 image hashes are identical between runs. Every rerun image is 512×512
+RGB and matches its recorded SHA-256; `evaluation_qc.json` records the checks.
+There are 54 unfiltered images and six `safety_filtered` rows: green sphere seed
+44; yellow sphere seeds 43, 45, and 46; soft studio red sphere seed 43; and
+strong side-lit red sphere seed 46. These six are missing visual observations,
+not negative material-quality scores.
+
+Codex inspected the four contact sheets as a qualitative screening pass, not
+as the protocol's human rating. In seen reconstruction, red glossy cubes appear
+at some seeds, but seed 43 has two cubes, seed 45 crops the cube, and seed 46
+resembles a red enclosure. All five blue-sphere outputs are blue and show
+highlights. Green seed 46 loses much of its green color; of the two usable
+yellow outputs, seed 42 looks relatively matte and seed 44 looks metallic.
+Unseen mugs, vases, chairs, and mailboxes are often recognizable and reflective,
+but material and color are inconsistent: mug seed 42 lacks a handle, vase seed
+46 looks transparent, and chair/mailbox seeds include red and dark surfaces.
+Lighting prompts change highlights in several samples, while seed 45 remains
+severely cropped and some samples add a stand or other scene content.
+
+This pilot therefore has visible examples compatible with a transferable
+reflective appearance, alongside color, shape, and composition failures. It
+does **not** establish material disentanglement: six planned samples are
+filtered, no human rubric has been completed, and there is no matched
+base-model or adapter-free control to attribute the appearance to `<M*>`.
+The run preserves all samples, status rows, four contact sheets, and a blank
+`human_review_template.csv` for a later human assessment.
