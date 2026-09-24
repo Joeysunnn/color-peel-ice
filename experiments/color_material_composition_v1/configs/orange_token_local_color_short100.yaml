@@ -1,0 +1,42 @@
+schema_version: 1
+status: authorized_diagnostic_by_project_owner
+stage: train
+run: {study: color_material_composition_v1, variant: orange_token_local_color_short100, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: ${COLORPEEL_RUN_ROOT}/natural_image_subject_color_pilot/emission_color_transfer_orange_89dd1d1_staging/staging_manifest.json
+color_material_source:
+  protocol: experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_protocol_v1.json
+  protocol_sha256: 9a71823b1fc55bfb4d5a0f1462190aeec46d22453ea78d62c840874ee83b83b1
+  source_root: ${COLORPEEL_RUN_ROOT}/natural_image_subject_color_pilot/emission_color_branch_4c9e55d_pilot
+  staging_root: ${COLORPEEL_RUN_ROOT}/natural_image_subject_color_pilot/emission_color_transfer_orange_89dd1d1_staging
+  staging_manifest_sha256: 614d4a563783ac77a8916222774f051782b8c8051a8cee485a38940cd1944f6f
+  concepts_sha256: 2651523897fe90ee53a36c9a7760be2d69cd115b1f5dd2d5a33d87e436416016
+  selected_material_source: experiments/material_token_local_pilot_v1/configs/selected_material_source.json
+  selected_material_source_sha256: 1aefb6c8d941e73b369cfee2301429046c970c8786158b94e9b9452289bd1d90
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_RUN_ROOT}/natural_image_subject_color_pilot/emission_color_transfer_orange_89dd1d1_staging/concepts.json
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  kv_learning_rate: 1.0e-5
+  token_local_kv: true
+  freeze_model: crossattn_kv
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 100
+  checkpointing_steps: 100
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.0
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.01
+  adam_epsilon: 1.0e-8
+  hflip: true
+  modifier_token: "<C*>"
+  initializer_token: orange

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import platform
@@ -104,6 +105,10 @@ def read_config(path: Path) -> dict[str, Any]:
         required = "authorized_for_ground_reflection_comparison" if comparison else "authorized_after_preview_review"
         if config.get("status") != required:
             raise ValueError("material pilot training remains blocked until a new reviewed config is authorized")
+    if config["stage"] == "train" and config["run"]["study"] == "color_material_composition_v1":
+        if (config["run"]["variant"] != "orange_token_local_color_short100"
+                or config.get("status") != "authorized_diagnostic_by_project_owner"):
+            raise ValueError("color/material diagnostic requires its authorized short-run config")
     stage_managed_arguments = set(MANAGED_ARGUMENTS)
     if config["stage"] == "segment":
         stage_managed_arguments.add("mask-dir")
@@ -218,6 +223,59 @@ def validate_material_pilot_train_inputs(config: dict[str, Any], environment: di
                 raise ValueError(f"material staged {field} differs from its approved hash")
 
 
+def validate_color_material_color_inputs(config: dict[str, Any], environment: dict[str, str]) -> None:
+    if config["stage"] != "train" or config["run"]["study"] != "color_material_composition_v1":
+        return
+    source = config.get("color_material_source")
+    if not isinstance(source, dict):
+        raise ValueError("color/material source lock is required")
+
+    def locked_path(path_key: str, hash_key: str) -> Path:
+        path = Path(expand_value(source[path_key], environment))
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        path = path.resolve()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest != source[hash_key]:
+            raise ValueError(f"color/material {path_key} hash differs")
+        return path
+
+    protocol_path = locked_path("protocol", "protocol_sha256")
+    selection_path = locked_path("selected_material_source", "selected_material_source_sha256")
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    if (selection.get("schema") != "selected_material_source/v1"
+            or selection.get("checkpoint", {}).get("modifier_token") != "<M*>"):
+        raise ValueError("selected material source differs")
+    staging_root = Path(expand_value(source["staging_root"], environment)).resolve()
+    staging_manifest = staging_root / "staging_manifest.json"
+    concepts_path = staging_root / "concepts.json"
+    for path, key in ((staging_manifest, "staging_manifest_sha256"), (concepts_path, "concepts_sha256")):
+        if hashlib.sha256(path.read_bytes()).hexdigest() != source[key]:
+            raise ValueError(f"color/material {path.name} hash differs")
+    if (Path(expand_value(config["data_manifest"], environment)).resolve() != staging_manifest
+            or Path(expand_value(config["args"]["concepts_list"], environment)).resolve() != concepts_path):
+        raise ValueError("color training must use the locked staged images")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from scripts.methods.colorpeel_ice import stage_d1_emission_color_transfer as stage
+
+    color_protocol = stage.protocol(protocol_path)
+    verified = stage.verified_source(Path(expand_value(source["source_root"], environment)), color_protocol)
+    manifest = json.loads(staging_manifest.read_text(encoding="utf-8"))
+    concepts = json.loads(concepts_path.read_text(encoding="utf-8"))
+    if (manifest.get("record_count") != 9 or len(concepts) != 9
+            or {row.get("request_id") for row in manifest.get("records", [])} != set(verified)):
+        raise ValueError("color staging does not contain the locked nine-image grid")
+    for row, concept in zip(manifest["records"], concepts):
+        request_id = row["request_id"]
+        expected = verified[request_id]
+        image = staging_root / request_id / "img.png"
+        if (row.get("source_image_sha256") != expected["image_sha256"]
+                or hashlib.sha256(image.read_bytes()).hexdigest() != expected["image_sha256"]
+                or concept != {"instance_prompt": [expected["prompt"]], "instance_data_dir": str(staging_root / request_id)}):
+            raise ValueError(f"color staged image or caption differs: {request_id}")
+
+
 def argument_tokens(arguments: dict[str, Any], environment: dict[str, str]) -> list[str]:
     tokens: list[str] = []
     for key, raw_value in arguments.items():
@@ -318,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
         environment[key] = str(value)
     environment["COLORPEEL_RUN_DIR"] = str(run_dir)
     validate_material_pilot_train_inputs(config, environment)
+    validate_color_material_color_inputs(config, environment)
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"
