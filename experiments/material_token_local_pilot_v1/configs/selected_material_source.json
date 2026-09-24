@@ -1,0 +1,30 @@
+{
+  "schema": "selected_material_source/v1",
+  "decision_date": "2026-09-24",
+  "decision": "Use the original ground-reflection renderer profile and its trained <M*> checkpoint for subsequent material experiments.",
+  "basis": "Project owner judged the ground-reflection evaluation visually better than the corrected-profile evaluation.",
+  "renderer_profile": {
+    "path": "experiments/material_token_local_pilot_v1/configs/render_profile_ground_reflection.json",
+    "canonical_sha256": "caefa8485ca280f6867fbccae82720a57e27332303224e2a207a5336c31570b5"
+  },
+  "training_run_relative_to_COLORPEEL_RUN_ROOT": "material_token_local_pilot_v1/20260924-114730__material_token_local_pilot_v1__standalone_metal_ground_reflection_token_local_kv_5000__5adbef9__42",
+  "training_manifest_sha256": "8b96442f48ca8192616b6882df54b2a420580efe3ae6c06990a0d1b28b2c052e",
+  "checkpoint": {
+    "step": 5000,
+    "directory_relative_to_training_run": "checkpoints",
+    "adaptation_mode": "token_local_kv",
+    "modifier_token": "<M*>",
+    "adaptation_config_sha256": "7986ebedfc96c3106114c13c7790b2e5d85d88782bda531a41e351c289e96a27",
+    "token_local_kv_weights_sha256": "9c102acedacde84a19f3a41bae57245ec8c156cd059b9d8b69755a908311f516",
+    "token_embedding_sha256": "72a4ef265032c3919816868d337f132b96564c5cd106f0bae4d5f7ba31f27fa5"
+  },
+  "evaluation_run_relative_to_COLORPEEL_RUN_ROOT": "material_token_local_pilot_v1/20260924-132148__material_token_local_pilot_v1__ground_reflection_evaluation_60__5adbef9__42",
+  "evaluation_protocol_sha256": "bd136a8f379c65c9b512d366f80a7f9f1d62dd51b43f275f9d62fe092c6c57b2",
+  "evaluation_checkpoint_lock_sha256": "9fd27f7d2854f3f96b3567545dcaa179ab40ef8e152bfb7bdd70d3be28a6eabb",
+  "generation_status_sha256": "feba82b05a7d2021a507ac759c29e807b93c10a22832183494b5d984866fb72f",
+  "limitations": [
+    "The renderer comparison changes three profile settings together.",
+    "Appearance preference is a qualitative selection, not a disentanglement metric.",
+    "Five evaluation outputs were safety filtered."
+  ]
+}

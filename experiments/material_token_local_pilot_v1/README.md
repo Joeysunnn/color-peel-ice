@@ -96,3 +96,13 @@ model directory, completed training `run_manifest_path` and its SHA-256,
 verifies that the checkpoint belongs to a successful standalone material run.
 Subject/color checkpoints, AlignIT, joint training, texture tokens, and natural
 image material extraction are outside this pilot.
+
+## Selected material source for later composition
+
+The project owner preferred the ground-reflection comparison after its
+5,000-step training and fixed 60-image inference. Use
+`configs/selected_material_source.json` to identify the renderer profile,
+training checkpoint, and evaluation evidence for subsequent material work.
+The separate `reports/02_ground_reflection_comparison.md` records the paired
+comparison and its limitations. This selection does not authorize or imply a
+joint subject/color/material training result.
