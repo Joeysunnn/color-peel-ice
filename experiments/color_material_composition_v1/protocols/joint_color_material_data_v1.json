@@ -6,7 +6,7 @@
   "source_emission_target": "D1GT:81/130.png",
   "source_emission_lab": {"L": 50.0, "a": 63.21805661727065, "b": 54.85769274644318},
   "colors": {
-    "orange": {"nominal_rgb": [223, 54, 25], "material_socket_rgba": [0.738731741987261, 0.2, 0.009661907129827573, 1.0]},
+    "orange": {"nominal_rgb": [223, 54, 25], "material_socket_rgba": [0.738731741987261, 0.12, 0.009661907129827573, 1.0]},
     "blue": {"nominal_rgb": [42, 75, 215], "material_socket_rgba": [0.16470588235294117, 0.29411764705882354, 0.8431372549019608, 1.0]}
   },
   "shapes": ["cube", "sphere", "cylinder"],

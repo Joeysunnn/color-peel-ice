@@ -61,7 +61,7 @@ def validate_protocol(path: Path):
             or protocol.get("evaluation_holdout_noun") != "mug"):
         raise ValueError("joint C/M data protocol differs")
     expected_colors = {
-        "orange": {"nominal_rgb": [223, 54, 25], "material_socket_rgba": [0.738731741987261, 0.2, 0.009661907129827573, 1.0]},
+        "orange": {"nominal_rgb": [223, 54, 25], "material_socket_rgba": [0.738731741987261, 0.12, 0.009661907129827573, 1.0]},
         "blue": {"nominal_rgb": [42, 75, 215], "material_socket_rgba": [42 / 255, 75 / 255, 215 / 255, 1.0]},
     }
     if protocol.get("colors") != expected_colors:

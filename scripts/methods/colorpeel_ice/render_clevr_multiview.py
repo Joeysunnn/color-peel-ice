@@ -184,7 +184,7 @@ def validate_cm_joint_requests(records: list[dict[str, Any]], profile: dict[str,
                 and record["material_token"] == ("<M*>" if material == "metal" else None),
                 f"Joint C/M token labels differ: {key}")
         expected_rgb = [223, 54, 25] if color == "orange" else [42, 75, 215]
-        expected_socket = ([0.738731741987261, 0.2, 0.009661907129827573, 1.0]
+        expected_socket = ([0.738731741987261, 0.12, 0.009661907129827573, 1.0]
                            if color == "orange" else [42 / 255, 75 / 255, 215 / 255, 1.0])
         require(record["nominal_rgb"] == expected_rgb and record["material_socket_rgba"] == expected_socket,
                 f"Joint C/M color socket differs: {key}")

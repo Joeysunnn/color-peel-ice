@@ -19,3 +19,13 @@ to `0.2`. The D1GT target and nominal RGB remain provenance references, while
 the material socket is now an empirical calibration input. The new preview
 requires its own review record. No full 72-image rendering or joint training
 is approved on the rejected first preview.
+
+The second 12-image preview under commit `d1bbbdf` completed at
+`$COLORPEEL_RUN_ROOT/color_material_composition_v1/joint_cm_caa_ablation_v2/preview`.
+All 48 artifact hashes matched. It shifted orange metal and rubber from deep
+red to brown/gold in the neutral soft-front view, so it is also rejected for
+the intended orange-metal target. Masked median RGB for the cube metal changed
+from `[81,13,3]` (first preview) to `[82,40,3]` (second preview); the blue
+control remained `[36,50,87]`. A third preview tests green socket `0.12`,
+between the two observed endpoints, aiming for orange rather than red or gold.
+The selected ground-reflection scene and metal asset remain unchanged.
