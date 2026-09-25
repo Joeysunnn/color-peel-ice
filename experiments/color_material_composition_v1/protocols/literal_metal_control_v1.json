@@ -1,0 +1,13 @@
+{
+  "schema": "literal_metal_control/v1",
+  "source_protocol": "experiments/color_material_composition_v1/protocols/literal_orange_vs_color_token_with_m_v1.json",
+  "source_protocol_sha256": "a96ad9e61d66319811b849d8fb682167f244b147fee62b987a6fb8b6b1d20720",
+  "reference_run_relative_to_COLORPEEL_RUN_ROOT": "color_material_composition_v1/20260925-094516__literal_orange_vs_c_with_m__5c8d354__42/output",
+  "reference_status_sha256": "267484b778685d7ef9d1ed0554b29a337de0ef248f4a740dd8e1340ca63d15f4",
+  "objects": ["cube", "sphere", "mug"],
+  "seeds": [42, 43, 44],
+  "reference_prompt": "a photo of a {object} with orange color and <M*> material",
+  "control_prompt": "a photo of a {object} with orange color and metal material",
+  "sampling": {"num_inference_steps": 100, "guidance_scale": 3.5},
+  "safety_checker": "enabled"
+}
