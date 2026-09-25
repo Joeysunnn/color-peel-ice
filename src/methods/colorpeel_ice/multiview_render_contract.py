@@ -213,6 +213,10 @@ EXPECTED_PROFILE_CM_JOINT["profile_id"] = "color_material_joint_v1"
 EXPECTED_PROFILE_CM_JOINT["object"]["material_policy"] = "request_controlled"
 EXPECTED_PROFILE_CM_JOINT["object"]["allowed_materials"] = ["metal", "rubber"]
 
+# Fresh material-only images for unpaired emission-C / native-metal-M training.
+EXPECTED_PROFILE_M_UNPAIRED = deepcopy(EXPECTED_PROFILE_V5_GROUND_REFLECTION)
+EXPECTED_PROFILE_M_UNPAIRED["profile_id"] = "material_shared_kv_unpaired_v1"
+
 # Backwards-compatible alias: v1 callers and its canonical fingerprint remain unchanged.
 EXPECTED_PROFILE = EXPECTED_PROFILE_V1
 EXPECTED_PROFILES = {
@@ -222,6 +226,7 @@ EXPECTED_PROFILES = {
     EXPECTED_PROFILE_V4["profile_id"]: EXPECTED_PROFILE_V4,
     EXPECTED_PROFILE_V5["profile_id"]: EXPECTED_PROFILE_V5,
     EXPECTED_PROFILE_CM_JOINT["profile_id"]: EXPECTED_PROFILE_CM_JOINT,
+    EXPECTED_PROFILE_M_UNPAIRED["profile_id"]: EXPECTED_PROFILE_M_UNPAIRED,
 }
 
 

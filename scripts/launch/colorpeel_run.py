@@ -109,7 +109,7 @@ def read_config(path: Path) -> dict[str, Any]:
         variant = config["run"]["variant"]
         if variant == "orange_token_local_color_short100":
             required_status = "authorized_diagnostic_by_project_owner"
-        elif variant in {"joint_cm_caa0_1500", "joint_cm_caa02_1500"}:
+        elif variant in {"joint_cm_caa0_1500", "joint_cm_caa02_1500", "unpaired_emission_m_shared_kv_5100"}:
             required_status = "authorized_after_preview_review"
         else:
             raise ValueError("unknown color/material training variant")
@@ -319,6 +319,40 @@ def validate_joint_color_material_train_inputs(config: dict[str, Any], environme
         raise ValueError("joint C/M training must use the reviewed staged concepts")
 
 
+def validate_unpaired_emission_material_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> None:
+    if (config["stage"] != "train" or config["run"]["study"] != "color_material_composition_v1"
+            or config["run"]["variant"] != "unpaired_emission_m_shared_kv_5100"):
+        return
+    args = config["args"]
+    if (args.get("modifier_token") != "<C*>+<M*>" or args.get("initializer_token") != "orange+metal"
+            or args.get("cos_weight") != 0.0 or args.get("max_train_steps") != 5100
+            or args.get("strict_unpaired_modifier_updates") is not True
+            or args.get("token_local_kv", False) or args.get("freeze_model") != "crossattn_kv"
+            or args.get("adam_weight_decay") != 0.0
+            or args.get("train_batch_size") != 1 or args.get("gradient_accumulation_steps") != 1):
+        raise ValueError("unpaired emission/material training settings differ")
+    source = config.get("unpaired_emission_material_source")
+    if not isinstance(source, dict):
+        raise ValueError("unpaired emission/material source lock is required")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from src.methods.colorpeel_ice import prepare_unpaired_emission_material as unpaired
+
+    def source_path(key: str) -> Path:
+        path = Path(expand_value(source[key], environment))
+        return (path if path.is_absolute() else PROJECT_ROOT / path).resolve()
+
+    concepts_path, assets_path = unpaired.validate_staging(
+        source_path("protocol"), source_path("plan_dir"), source_path("preview_root"),
+        source_path("review_record"), source_path("full_root"),
+        Path(expand_value(environment["COLORPEEL_RUN_ROOT"], environment)).resolve(),
+        source_path("staging_root"),
+    )
+    if (Path(expand_value(args["concepts_list"], environment)).resolve() != concepts_path.resolve()
+            or Path(expand_value(config["data_manifest"], environment)).resolve() != assets_path.resolve()):
+        raise ValueError("unpaired emission/material training must use the reviewed staged concepts")
+
+
 def argument_tokens(arguments: dict[str, Any], environment: dict[str, str]) -> list[str]:
     tokens: list[str] = []
     for key, raw_value in arguments.items():
@@ -421,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_material_pilot_train_inputs(config, environment)
     validate_color_material_color_inputs(config, environment)
     validate_joint_color_material_train_inputs(config, environment)
+    validate_unpaired_emission_material_train_inputs(config, environment)
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"

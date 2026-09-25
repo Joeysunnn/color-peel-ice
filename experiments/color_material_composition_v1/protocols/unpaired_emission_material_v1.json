@@ -1,0 +1,22 @@
+{
+  "schema": "unpaired_emission_material/v1",
+  "color_source_protocol": "experiments/natural_image_subject_color_pilot/configs/d1_emission_color_transfer_orange_protocol_v1.json",
+  "color_source_protocol_sha256": "9a71823b1fc55bfb4d5a0f1462190aeec46d22453ea78d62c840874ee83b83b1",
+  "color_source_root_relative_to_COLORPEEL_RUN_ROOT": "natural_image_subject_color_pilot/emission_color_branch_4c9e55d_pilot",
+  "material_scene_profile": "experiments/material_token_local_pilot_v1/configs/render_profile_ground_reflection.json",
+  "material_scene_profile_canonical_sha256": "caefa8485ca280f6867fbccae82720a57e27332303224e2a207a5336c31570b5",
+  "material_shapes": ["cube", "sphere", "cylinder"],
+  "material_colors": {"red": [173, 35, 35], "blue": [42, 75, 215], "green": [29, 105, 20], "yellow": [255, 238, 51]},
+  "material_lights": ["soft_front", "side_directional", "warm_top"],
+  "material_views": ["frontish", "oblique_45"],
+  "material_seed_formula": "760000 + cell_index * 10 + view_index",
+  "material_image_count": 72,
+  "preview_prefix_count": 12,
+  "training": {
+    "color_token": "<C*>", "material_token": "<M*>",
+    "shared_kv": true, "caa_weight": 0.0,
+    "color_steps": 100, "material_steps": 5000,
+    "schedule": "50 material rows then 1 emission color row, repeated 100 times",
+    "strict_unpaired_modifier_updates": true
+  }
+}

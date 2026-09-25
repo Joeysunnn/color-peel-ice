@@ -208,7 +208,7 @@ def validate_requests(
     if profile["profile_id"] == "color_material_joint_v1":
         return validate_cm_joint_requests(records, profile)
     material_profile = profile["profile_id"] == "multiview_render_v3_material"
-    pilot_profile = profile["profile_id"] == "material_token_local_pilot_v1"
+    pilot_profile = profile["profile_id"] in {"material_token_local_pilot_v1", "material_shared_kv_unpaired_v1"}
     expected_count = 360 if material_profile else (None if pilot_profile else 180)
     required_fields = PILOT_REQUEST_FIELDS if pilot_profile else (MATERIAL_REQUEST_FIELDS if material_profile else REQUEST_FIELDS)
     if pilot_profile:
@@ -242,7 +242,8 @@ def validate_requests(
                     f"Invalid viewpoint for {key}")
             expected_split = "preview" if observed_colors == preview_colors else "full"
             require(record["dataset_split"] == expected_split, f"Invalid dataset split for {key}")
-            expected_seed = 730000 + record["cell_index"] * 10 + record["view_index"]
+            seed_base = 760000 if profile["profile_id"] == "material_shared_kv_unpaired_v1" else 730000
+            expected_seed = seed_base + record["cell_index"] * 10 + record["view_index"]
             require(record["render_seed"] == expected_seed, f"Invalid render_seed for {key}")
         elif material_profile:
             require(record["shape_color_index"] in range(9),
@@ -365,7 +366,7 @@ def verify_completed_record(
 ) -> None:
     request_fields = (
         CM_JOINT_REQUEST_FIELDS if contract["profile_id"] == "color_material_joint_v1" else (
-            PILOT_REQUEST_FIELDS if contract["profile_id"] == "material_token_local_pilot_v1" else (
+            PILOT_REQUEST_FIELDS if contract["profile_id"] in {"material_token_local_pilot_v1", "material_shared_kv_unpaired_v1"} else (
                 MATERIAL_REQUEST_FIELDS if contract["profile_id"] == "multiview_render_v3_material" else REQUEST_FIELDS
             )
         )
@@ -596,7 +597,7 @@ def apply_view_jitter(profile: dict[str, Any], render_seed: int) -> tuple[dict[s
 
 def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj, viewpoint: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     require(profile["profile_id"] in {
-        "multiview_render_v2", "multiview_render_v3_material", "multiview_render_v4_two_object", "material_token_local_pilot_v1", "color_material_joint_v1",
+        "multiview_render_v2", "multiview_render_v3_material", "multiview_render_v4_two_object", "material_token_local_pilot_v1", "color_material_joint_v1", "material_shared_kv_unpaired_v1",
     }, "Orbit camera requires a locked orbit renderer profile")
     offsets = orbit_jitter_metadata(render_seed, profile)
     camera = bpy.data.objects.get(profile["camera"]["name"])
@@ -630,7 +631,7 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj, viewpoint: 
     jitter = offsets["camera_orbit_jitter"]
     final_radius = base_spherical["radius"] * (1.0 + jitter["distance_fraction"])
     viewpoint_values = {"azimuth_offset_degrees": 0.0, "elevation_offset_degrees": 0.0}
-    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
+    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1", "material_shared_kv_unpaired_v1"}:
         require(viewpoint in profile["camera"]["viewpoints"], "Pilot viewpoint is missing or invalid")
         viewpoint_values = profile["camera"]["viewpoints"][viewpoint]
     final_azimuth = (
@@ -708,7 +709,7 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj, viewpoint: 
         "sensor_width": float(camera.data.sensor_width),
         "shift_xy": [float(camera.data.shift_x), float(camera.data.shift_y)],
     }
-    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
+    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1", "material_shared_kv_unpaired_v1"}:
         camera_metadata["viewpoint"] = viewpoint
 
     light_metadata: dict[str, Any] = {
@@ -860,7 +861,7 @@ def render_one(
         camera_metadata, light_metadata = apply_orbit_view(
             profile, request["render_seed"], obj, request.get("viewpoint")
         )
-        if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
+        if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1", "material_shared_kv_unpaired_v1"}:
             light_metadata = apply_pilot_lighting(profile, request["lighting_condition"])
 
     final_dir = args.output_root / request["cell_id"] / f"view_{request['view_index']:02d}"
@@ -905,10 +906,10 @@ def render_one(
             "pixel_coords": camera_pixel_coords(bpy.data.objects[profile["camera"]["name"]], obj),
         }],
     }
-    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
+    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1", "material_shared_kv_unpaired_v1"}:
         scene["lighting_condition"] = request["lighting_condition"]
         scene["viewpoint"] = request["viewpoint"]
-    if profile["profile_id"] in {"multiview_render_v3_material", "material_token_local_pilot_v1", "color_material_joint_v1"}:
+    if profile["profile_id"] in {"multiview_render_v3_material", "material_token_local_pilot_v1", "color_material_joint_v1", "material_shared_kv_unpaired_v1"}:
         material_key = f"material_{request['material']}"
         scene["objects"][0]["material_asset_name"] = material_asset_name
         scene["objects"][0]["material_asset_sha256"] = contract["asset_sha256"][material_key]

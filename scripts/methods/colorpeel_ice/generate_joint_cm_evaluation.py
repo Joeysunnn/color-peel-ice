@@ -55,7 +55,7 @@ def verify_training(run: Path, variant: str):
             or manifest.get("stage") != "train"
             or manifest.get("run", {}).get("study") != "color_material_composition_v1"
             or manifest.get("run", {}).get("variant") != variant
-            or variant not in {"joint_cm_caa0_1500", "joint_cm_caa02_1500"}):
+            or variant not in {"joint_cm_caa0_1500", "joint_cm_caa02_1500", "unpaired_emission_m_shared_kv_5100"}):
         raise ValueError("joint C/M training run is not complete")
     model_dir = run / "checkpoints"
     hashes = {name: sha256(model_dir / name) for name in (WEIGHTS, "<C*>.bin", "<M*>.bin")}
@@ -67,7 +67,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", type=Path, required=True)
     parser.add_argument("--training-run", type=Path, required=True)
-    parser.add_argument("--variant", choices=("joint_cm_caa0_1500", "joint_cm_caa02_1500"), required=True)
+    parser.add_argument("--variant", choices=("joint_cm_caa0_1500", "joint_cm_caa02_1500",
+                                              "unpaired_emission_m_shared_kv_5100"), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--dry-run", action="store_true")

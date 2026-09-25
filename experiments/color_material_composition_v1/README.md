@@ -31,7 +31,14 @@ must remain visible. This stage does not train a joint checkpoint.
 The completed first diagnostic and its limitations are in
 `reports/01_orange_metal_diagnostic.md`.
 
-## Joint C/M CAA ablation
+## Archived crossed CLEVR-color plan
+
+The crossed CLEVR orange/blue × metal/rubber plan below is superseded for C/M
+training. The first preview was red and the second was brown/gold, despite
+color-socket calibration. No full render or training from this crossed plan
+should run. The previews remain as evidence about native-material color drift.
+
+### Historical joint C/M CAA ablation (do not run)
 
 The literal-metal control first compares `orange color and metal material`
 against `orange color and <M*> material` at the same cube/sphere/mug seeds
@@ -95,3 +102,42 @@ distinct run directories. After each run succeeds,
 the fixed 36-image base/C-only/M-only/C+M comparison for cube, sphere, and
 held-out mug at seeds 42–44. Inspect color, metal appearance, shape, and
 safety filtering separately at matched seeds.
+
+## Active unpaired emission-C / fresh metal-M plan
+
+The active plan keeps the nine verified emission orange images as the C source
+and renders a fresh 72-image metal-only set under the selected ground-reflection
+profile with new seeds. Its colors are literal red, blue, green, and yellow;
+orange is absent from M training. Each training prompt contains exactly one
+learned token. The 5,100-step shared-K/V schedule has 100 C steps and 5,000 M
+steps, matching the earlier standalone step doses while spreading C steps
+throughout training. CAA is zero because no sample contains both tokens.
+Shared K/V still updates on both branches. A strict per-step guard restores
+the embedding row of the token absent from that step after AdamW updates.
+
+The first 12 fresh material images form a preview. The selected metal look,
+ground reflection, four literal colors, shapes, and masks must pass review
+before full rendering and staging. From the server checkout after local push
+and server pull:
+
+```bash
+export COLORPEEL_UNPAIRED_CM_ROOT="$COLORPEEL_RUN_ROOT/color_material_composition_v1/unpaired_emission_m_v1"
+python -m src.methods.colorpeel_ice.prepare_unpaired_emission_material \
+  --output-dir "$COLORPEEL_UNPAIRED_CM_ROOT/plan"
+CUDA_VISIBLE_DEVICES=3 blender --background --python-exit-code 1 \
+  --python scripts/methods/colorpeel_ice/render_clevr_multiview.py -- \
+  --requests "$COLORPEEL_UNPAIRED_CM_ROOT/plan/render_requests.jsonl" \
+  --profile "$COLORPEEL_UNPAIRED_CM_ROOT/plan/render_profile.json" \
+  --output-root "$COLORPEEL_UNPAIRED_CM_ROOT/preview" --limit 12 \
+  --properties-json "$CLEVR_ROOT/data/properties.json" \
+  --base-scene-blendfile "$CLEVR_ROOT/data/base_scene.blend" \
+  --shape-dir "$CLEVR_ROOT/data/shapes" --material-dir "$CLEVR_ROOT/data/materials"
+```
+
+After review, render the same manifest without `--limit` into `full`, then
+stage it with `--plan-dir`, `--preview-root`, `--review-record`, `--full-root`,
+`--run-root "$COLORPEEL_RUN_ROOT"`, and `--output-dir .../staging`. The
+launcher config is `configs/unpaired_emission_m_shared_kv_5100.yaml`; the
+existing fixed 36-image C-only/M-only/C+M evaluation script accepts its
+completed shared-K/V checkpoint. The joint output remains an extrapolation
+because no training image contains both learned tokens.

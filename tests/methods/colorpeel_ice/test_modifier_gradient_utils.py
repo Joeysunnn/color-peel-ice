@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import torch
 
 
 MODULE_PATH = Path(__file__).parents[3] / "src" / "train" / "token_gradient_utils.py"
@@ -22,6 +23,16 @@ class ModifierGradientMaskTests(unittest.TestCase):
             MODULE.modifier_rows_to_zero(10, [])
         with self.assertRaises(ValueError):
             MODULE.modifier_rows_to_zero(10, [10])
+
+    def test_unpaired_step_identifies_only_the_absent_modifier(self):
+        self.assertEqual(
+            MODULE.inactive_modifier_ids_for_unpaired_step(torch.tensor([[1, 10, 2]]), [10, 11]),
+            [11],
+        )
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            MODULE.inactive_modifier_ids_for_unpaired_step(torch.tensor([[10, 11]]), [10, 11])
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            MODULE.inactive_modifier_ids_for_unpaired_step(torch.tensor([[1, 2]]), [10, 11])
 
 
 if __name__ == "__main__":

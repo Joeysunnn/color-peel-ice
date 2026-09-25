@@ -25,7 +25,7 @@ from joint_binding_utils import (
     ice_wasserstein_attention_loss,
     modifier_group_positions,
 )
-from token_gradient_utils import modifier_rows_to_zero
+from token_gradient_utils import inactive_modifier_ids_for_unpaired_step, modifier_rows_to_zero
 from context_prior_utils import load_context_prior_records
 from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
 import numpy as np
@@ -517,6 +517,10 @@ def parse_args(input_args=None):
     )
     parser.add_argument("--cos_weight", type=float, help="Weight assigned to Cosine Similarity Loss")
     parser.add_argument(
+        "--strict_unpaired_modifier_updates", action="store_true",
+        help="Require one modifier per step and preserve absent modifier embedding rows across AdamW steps.",
+    )
+    parser.add_argument(
         "--joint_two_object_binding",
         action="store_true",
         help="Use two instance masks, within-object CAA, and ICE spatial attention guidance.",
@@ -945,9 +949,18 @@ def main(args):
     # Code taken from https://github.com/huggingface/diffusers/blob/main/examples/textual_inversion/textual_inversion.py
     modifier_token_id = []
     initializer_token_id = []
+    if args.strict_unpaired_modifier_updates and args.modifier_token is None:
+        raise ValueError("strict unpaired modifier updates require learned modifier tokens")
     if args.modifier_token is not None:
         args.modifier_token = args.modifier_token.split("+")
         args.initializer_token = args.initializer_token.split("+")
+
+        if args.strict_unpaired_modifier_updates and (
+            len(args.modifier_token) < 2 or args.cos_weight != 0
+            or args.train_batch_size != 1 or args.gradient_accumulation_steps != 1
+            or args.adam_weight_decay != 0 or args.use_8bit_adam or accelerator.num_processes != 1
+        ):
+            raise ValueError("strict unpaired modifier updates require two or more tokens, CAA=0, batch=1, accumulation=1, AdamW decay=0, and one process")
 
         if len(args.modifier_token) < 2 and args.cos_weight != 0:
             raise ValueError("cos_weight must be 0 when fewer than two modifier tokens are learned")
@@ -1456,7 +1469,16 @@ def main(args):
                         else custom_diffusion_layers.parameters()
                     )
                     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                inactive_rows = []
+                inactive_values = None
+                if args.strict_unpaired_modifier_updates:
+                    inactive_rows = inactive_modifier_ids_for_unpaired_step(batch["input_ids"], modifier_token_id)
+                    embedding_weight = accelerator.unwrap_model(text_encoder).get_input_embeddings().weight
+                    inactive_values = embedding_weight.detach()[inactive_rows].clone()
                 optimizer.step()
+                if inactive_values is not None:
+                    with torch.no_grad():
+                        embedding_weight[inactive_rows] = inactive_values
                 lr_scheduler.step()
                 optimizer.zero_grad(set_to_none=args.set_grads_to_none)
 
