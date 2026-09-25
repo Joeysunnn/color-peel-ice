@@ -242,9 +242,22 @@ def validate_staging(protocol_path: Path, plan_dir: Path, preview_root: Path,
         })
     if read_json(concepts_path) != schedule(color_concepts, material_concepts):
         raise ValueError("unpaired training captions or step schedule differ")
+    expected_assets = [{
+        "branch": "color", "id": request_id, "field": "image",
+        "path": str(staging_root.resolve() / "color" / request_id / "images" / "image.png"),
+        "sha256": source["image_sha256"],
+    } for request_id, source in sorted(color_images.items())]
+    for row in rendered:
+        item = staging_root.resolve() / "material" / row["cell_id"] / f"view_{row['view_index']:02d}"
+        for field, path in (("image", item / "images" / "image.jpg"),
+                            ("mask", item / "masks" / "image.png")):
+            expected_assets.append({
+                "branch": "material", "id": f"{row['cell_id']}/view_{row['view_index']:02d}",
+                "field": field, "path": str(path), "sha256": row["artifact_sha256"][field],
+            })
     assets = read_jsonl(assets_path)
-    if len(assets) != 153 or len({row["path"] for row in assets}) != 153:
-        raise ValueError("unpaired training asset count differs")
+    if assets != expected_assets:
+        raise ValueError("unpaired training asset sources differ")
     for asset in assets:
         path = Path(asset["path"]).resolve()
         if not path.is_relative_to(staging_root.resolve()) or sha256(path) != asset["sha256"]:
