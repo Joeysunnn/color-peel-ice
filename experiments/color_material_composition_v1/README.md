@@ -40,9 +40,10 @@ against `orange color and <M*> material` at the same cube/sphere/mug seeds
 The joint experiment uses the selected ground-reflection scene and a new
 72-image crossed grid: three training shapes × orange/blue × metal/rubber ×
 three lights × two views. The four color/material cells for each shape and
-view share a render seed. Orange uses the earlier emission branch's fixed
-source color as a material socket input. Its rendered metal color must be
-checked visually; the socket value alone does not establish the final color.
+view share a render seed. The orange emission branch supplies the target color
+reference; the material socket is calibrated against rendered previews. Its
+rendered metal color must be checked visually; the socket value alone does not
+establish the final color.
 The first 12 requests form a soft-front preview. Review all 12 with the
 generated checklist, then make a separate pass record tied to the preview
 manifest hash. Full rendering, staging, and training follow that review.
