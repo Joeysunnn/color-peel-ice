@@ -1,0 +1,13 @@
+{
+  "schema": "literal_orange_vs_color_token_with_m/v1",
+  "source_protocol": "experiments/color_material_composition_v1/protocols/orange_metal_diagnostic_v1.json",
+  "source_protocol_sha256": "93c1b5127bccf7fdf262e0375ad1eb3e491403bdd85dbc36e2a1465f7cf0b96f",
+  "reference_run_relative_to_COLORPEEL_RUN_ROOT": "color_material_composition_v1/20260924-201139__orange_metal_diagnostic_36__74a86cd__42",
+  "reference_status_sha256": "7650dec7eb4590a627649b2b9960d110a5f820e16a0881807b1968cce2503159",
+  "objects": ["cube", "sphere", "mug"],
+  "seeds": [42, 43, 44],
+  "learned_prompt": "a photo of a {object} with <C*> color and <M*> material",
+  "literal_prompt": "a photo of a {object} with orange color and <M*> material",
+  "sampling": {"num_inference_steps": 100, "guidance_scale": 3.5},
+  "safety_checker": "enabled"
+}
