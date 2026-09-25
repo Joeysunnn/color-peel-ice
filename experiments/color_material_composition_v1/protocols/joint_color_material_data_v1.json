@@ -1,0 +1,21 @@
+{
+  "schema": "joint_color_material_data/v1",
+  "purpose": "Matched orange/blue by metal/rubber counterfactuals for C/M joint CAA ablation",
+  "selected_scene_profile": "experiments/material_token_local_pilot_v1/configs/render_profile_ground_reflection.json",
+  "selected_scene_profile_sha256": "caefa8485ca280f6867fbccae82720a57e27332303224e2a207a5336c31570b5",
+  "source_emission_target": "D1GT:81/130.png",
+  "source_emission_lab": {"L": 50.0, "a": 63.21805661727065, "b": 54.85769274644318},
+  "colors": {
+    "orange": {"nominal_rgb": [223, 54, 25], "material_socket_rgba": [0.738731741987261, 0.036888636218879646, 0.009661907129827573, 1.0]},
+    "blue": {"nominal_rgb": [42, 75, 215], "material_socket_rgba": [0.16470588235294117, 0.29411764705882354, 0.8431372549019608, 1.0]}
+  },
+  "shapes": ["cube", "sphere", "cylinder"],
+  "materials": ["metal", "rubber"],
+  "lighting_conditions": ["soft_front", "side_directional", "warm_top"],
+  "viewpoints": ["frontish", "oblique_45"],
+  "render_seed_formula": "740000 + shape_index * 10 + view_index",
+  "full_image_count": 72,
+  "preview_prefix_count": 12,
+  "training": {"architecture": "shared_custom_diffusion_kv", "modifier_token": "<C*>+<M*>", "initializer_token": "orange+metal", "use_object_masks": true, "caa_weights": [0.0, 0.2]},
+  "evaluation_holdout_noun": "mug"
+}

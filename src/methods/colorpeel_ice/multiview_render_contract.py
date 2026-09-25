@@ -206,6 +206,13 @@ EXPECTED_PROFILE_V5_GROUND_REFLECTION["background"]["world_rgba"] = [0.05, 0.05,
 del EXPECTED_PROFILE_V5_GROUND_REFLECTION["background"]["world_strength"]
 del EXPECTED_PROFILE_V5_GROUND_REFLECTION["background"]["ground_visible_glossy"]
 
+# Joint C/M counterfactuals retain the selected ground-reflection scene while
+# crossing color and native material assets on the same object and view.
+EXPECTED_PROFILE_CM_JOINT = deepcopy(EXPECTED_PROFILE_V5_GROUND_REFLECTION)
+EXPECTED_PROFILE_CM_JOINT["profile_id"] = "color_material_joint_v1"
+EXPECTED_PROFILE_CM_JOINT["object"]["material_policy"] = "request_controlled"
+EXPECTED_PROFILE_CM_JOINT["object"]["allowed_materials"] = ["metal", "rubber"]
+
 # Backwards-compatible alias: v1 callers and its canonical fingerprint remain unchanged.
 EXPECTED_PROFILE = EXPECTED_PROFILE_V1
 EXPECTED_PROFILES = {
@@ -214,6 +221,7 @@ EXPECTED_PROFILES = {
     EXPECTED_PROFILE_V3["profile_id"]: EXPECTED_PROFILE_V3,
     EXPECTED_PROFILE_V4["profile_id"]: EXPECTED_PROFILE_V4,
     EXPECTED_PROFILE_V5["profile_id"]: EXPECTED_PROFILE_V5,
+    EXPECTED_PROFILE_CM_JOINT["profile_id"]: EXPECTED_PROFILE_CM_JOINT,
 }
 
 

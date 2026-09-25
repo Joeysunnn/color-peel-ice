@@ -106,9 +106,15 @@ def read_config(path: Path) -> dict[str, Any]:
         if config.get("status") != required:
             raise ValueError("material pilot training remains blocked until a new reviewed config is authorized")
     if config["stage"] == "train" and config["run"]["study"] == "color_material_composition_v1":
-        if (config["run"]["variant"] != "orange_token_local_color_short100"
-                or config.get("status") != "authorized_diagnostic_by_project_owner"):
-            raise ValueError("color/material diagnostic requires its authorized short-run config")
+        variant = config["run"]["variant"]
+        if variant == "orange_token_local_color_short100":
+            required_status = "authorized_diagnostic_by_project_owner"
+        elif variant in {"joint_cm_caa0_1500", "joint_cm_caa02_1500"}:
+            required_status = "authorized_after_preview_review"
+        else:
+            raise ValueError("unknown color/material training variant")
+        if config.get("status") != required_status:
+            raise ValueError("color/material training status differs from its authorized variant")
     stage_managed_arguments = set(MANAGED_ARGUMENTS)
     if config["stage"] == "segment":
         stage_managed_arguments.add("mask-dir")
@@ -224,7 +230,8 @@ def validate_material_pilot_train_inputs(config: dict[str, Any], environment: di
 
 
 def validate_color_material_color_inputs(config: dict[str, Any], environment: dict[str, str]) -> None:
-    if config["stage"] != "train" or config["run"]["study"] != "color_material_composition_v1":
+    if (config["stage"] != "train" or config["run"]["study"] != "color_material_composition_v1"
+            or config["run"]["variant"] != "orange_token_local_color_short100"):
         return
     source = config.get("color_material_source")
     if not isinstance(source, dict):
@@ -273,7 +280,43 @@ def validate_color_material_color_inputs(config: dict[str, Any], environment: di
         if (row.get("source_image_sha256") != expected["image_sha256"]
                 or hashlib.sha256(image.read_bytes()).hexdigest() != expected["image_sha256"]
                 or concept != {"instance_prompt": [expected["prompt"]], "instance_data_dir": str(staging_root / request_id)}):
-            raise ValueError(f"color staged image or caption differs: {request_id}")
+                raise ValueError(f"color staged image or caption differs: {request_id}")
+
+
+def validate_joint_color_material_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> None:
+    if (config["stage"] != "train" or config["run"]["study"] != "color_material_composition_v1"
+            or config["run"]["variant"] not in {"joint_cm_caa0_1500", "joint_cm_caa02_1500"}):
+        return
+    args = config["args"]
+    expected_weight = 0.0 if config["run"]["variant"] == "joint_cm_caa0_1500" else 0.2
+    if (args.get("cos_weight") != expected_weight or args.get("max_train_steps") != 1500
+            or args.get("modifier_token") != "<C*>+<M*>"
+            or args.get("initializer_token") != "orange+metal"
+            or args.get("token_local_kv", False) or args.get("freeze_model", "crossattn_kv") != "crossattn_kv"
+            or args.get("adam_weight_decay") != 0.0):
+        raise ValueError("joint C/M training settings differ from the locked ablation")
+    source = config.get("joint_color_material_source")
+    if not isinstance(source, dict):
+        raise ValueError("joint C/M source lock is required")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from src.methods.colorpeel_ice import prepare_joint_color_material as joint
+
+    def source_path(key: str) -> Path:
+        path = Path(expand_value(source[key], environment))
+        return (path if path.is_absolute() else PROJECT_ROOT / path).resolve()
+
+    protocol_path = source_path("protocol")
+    plan_dir = source_path("plan_dir")
+    preview_root = source_path("preview_root")
+    review_record = source_path("review_record")
+    staging_root = source_path("staging_root")
+    concepts_path, assets_path = joint.validate_staging(
+        protocol_path, plan_dir, preview_root, review_record, staging_root,
+    )
+    if (Path(expand_value(args["concepts_list"], environment)).resolve() != concepts_path.resolve()
+            or Path(expand_value(config["data_manifest"], environment)).resolve() != assets_path.resolve()):
+        raise ValueError("joint C/M training must use the reviewed staged concepts")
 
 
 def argument_tokens(arguments: dict[str, Any], environment: dict[str, str]) -> list[str]:
@@ -377,6 +420,7 @@ def main(argv: list[str] | None = None) -> int:
     environment["COLORPEEL_RUN_DIR"] = str(run_dir)
     validate_material_pilot_train_inputs(config, environment)
     validate_color_material_color_inputs(config, environment)
+    validate_joint_color_material_train_inputs(config, environment)
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"

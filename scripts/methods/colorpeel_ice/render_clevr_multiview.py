@@ -64,6 +64,7 @@ PILOT_REQUEST_FIELDS = (
     "view_index", "lighting_condition", "viewpoint", "dataset_split", "render_seed",
     "renderer_profile_id", "renderer_profile_sha256",
 )
+CM_JOINT_REQUEST_FIELDS = PILOT_REQUEST_FIELDS + ("color_token", "material_socket_rgba")
 RENDERER_OWNED_FIELDS = (
     "camera", "light", "background", "scene_json", "image", "mask", "background_mask",
 )
@@ -161,10 +162,51 @@ def validate_profile(profile: Any) -> dict[str, Any]:
         raise RendererError(str(exc)) from exc
 
 
+def validate_cm_joint_requests(records: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
+    require(len(records) == 72, "Joint C/M grid requires 72 requests")
+    expected_keys = {(f"{shape}_{color}_{material}", view_index)
+                     for shape in ("cube", "sphere", "cylinder")
+                     for color in ("orange", "blue") for material in ("metal", "rubber")
+                     for view_index in range(6)}
+    seen = set()
+    for record in records:
+        require(all(field in record for field in CM_JOINT_REQUEST_FIELDS), "Joint C/M request is missing fields")
+        shape, color, material, view = (record.get(key) for key in ("shape", "color", "material", "view_index"))
+        key = (record.get("cell_id"), view)
+        require(key in expected_keys and key not in seen, f"Unexpected joint C/M cell: {key}")
+        seen.add(key)
+        shape_index = ("cube", "sphere", "cylinder").index(shape)
+        color_index = ("orange", "blue").index(color)
+        material_index = ("metal", "rubber").index(material)
+        require(record["cell_index"] == shape_index * 4 + color_index * 2 + material_index,
+                f"Joint C/M cell index differs: {key}")
+        require(record["color_token"] == ("<C*>" if color == "orange" else None)
+                and record["material_token"] == ("<M*>" if material == "metal" else None),
+                f"Joint C/M token labels differ: {key}")
+        expected_rgb = [223, 54, 25] if color == "orange" else [42, 75, 215]
+        expected_socket = ([0.738731741987261, 0.036888636218879646, 0.009661907129827573, 1.0]
+                           if color == "orange" else [42 / 255, 75 / 255, 215 / 255, 1.0])
+        require(record["nominal_rgb"] == expected_rgb and record["material_socket_rgba"] == expected_socket,
+                f"Joint C/M color socket differs: {key}")
+        require(record["lighting_condition"] == ("soft_front", "side_directional", "warm_top")[view // 2]
+                and record["viewpoint"] == ("frontish", "oblique_45")[view % 2]
+                and record["render_seed"] == 740000 + shape_index * 10 + view
+                and record["dataset_split"] == "full", f"Joint C/M paired view differs: {key}")
+        require(record["renderer_profile_id"] == profile["profile_id"]
+                and record["renderer_profile_sha256"] == canonical_sha256(profile),
+                f"Joint C/M profile differs: {key}")
+        require(all(record.get(field) is None for field in RENDERER_OWNED_FIELDS),
+                f"Joint C/M request fabricates renderer output: {key}")
+    require(seen == expected_keys, "Joint C/M grid is incomplete")
+    return records
+
+
 def validate_requests(
     records: list[dict[str, Any]],
     profile: dict[str, Any] = EXPECTED_PROFILE,
 ) -> list[dict[str, Any]]:
+    if profile["profile_id"] == "color_material_joint_v1":
+        return validate_cm_joint_requests(records, profile)
     material_profile = profile["profile_id"] == "multiview_render_v3_material"
     pilot_profile = profile["profile_id"] == "material_token_local_pilot_v1"
     expected_count = 360 if material_profile else (None if pilot_profile else 180)
@@ -266,7 +308,7 @@ def collect_asset_hashes(
         assets[f"shape_{shape}"] = _asset_path(shape_dir, properties["shapes"][shape])
     require("metal" in properties["materials"], "properties.json is missing metal material")
     assets["material_metal"] = _asset_path(material_dir, properties["materials"]["metal"])
-    if profile["profile_id"] in {"multiview_render_v3_material", "multiview_render_v4_two_object"}:
+    if profile["profile_id"] in {"multiview_render_v3_material", "multiview_render_v4_two_object", "color_material_joint_v1"}:
         require("rubber" in properties["materials"], "properties.json is missing rubber material")
         assets["material_rubber"] = _asset_path(material_dir, properties["materials"]["rubber"])
     return properties, {name: file_sha256(path) for name, path in assets.items()}
@@ -322,8 +364,10 @@ def verify_completed_record(
     contract: dict[str, Any],
 ) -> None:
     request_fields = (
-        PILOT_REQUEST_FIELDS if contract["profile_id"] == "material_token_local_pilot_v1" else (
-            MATERIAL_REQUEST_FIELDS if contract["profile_id"] == "multiview_render_v3_material" else REQUEST_FIELDS
+        CM_JOINT_REQUEST_FIELDS if contract["profile_id"] == "color_material_joint_v1" else (
+            PILOT_REQUEST_FIELDS if contract["profile_id"] == "material_token_local_pilot_v1" else (
+                MATERIAL_REQUEST_FIELDS if contract["profile_id"] == "multiview_render_v3_material" else REQUEST_FIELDS
+            )
         )
     )
     for field in request_fields:
@@ -455,7 +499,7 @@ def append_shape(shape_dir: Path, object_name: str):
 
 
 def create_asset_material(name: str, rgb: list[int], material: str,
-                          material_dir: Path, properties: dict[str, Any]):
+                          material_dir: Path, properties: dict[str, Any], socket_rgba=None):
     source_name = properties["materials"][material]
     blend_path = _asset_path(material_dir, source_name)
     bpy.ops.wm.append(directory=str(blend_path / "NodeTree") + os.sep, filename=source_name, link=False)
@@ -467,7 +511,9 @@ def create_asset_material(name: str, rgb: list[int], material: str,
     require(output is not None, "Material Output node is missing")
     group_node = material.node_tree.nodes.new("ShaderNodeGroup")
     group_node.node_tree = node_group
-    group_node.inputs["Color"].default_value = tuple(value / 255.0 for value in rgb) + (1.0,)
+    group_node.inputs["Color"].default_value = (
+        tuple(socket_rgba) if socket_rgba is not None else tuple(value / 255.0 for value in rgb) + (1.0,)
+    )
     material.node_tree.links.new(group_node.outputs["Shader"], output.inputs["Surface"])
     return material
 
@@ -484,7 +530,8 @@ def add_object(request: dict[str, Any], profile: dict[str, Any], properties: dic
     obj.scale = (scale, scale, scale)
     name = f"ColorPeel_{request['shape']}_{request['color']}_{request['material']}"
     material = create_asset_material(
-        name, request["nominal_rgb"], request["material"], material_dir, properties
+        name, request["nominal_rgb"], request["material"], material_dir, properties,
+        request.get("material_socket_rgba"),
     )
     obj.data.materials.clear()
     obj.data.materials.append(material)
@@ -549,7 +596,7 @@ def apply_view_jitter(profile: dict[str, Any], render_seed: int) -> tuple[dict[s
 
 def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj, viewpoint: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
     require(profile["profile_id"] in {
-        "multiview_render_v2", "multiview_render_v3_material", "multiview_render_v4_two_object", "material_token_local_pilot_v1",
+        "multiview_render_v2", "multiview_render_v3_material", "multiview_render_v4_two_object", "material_token_local_pilot_v1", "color_material_joint_v1",
     }, "Orbit camera requires a locked orbit renderer profile")
     offsets = orbit_jitter_metadata(render_seed, profile)
     camera = bpy.data.objects.get(profile["camera"]["name"])
@@ -583,7 +630,7 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj, viewpoint: 
     jitter = offsets["camera_orbit_jitter"]
     final_radius = base_spherical["radius"] * (1.0 + jitter["distance_fraction"])
     viewpoint_values = {"azimuth_offset_degrees": 0.0, "elevation_offset_degrees": 0.0}
-    if profile["profile_id"] == "material_token_local_pilot_v1":
+    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
         require(viewpoint in profile["camera"]["viewpoints"], "Pilot viewpoint is missing or invalid")
         viewpoint_values = profile["camera"]["viewpoints"][viewpoint]
     final_azimuth = (
@@ -661,7 +708,7 @@ def apply_orbit_view(profile: dict[str, Any], render_seed: int, obj, viewpoint: 
         "sensor_width": float(camera.data.sensor_width),
         "shift_xy": [float(camera.data.shift_x), float(camera.data.shift_y)],
     }
-    if profile["profile_id"] == "material_token_local_pilot_v1":
+    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
         camera_metadata["viewpoint"] = viewpoint
 
     light_metadata: dict[str, Any] = {
@@ -813,7 +860,7 @@ def render_one(
         camera_metadata, light_metadata = apply_orbit_view(
             profile, request["render_seed"], obj, request.get("viewpoint")
         )
-        if profile["profile_id"] == "material_token_local_pilot_v1":
+        if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
             light_metadata = apply_pilot_lighting(profile, request["lighting_condition"])
 
     final_dir = args.output_root / request["cell_id"] / f"view_{request['view_index']:02d}"
@@ -858,10 +905,10 @@ def render_one(
             "pixel_coords": camera_pixel_coords(bpy.data.objects[profile["camera"]["name"]], obj),
         }],
     }
-    if profile["profile_id"] == "material_token_local_pilot_v1":
+    if profile["profile_id"] in {"material_token_local_pilot_v1", "color_material_joint_v1"}:
         scene["lighting_condition"] = request["lighting_condition"]
         scene["viewpoint"] = request["viewpoint"]
-    if profile["profile_id"] in {"multiview_render_v3_material", "material_token_local_pilot_v1"}:
+    if profile["profile_id"] in {"multiview_render_v3_material", "material_token_local_pilot_v1", "color_material_joint_v1"}:
         material_key = f"material_{request['material']}"
         scene["objects"][0]["material_asset_name"] = material_asset_name
         scene["objects"][0]["material_asset_sha256"] = contract["asset_sha256"][material_key]
@@ -912,8 +959,9 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
         args.shape_dir.resolve(), args.material_dir.resolve(), profile,
     )
     for request in requests:
-        require(properties["colors"].get(request["color"]) == request["nominal_rgb"],
-                f"Request RGB differs from properties.json: {request['cell_id']}")
+        if profile["profile_id"] != "color_material_joint_v1":
+            require(properties["colors"].get(request["color"]) == request["nominal_rgb"],
+                    f"Request RGB differs from properties.json: {request['cell_id']}")
     contract = stable_contract(requests, profile, asset_hashes)
     if args.validate_only:
         result = {"status": "validated", **contract}

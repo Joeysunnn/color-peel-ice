@@ -1,0 +1,43 @@
+schema_version: 1
+status: authorized_after_preview_review
+stage: train
+run: {study: color_material_composition_v1, variant: joint_cm_caa02_1500, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: ${COLORPEEL_JOINT_CM_ROOT}/staging/training_assets_manifest.jsonl
+joint_color_material_source:
+  protocol: experiments/color_material_composition_v1/protocols/joint_color_material_data_v1.json
+  plan_dir: ${COLORPEEL_JOINT_CM_ROOT}/plan
+  preview_root: ${COLORPEEL_JOINT_CM_ROOT}/preview
+  review_record: ${COLORPEEL_JOINT_CM_ROOT}/preview_review.json
+  staging_root: ${COLORPEEL_JOINT_CM_ROOT}/staging
+args:
+  pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4
+  concepts_list: ${COLORPEEL_JOINT_CM_ROOT}/staging/concepts.json
+  resolution: 512
+  train_batch_size: 1
+  learning_rate: 1.0e-5
+  freeze_model: crossattn_kv
+  scale_lr: true
+  lr_scheduler: constant
+  lr_warmup_steps: 0
+  max_train_steps: 1500
+  checkpointing_steps: 500
+  seed: 42
+  mixed_precision: "no"
+  cos_weight: 0.2
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  dataloader_num_workers: 2
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_weight_decay: 0.0
+  adam_epsilon: 1.0e-8
+  hflip: true
+  modifier_token: "<C*>+<M*>"
+  initializer_token: "orange+metal"
+protocol:
+  data: joint_color_material_data/v1
+  architecture: shared_custom_diffusion_kv
+  caa_pair: "<C*>+<M*>"
+  object_mask_training: true
+  independent_token_local_runs: external_baselines

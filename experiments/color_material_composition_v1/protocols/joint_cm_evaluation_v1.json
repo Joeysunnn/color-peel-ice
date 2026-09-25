@@ -1,0 +1,14 @@
+{
+  "schema": "joint_cm_evaluation/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "objects": ["cube", "sphere", "mug"],
+  "seeds": [42, 43, 44],
+  "sampling": {"num_inference_steps": 100, "guidance_scale": 3.5},
+  "conditions": {
+    "base": "a photo of a {object}",
+    "color_only": "a photo of a {object} with <C*> color",
+    "material_only": "a photo of a {object} with <M*> material",
+    "color_material": "a photo of a {object} with <C*> color and <M*> material"
+  },
+  "safety_checker": "enabled"
+}
