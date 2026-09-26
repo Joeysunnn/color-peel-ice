@@ -50,3 +50,6 @@ requests 108 matched images: three S arms, red/blue/city-street prompts, S only,
 S with literal matte plastic, S with M, and S with literal metal, using seeds
 42–44, 100 steps, and guidance 3.5. Compare shape/identity, requested color,
 and apparent surface separately; filtered images remain in the status ledger.
+The completed prompt-alignment diagnosis is in
+`diagnostics/mailbox_matte_subject_prompt_alignment_20260926.md`; neither new S
+checkpoint passed the color and scene controls.
