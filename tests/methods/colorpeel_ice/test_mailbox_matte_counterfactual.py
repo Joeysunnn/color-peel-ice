@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from src.methods.colorpeel_ice.prepare_mailbox_matte_counterfactual import suppress_highlights
+from src.methods.colorpeel_ice.prepare_mailbox_matte_counterfactual import imagegen_matte, suppress_highlights
 
 
 def test_highlight_suppression_preserves_background_and_dark_seam():
@@ -26,3 +26,20 @@ def test_highlight_suppression_preserves_background_and_dark_seam():
     assert output[250, 160].mean() < image[250, 160].mean() - 5
     assert metrics["changed_foreground_pixels"] > 0
     assert metrics["outside_mask_changed_pixels"] == 0
+
+
+def test_imagegen_matte_uses_original_background_and_recolors_only_mask():
+    image = np.full((512, 512, 3), (40, 30, 20), dtype=np.uint8)
+    mask = np.zeros((512, 512), dtype=np.uint8)
+    mask[200:400, 120:420] = 255
+    reference = np.full((512, 512, 3), (220, 20, 30), dtype=np.uint8)
+    reference[200:400, 120:420] = (100, 180, 40)
+
+    green, green_metrics = imagegen_matte(image, mask, reference, "green")
+    blue, blue_metrics = imagegen_matte(image, mask, reference, "blue")
+
+    assert np.array_equal(green[mask == 0], image[mask == 0])
+    assert np.array_equal(blue[mask == 0], image[mask == 0])
+    assert not np.array_equal(green[mask == 255], blue[mask == 255])
+    assert green_metrics["outside_mask_changed_pixels"] == 0
+    assert blue_metrics["outside_mask_changed_pixels"] == 0

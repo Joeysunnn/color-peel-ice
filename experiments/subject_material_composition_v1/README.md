@@ -17,11 +17,14 @@ is an inference diagnostic, not evidence that the factors are disentangled.
 ## Mailbox surface counterfactual preview
 
 The next S-data ablation starts from the same five verified mailbox images and
-repaired object masks. `protocols/mailbox_matte_counterfactual_v1.json` fixes a
-masked Lab-lightness highlight suppression; the original images and every
-background pixel remain unchanged. The preview shows each original beside its
-derived matte candidate. Review must confirm weaker metal highlights while
-preserving the mailbox shape, seams, decorations, color, and mask boundary.
+repaired object masks. The v1 masked Lab-lightness preview still looked glossy
+and was rejected before staging. `protocols/mailbox_matte_counterfactual_v2.json`
+fixes a photorealistic matte reference edited from the green image, resizes it,
+recolors it to the five source hues, and copies only original-mask pixels onto
+each original background. The reference is a generated counterfactual, not
+ground-truth relighting. The preview shows each original beside its derived
+matte candidate. Review must confirm weaker metal highlights while preserving
+the mailbox shape, seams, decorations, color, and mask boundary.
 
 After a matching preview review, staging creates a five-image matte-only S set
 with the original captions and a ten-image metal/matte S set with explicit

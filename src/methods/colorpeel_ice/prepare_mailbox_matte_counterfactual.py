@@ -11,10 +11,13 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from src.methods.colorpeel_ice.natural_subject_recolor_pilot import recolor
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_PROTOCOL = REPO_ROOT / "experiments/subject_material_composition_v1/protocols/mailbox_matte_counterfactual_v1.json"
 COLORS = ("red", "green", "cyan", "blue", "magenta")
+HUES = {"red": 0.0, "green": 120.0, "cyan": 180.0, "blue": 240.0, "magenta": 300.0}
 
 
 def sha256(path: Path) -> str:
@@ -36,20 +39,31 @@ def write_json(path: Path, value):
 def protocol(path: Path):
     value = read_json(path)
     source = REPO_ROOT / value["source_training_protocol"]
-    if (value.get("schema") != "mailbox_matte_counterfactual/v1"
-            or sha256(source) != value["source_training_protocol_sha256"]
+    transform = value.get("transform", {})
+    old_transform = {
+        "method": "masked_lab_highlight_suppression/v1",
+        "gaussian_sigma_pixels": 16.0, "highlight_floor_l8": 3.0,
+        "suppression_strength": 1.0, "edge_transition_pixels": 5.0,
+    }
+    new_transform = {
+        "method": "masked_imagegen_matte_reference_lch_recolor/v2",
+        "reference_path": "assets/subject_material_composition_v1/mailbox_green_imagegen_matte_reference.png",
+        "reference_sha256": "839c0716d308d5741baf1097ba31b961a3813dcac7c02083b0d56d86269c3b7e",
+        "reference_size": [1254, 1254], "resize": "pillow_lanczos_512",
+        "target_hue_degrees": HUES,
+    }
+    valid_transform = ((value.get("schema") == "mailbox_matte_counterfactual/v1" and transform == old_transform)
+                       or (value.get("schema") == "mailbox_matte_counterfactual/v2" and transform == new_transform))
+    if (not valid_transform or sha256(source) != value["source_training_protocol_sha256"]
             or value.get("colors") != list(COLORS)
-            or value.get("transform") != {
-                "method": "masked_lab_highlight_suppression/v1",
-                "gaussian_sigma_pixels": 16.0, "highlight_floor_l8": 3.0,
-                "suppression_strength": 1.0, "edge_transition_pixels": 5.0,
-            }
             or value.get("training") != {
                 "subject_token": "<S*>", "initializer_token": "mailbox",
                 "architecture": "token_local_kv", "steps_per_branch": 5000,
                 "caa_weight": 0.0, "matte_only_rows": 5, "balanced_rows": 10,
             }):
         raise ValueError("mailbox matte protocol differs")
+    if value["schema"].endswith("/v2") and sha256(REPO_ROOT / transform["reference_path"]) != transform["reference_sha256"]:
+        raise ValueError("mailbox matte reference differs")
     return value
 
 
@@ -110,6 +124,40 @@ def suppress_highlights(rgb: np.ndarray, binary_mask: np.ndarray, settings: dict
     }
 
 
+def imagegen_matte(rgb: np.ndarray, binary_mask: np.ndarray, reference: np.ndarray,
+                   color: str):
+    if (rgb.shape != (512, 512, 3) or reference.shape != (512, 512, 3)
+            or rgb.dtype != np.uint8 or reference.dtype != np.uint8
+            or binary_mask.shape != (512, 512)
+            or set(np.unique(binary_mask).tolist()) != {0, 255}):
+        raise ValueError("mailbox image, mask or matte reference differs")
+    if color not in HUES:
+        raise ValueError("mailbox color differs")
+    alpha = np.where(binary_mask == 255, 65535, 0).astype(np.uint16)
+    recolored, hue_metrics, _ = recolor(reference, binary_mask, alpha, HUES[color])
+    inside = binary_mask == 255
+    output = rgb.copy()
+    output[inside] = recolored[inside]
+    return output, {
+        "foreground_pixels": int(inside.sum()),
+        "changed_foreground_pixels": int((np.any(output != rgb, axis=2) & inside).sum()),
+        "outside_mask_changed_pixels": int(np.any(output != rgb, axis=2)[~inside].sum()),
+        "hue_error_median_degrees": hue_metrics["hue_error_median_degrees"],
+        "hue_error_p95_degrees": hue_metrics["hue_error_p95_degrees"],
+    }
+
+
+def matte_transform(value: dict, rgb: np.ndarray, binary_mask: np.ndarray, color: str):
+    if value["schema"].endswith("/v1"):
+        return suppress_highlights(rgb, binary_mask, value["transform"])
+    reference_path = REPO_ROOT / value["transform"]["reference_path"]
+    with Image.open(reference_path) as image:
+        if list(image.size) != value["transform"]["reference_size"]:
+            raise ValueError("mailbox matte reference size differs")
+        reference = np.asarray(image.convert("RGB").resize((512, 512), Image.Resampling.LANCZOS))
+    return imagegen_matte(rgb, binary_mask, reference, color)
+
+
 def preview(protocol_path: Path, run_root: Path, output_dir: Path):
     value = protocol(protocol_path)
     sources = verified_source(value, run_root)
@@ -122,7 +170,7 @@ def preview(protocol_path: Path, run_root: Path, output_dir: Path):
     for index, (color, image_path, mask_path) in enumerate(sources):
         rgb = np.asarray(Image.open(image_path).convert("RGB"), dtype=np.uint8)
         mask = np.asarray(Image.open(mask_path).convert("L"), dtype=np.uint8)
-        matte, metrics = suppress_highlights(rgb, mask, value["transform"])
+        matte, metrics = matte_transform(value, rgb, mask, color)
         if metrics["changed_foreground_pixels"] == 0:
             raise ValueError(f"no highlight suppression for {color}")
         matte_path = output_dir / f"{color}_matte.png"
@@ -130,7 +178,7 @@ def preview(protocol_path: Path, run_root: Path, output_dir: Path):
         board.paste(Image.fromarray(rgb), (index * 512, 32))
         board.paste(Image.fromarray(matte), (index * 512, 580))
         draw.text((index * 512 + 8, 8), f"{color}: original metal", fill="black")
-        draw.text((index * 512 + 8, 556), f"{color}: highlight suppressed", fill="black")
+        draw.text((index * 512 + 8, 556), f"{color}: matte candidate", fill="black")
         records.append({"color": color, "source_image_sha256": sha256(image_path),
                         "source_mask_sha256": sha256(mask_path),
                         "matte_image": matte_path.name, "matte_image_sha256": sha256(matte_path),
@@ -160,7 +208,7 @@ def validated_preview(protocol_path: Path, run_root: Path, preview_dir: Path):
         matte = preview_dir / record["matte_image"]
         source_rgb = np.asarray(Image.open(source).convert("RGB"), dtype=np.uint8)
         source_mask = np.asarray(Image.open(mask).convert("L"), dtype=np.uint8)
-        expected, metrics = suppress_highlights(source_rgb, source_mask, value["transform"])
+        expected, metrics = matte_transform(value, source_rgb, source_mask, color)
         if (record["color"] != color or record["source_image_sha256"] != sha256(source)
                 or record["source_mask_sha256"] != sha256(mask)
                 or record["matte_image"] != f"{color}_matte.png"

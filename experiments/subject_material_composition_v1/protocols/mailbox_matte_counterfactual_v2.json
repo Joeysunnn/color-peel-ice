@@ -1,0 +1,32 @@
+{
+  "schema": "mailbox_matte_counterfactual/v2",
+  "source_training_protocol": "experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_mailbox_category_exposure_matched_5000_training_protocol_v1.json",
+  "source_training_protocol_sha256": "df51b34e725dad71ac58e591a6869587785dece1756961dbebeea712e56855f7",
+  "source_root_relative_to_COLORPEEL_RUN_ROOT": "20260918-190000__natural_image_subject_color_pilot__subject_exposure_matched_base5_assets__c3844f1__42",
+  "source_concepts_sha256": "798e198e966f503f9913a72cee0b3834d66eb1dd8ca02eb0d98cb45b5e408e17",
+  "source_staging_manifest_sha256": "fe46578c4c306c11745d53a100c731a308b0e2c7d961f5c6032b14ee1756aa92",
+  "colors": ["red", "green", "cyan", "blue", "magenta"],
+  "transform": {
+    "method": "masked_imagegen_matte_reference_lch_recolor/v2",
+    "reference_path": "assets/subject_material_composition_v1/mailbox_green_imagegen_matte_reference.png",
+    "reference_sha256": "839c0716d308d5741baf1097ba31b961a3813dcac7c02083b0d56d86269c3b7e",
+    "reference_size": [1254, 1254],
+    "resize": "pillow_lanczos_512",
+    "target_hue_degrees": {"red": 0.0, "green": 120.0, "cyan": 180.0, "blue": 240.0, "magenta": 300.0}
+  },
+  "reference_provenance": {
+    "source_image_sha256": "15b93e4e49502870daa3b71f524220943ccfaf2114f810c54da827e0a210aed0",
+    "editor": "OpenAI image_gen.imagegen",
+    "prompt": "Photorealistic image edit of the supplied image. Change ONLY the surface finish of the vivid green mailbox in the lower part of the photograph: it should look like opaque matte green painted material with a high roughness, broad soft light response and no crisp white specular streaks or glossy metallic reflections. Keep the exact same green hue, mailbox silhouette, perspective, position, size, seams, ridges, panel lines, handle, mounting hardware, and crop. Preserve the brick wall, the decorative blue house-number sign reading 135, door, framing, depth of field, and all other background details exactly as in the source. Do not add or remove objects. Do not change the image composition. Output a natural photo, 512 by 512 pixels.",
+    "note": "The editor produced a 1254px image with background changes; the pipeline resizes it and copies only pixels inside each verified original mailbox mask onto its source image. The generated image is a material counterfactual, not a ground-truth relighting of the source."
+  },
+  "training": {
+    "subject_token": "<S*>",
+    "initializer_token": "mailbox",
+    "architecture": "token_local_kv",
+    "steps_per_branch": 5000,
+    "caa_weight": 0.0,
+    "matte_only_rows": 5,
+    "balanced_rows": 10
+  }
+}
