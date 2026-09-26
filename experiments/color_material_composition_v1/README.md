@@ -141,3 +141,10 @@ launcher config is `configs/unpaired_emission_m_shared_kv_5100.yaml`; the
 existing fixed 36-image C-only/M-only/C+M evaluation script accepts its
 completed shared-K/V checkpoint. The joint output remains an extrapolation
 because no training image contains both learned tokens.
+
+The completed 5,100-step run and fixed 36-image evaluation are selected as a
+provisional C+M baseline after the project owner's visual review. The exact
+training checkpoint, evaluation ledger, and known limits are pinned in
+`configs/selected_color_material_source.json`. Two evaluation images were
+safety filtered; the selection is a qualitative decision, not a claim of
+general disentanglement.

@@ -1,0 +1,24 @@
+{
+  "schema": "selected_color_material_source/v1",
+  "decision_date": "2026-09-26",
+  "decision": "Provisional C+M baseline for subsequent comparisons: emission color plus newly rendered metal, trained with shared full cross-attention K/V and CAA weight zero.",
+  "basis": "Project owner reviewed the fixed 36-image inference grid and judged the result to basically meet the C+M requirement.",
+  "training_run_relative_to_COLORPEEL_RUN_ROOT": "color_material_composition_v1/20260926-114433__color_material_composition_v1__unpaired_emission_m_shared_kv_5100__c7efd42__42",
+  "training_manifest_sha256": "45348e1e5e5ddbb39f6ba850aa4615f68644880bf926437d772764f864d71286",
+  "checkpoint": {
+    "step": 5100,
+    "weights_sha256": "cff990bbb9614c8a24ac1dc98954d6c87231e9e4670101d08c10d0491e85ebda",
+    "color_token_sha256": "9a8ae77740dbb742e3b8c0ee37addbb7f946270f5316c50a4ef27ca100eed04b",
+    "material_token_sha256": "3923b85d1934cfa38de3c52c4a3c81311997cc90de51b2dfa7cf30a59864a30f"
+  },
+  "evaluation_run_relative_to_COLORPEEL_RUN_ROOT": "color_material_composition_v1/20260926-123417__color_material_composition_v1__unpaired_emission_m_shared_kv_evaluation_36__c7efd42__42",
+  "evaluation_protocol": "experiments/color_material_composition_v1/protocols/joint_cm_evaluation_v1.json",
+  "evaluation_protocol_sha256": "784aefb5327777f4ebfce2b53a46865a76b60ca134221a87d13cce233346dfbb",
+  "evaluation_status_sha256": "b6964736609d31b8c197fecc3b3295115205f08e545137414c368f9b52a33965",
+  "evaluation_counts": {"planned": 36, "generated": 36, "unfiltered": 34, "safety_filtered": 2},
+  "limitations": [
+    "No training sample contains both learned tokens; their joint behavior is inferred at generation time.",
+    "The owner decision is qualitative on three object nouns and three seeds, not a disentanglement metric.",
+    "The no-modifier condition uses the shared trained K/V checkpoint and is not a pristine base-model control."
+  ]
+}
