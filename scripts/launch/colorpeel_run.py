@@ -115,6 +115,12 @@ def read_config(path: Path) -> dict[str, Any]:
             raise ValueError("unknown color/material training variant")
         if config.get("status") != required_status:
             raise ValueError("color/material training status differs from its authorized variant")
+    if config["stage"] == "train" and config["run"]["study"] == "subject_material_composition_v1":
+        if (config["run"]["variant"] not in {
+                "mailbox_subject_matte_only_token_local_kv_5000",
+                "mailbox_subject_balanced_metal_matte_token_local_kv_5000",
+            } or config.get("status") != "authorized_after_preview_review"):
+            raise ValueError("mailbox subject/material training requires reviewed authorization")
     stage_managed_arguments = set(MANAGED_ARGUMENTS)
     if config["stage"] == "segment":
         stage_managed_arguments.add("mask-dir")
@@ -353,6 +359,63 @@ def validate_unpaired_emission_material_train_inputs(config: dict[str, Any], env
         raise ValueError("unpaired emission/material training must use the reviewed staged concepts")
 
 
+def validate_mailbox_matte_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> None:
+    if config["stage"] != "train" or config["run"]["study"] != "subject_material_composition_v1":
+        return
+    args = config["args"]
+    if (args.get("modifier_token") != "<S*>" or args.get("initializer_token") != "mailbox"
+            or args.get("token_local_kv") is not True or args.get("max_train_steps") != 5000
+            or args.get("cos_weight") != 0.0 or args.get("hflip") is not False):
+        raise ValueError("mailbox matte subject training settings differ")
+    source = config.get("mailbox_matte_source")
+    if not isinstance(source, dict):
+        raise ValueError("mailbox matte source lock is required")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from src.methods.colorpeel_ice import prepare_mailbox_matte_counterfactual as matte
+
+    protocol_path = (PROJECT_ROOT / source["protocol"]).resolve()
+    if matte.sha256(protocol_path) != source["protocol_sha256"]:
+        raise ValueError("mailbox matte protocol hash differs")
+    preview = Path(expand_value(source["preview_root"], environment)).resolve()
+    review_path = Path(expand_value(source["review_record"], environment)).resolve()
+    staging = Path(expand_value(source["staging_root"], environment)).resolve()
+    run_root = Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
+    matte.validated_preview(protocol_path, run_root, preview)
+    review = matte.read_json(review_path)
+    if (review.get("verdict") != "pass" or not review.get("reviewer")
+            or not review.get("reviewed_at")
+            or review.get("preview_manifest_sha256") != matte.sha256(preview / "preview_manifest.json")):
+        raise ValueError("mailbox matte preview review differs")
+    provenance_path = staging / "staging_provenance.json"
+    if matte.sha256(provenance_path) != source["staging_provenance_sha256"]:
+        raise ValueError("mailbox matte staging provenance differs")
+    provenance = matte.read_json(provenance_path)
+    variant = config["run"]["variant"]
+    concepts_name = ("matte_only_concepts.json" if variant == "mailbox_subject_matte_only_token_local_kv_5000"
+                     else "balanced_concepts.json")
+    concepts = staging / concepts_name
+    assets = staging / "training_assets_manifest.jsonl"
+    if (provenance.get("protocol_sha256") != matte.sha256(protocol_path)
+            or provenance.get("preview_manifest_sha256") != matte.sha256(preview / "preview_manifest.json")
+            or provenance.get("review_sha256") != matte.sha256(review_path)
+            or provenance.get(concepts_name.removesuffix(".json") + "_sha256") != matte.sha256(concepts)
+            or provenance.get("training_assets_manifest_sha256") != matte.sha256(assets)
+            or matte.sha256(concepts) != source["concepts_sha256"]):
+        raise ValueError("mailbox matte staged data differs from approved preview")
+    if (Path(expand_value(args["concepts_list"], environment)).resolve() != concepts
+            or Path(expand_value(config["data_manifest"], environment)).resolve() != assets):
+        raise ValueError("mailbox matte config must use reviewed staged data")
+    records = [json.loads(line) for line in assets.read_text(encoding="utf-8").splitlines()]
+    if len(records) != 10 or len(matte.read_json(concepts)) != (5 if "matte_only" in variant else 10):
+        raise ValueError("mailbox matte staged row count differs")
+    for record in records:
+        for field in ("image", "mask"):
+            path = Path(record[field]).resolve()
+            if not path.is_relative_to(staging) or matte.sha256(path) != record[f"{field}_sha256"]:
+                raise ValueError(f"mailbox matte staged {field} differs")
+
+
 def argument_tokens(arguments: dict[str, Any], environment: dict[str, str]) -> list[str]:
     tokens: list[str] = []
     for key, raw_value in arguments.items():
@@ -456,6 +519,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_color_material_color_inputs(config, environment)
     validate_joint_color_material_train_inputs(config, environment)
     validate_unpaired_emission_material_train_inputs(config, environment)
+    validate_mailbox_matte_train_inputs(config, environment)
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"

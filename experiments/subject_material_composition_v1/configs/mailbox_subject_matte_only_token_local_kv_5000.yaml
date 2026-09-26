@@ -1,7 +1,8 @@
 schema_version: 1
-status: pending_matte_preview_review
+status: authorized_after_preview_review
 stage: train
 run: {study: subject_material_composition_v1, variant: mailbox_subject_matte_only_token_local_kv_5000, seed: 42}
 environment: {CUDA_VISIBLE_DEVICES: "3"}
-data_manifest: experiments/subject_material_composition_v1/protocols/mailbox_matte_counterfactual_v2.json
-args: {pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4, concepts_list: "${COLORPEEL_MAILBOX_MATTE_ONLY_CONCEPTS}", resolution: 512, train_batch_size: 1, learning_rate: 1.0e-5, kv_learning_rate: 1.0e-5, token_local_kv: true, scale_lr: true, lr_scheduler: constant, lr_warmup_steps: 0, max_train_steps: 5000, checkpointing_steps: 1000, seed: 42, mixed_precision: "no", cos_weight: 0.0, gradient_accumulation_steps: 1, max_grad_norm: 1.0, dataloader_num_workers: 2, adam_beta1: 0.9, adam_beta2: 0.999, adam_weight_decay: 0.0, adam_epsilon: 1.0e-8, hflip: false, modifier_token: "<S*>", initializer_token: mailbox}
+data_manifest: "${COLORPEEL_MAILBOX_MATTE_ROOT}/staged/training_assets_manifest.jsonl"
+mailbox_matte_source: {protocol: experiments/subject_material_composition_v1/protocols/mailbox_matte_counterfactual_v2.json, protocol_sha256: 95e43522ba3cf4ade7c6506d39e03bb661a6430c31506fa9a86db568302b03c7, preview_root: "${COLORPEEL_MAILBOX_MATTE_ROOT}/preview", review_record: "${COLORPEEL_MAILBOX_MATTE_ROOT}/preview_review.json", staging_root: "${COLORPEEL_MAILBOX_MATTE_ROOT}/staged", staging_provenance_sha256: f62b28d654bf00f76e025ce058217611c2a04bd9c140a8e813c6d721f41d19fa, concepts_sha256: bfc27749d0384ea1625fb90a0610c1267f7d163ebb2b886607d314eeae3682a0}
+args: {pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4, concepts_list: "${COLORPEEL_MAILBOX_MATTE_ROOT}/staged/matte_only_concepts.json", resolution: 512, train_batch_size: 1, learning_rate: 1.0e-5, kv_learning_rate: 1.0e-5, token_local_kv: true, scale_lr: true, lr_scheduler: constant, lr_warmup_steps: 0, max_train_steps: 5000, checkpointing_steps: 1000, seed: 42, mixed_precision: "no", cos_weight: 0.0, gradient_accumulation_steps: 1, max_grad_norm: 1.0, dataloader_num_workers: 2, adam_beta1: 0.9, adam_beta2: 0.999, adam_weight_decay: 0.0, adam_epsilon: 1.0e-8, hflip: false, modifier_token: "<S*>", initializer_token: mailbox}
