@@ -32,3 +32,14 @@ ordinary material words. The intended training contrast keeps the earlier
 token-local K/V recipe and 5,000-step total dose. Ten rows give each source
 image fewer exposures than the five-row arm; interpret that contrast as a
 balanced-data pilot, not an isolated material-word effect.
+
+The two 5,000-step token-local K/V recipes are staged in
+`configs/mailbox_subject_matte_only_token_local_kv_5000.yaml` and
+`configs/mailbox_subject_balanced_metal_matte_token_local_kv_5000.yaml`.
+Both remain pending until the v2 preview is reviewed. After training, compare
+the old S checkpoint with both new S checkpoints using fixed prompts, seeds,
+and the same selected M checkpoint. Include S only, S with literal matte,
+S with M, and S with literal metal conditions; score identity and surface
+appearance separately. A matte source changes texture and may alter some
+fine mailbox details, so the comparison tests whether material leakage is
+reduced, not whether S and M are fully independent.
