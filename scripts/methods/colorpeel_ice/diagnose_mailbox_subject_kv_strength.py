@@ -6,8 +6,13 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
 
 import torch
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.methods.colorpeel_ice.generate_color_material_diagnostic import sha256
 from scripts.methods.colorpeel_ice.generate_mailbox_matte_subject_comparison import (
