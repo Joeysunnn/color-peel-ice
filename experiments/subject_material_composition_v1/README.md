@@ -43,3 +43,10 @@ S with M, and S with literal metal conditions; score identity and surface
 appearance separately. A matte source changes texture and may alter some
 fine mailbox details, so the comparison tests whether material leakage is
 reduced, not whether S and M are fully independent.
+
+`protocols/mailbox_matte_subject_inference_v1.json` locks the completed old,
+matte-only, and balanced S checkpoints plus the previously selected M. It
+requests 108 matched images: three S arms, red/blue/city-street prompts, S only,
+S with literal matte plastic, S with M, and S with literal metal, using seeds
+42–44, 100 steps, and guidance 3.5. Compare shape/identity, requested color,
+and apparent surface separately; filtered images remain in the status ledger.

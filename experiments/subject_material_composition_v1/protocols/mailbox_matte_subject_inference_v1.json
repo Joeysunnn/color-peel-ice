@@ -1,0 +1,39 @@
+{
+  "schema": "mailbox_matte_subject_inference/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "safety_checker": "enabled",
+  "baseline_protocol": "experiments/subject_material_composition_v1/protocols/mailbox_metal_diagnostic_v1.json",
+  "baseline_protocol_sha256": "2c660f047ececbb602fdf94284ff4c11db62a68fb3e82f1d2ad0fabc7893373",
+  "new_subject_arms": [
+    {
+      "id": "matte_only",
+      "training_run_relative_to_COLORPEEL_RUN_ROOT": "subject_material_composition_v1/20260926-135600__subject_material_composition_v1__mailbox_subject_matte_only_token_local_kv_5000__04d204d__42",
+      "training_variant": "mailbox_subject_matte_only_token_local_kv_5000",
+      "training_manifest_sha256": "8c2635ac5153f4d6a7f809fa0947788e3f8bcc03633fea096fbac28fc8a83d0d",
+      "checkpoint_sha256": {
+        "weights": "4857087ca7d3bde10b62d593def2e15c68e61c999d6c0efd429ff35202fe6a5f",
+        "adaptation": "b355938f9ba048cad27347a4f7262fe3857eeba463979604406c2cd8e0173b27",
+        "token": "d979277f7faa99f1b2e2e1c9fa200dc0033292fbe041ea5bc07320591c35c401"
+      }
+    },
+    {
+      "id": "balanced",
+      "training_run_relative_to_COLORPEEL_RUN_ROOT": "subject_material_composition_v1/20260926-135601__subject_material_composition_v1__mailbox_subject_balanced_metal_matte_token_local_kv_5000__04d204d__42",
+      "training_variant": "mailbox_subject_balanced_metal_matte_token_local_kv_5000",
+      "training_manifest_sha256": "643a325e6c77a2cac3488baa5973c49a43f84107bb2f63604a8eb51fcd9e4f69",
+      "checkpoint_sha256": {
+        "weights": "b61b559e35e9c832b32d103deaff612a2b4a4c6a063973bd9ad5f20a444e1592",
+        "adaptation": "b355938f9ba048cad27347a4f7262fe3857eeba463979604406c2cd8e0173b27",
+        "token": "4eb2643908c6e23083b7ec395c51e51ace19da33fa55d81abe7cddb1a9bee30f"
+      }
+    }
+  ],
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "subject_literal_matte_prompts": {
+    "red": "a photo of <S*> mailbox in red color made of matte plastic",
+    "blue": "a photo of <S*> mailbox in blue color made of matte plastic",
+    "city_street": "a photo of <S*> mailbox made of matte plastic on a city street"
+  },
+  "conditions": ["subject_only", "subject_literal_matte", "subject_material", "subject_literal_metal"],
+  "interpretation": "Compare mailbox identity and apparent surface separately across the old, matte-only, and balanced S checkpoints. The selected M checkpoint, prompts, seeds and sampling are fixed. Generated matte training pixels are a counterfactual and may change small geometry details."
+}
