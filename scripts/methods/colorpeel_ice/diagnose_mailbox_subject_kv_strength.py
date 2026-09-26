@@ -25,6 +25,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--split-kv", action="store_true")
     args = parser.parse_args()
     protocol, baseline, subjects, material_dir = verify_sources(
         args.protocol, Path(os.environ["COLORPEEL_RUN_ROOT"]).resolve())
@@ -44,26 +45,28 @@ def main() -> None:
             raise ValueError("inference cross-attention is not dual token-local K/V")
         original = [(proc, proc.delta_k.weight.detach().clone(), proc.delta_v.weight.detach().clone())
                     for proc in processors]
-        for scale in (0.0, 0.5):
+        settings = ((0.0, 1.0), (0.5, 1.0), (1.0, 0.5)) if args.split_kv else ((0.0, 0.0), (0.5, 0.5))
+        for key_scale, value_scale in settings:
             with torch.no_grad():
                 for proc, key, value in original:
-                    proc.delta_k.weight.copy_(key * scale)
-                    proc.delta_v.weight.copy_(value * scale)
+                    proc.delta_k.weight.copy_(key * key_scale)
+                    proc.delta_v.weight.copy_(value * value_scale)
             for group in ("red", "blue"):
                 prompt = prompts[group]
                 masks = attention_masks(pipe, prompt, 3.5)["modifier_token_mask"]
                 if (masks["subject"].shape[0] != 2 or masks["subject"].sum().item() != 1
                         or masks["material"].sum().item() != 0):
                     raise ValueError("subject/material token masks differ")
-                for seed in (42, 43):
+                for seed in ((42,) if args.split_kv else (42, 43)):
                     result = pipe(prompt, num_inference_steps=100, guidance_scale=3.5,
                                   generator=torch.Generator(device="cuda:0").manual_seed(seed),
                                   cross_attention_kwargs={"modifier_token_mask": masks})
-                    name = f"{arm}__kv{scale:g}__{group}__seed{seed}.png"
+                    name = f"{arm}__k{key_scale:g}__v{value_scale:g}__{group}__seed{seed}.png"
                     path = args.output_dir / name
                     result.images[0].save(path)
                     flags = getattr(result, "nsfw_content_detected", None)
-                    rows.append({"arm": arm, "subject_kv_scale": scale, "group": group,
+                    rows.append({"arm": arm, "subject_k_scale": key_scale,
+                                 "subject_v_scale": value_scale, "group": group,
                                  "seed": seed, "prompt": prompt, "image": name,
                                  "image_sha256": sha256(path),
                                  "safety_filtered": bool(flags[0]) if flags else False,
