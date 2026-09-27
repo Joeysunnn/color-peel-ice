@@ -34,6 +34,7 @@ STAGES = {
     "generate_subject_statue_reconstruction": "scripts/methods/colorpeel_ice/generate_d1_subject_recolor_statue_reconstruction.py",
     "generate_two_stage_subject_inpaint": "scripts/methods/colorpeel_ice/generate_d1_two_stage_subject_inpaint.py",
     "generate_mailbox_context_priors": "scripts/methods/colorpeel_ice/generate_d1_mailbox_context_priors.py",
+    "generate_perfusion_subject": "experiments/perfusion_subject_pilot/evaluate.py",
     "generate_multiview": "scripts/methods/colorpeel_ice/generate_multiview_heldout.py",
     "generate_material_multiview": "scripts/methods/colorpeel_ice/generate_material_multiview.py",
     "generate_two_object": "scripts/methods/colorpeel_ice/generate_two_object.py",
@@ -130,6 +131,37 @@ def read_config(path: Path) -> dict[str, Any]:
     if managed:
         raise ValueError("output arguments are launcher-managed: " + ", ".join(sorted(managed)))
     return config
+
+
+def validate_perfusion_subject_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> dict | None:
+    if config["stage"] != "train" or config["run"]["study"] != "perfusion_subject_pilot":
+        return None
+    baselines = {
+        "mailbox_keylocked_rank1_value_5000": (
+            "original", "experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_mailbox_category_token_local_kv_5000.yaml"),
+        "mailbox_balanced_aligned_keylocked_rank1_value_5000": (
+            "balanced_aligned", "experiments/subject_material_composition_v1/configs/mailbox_subject_balanced_caption_aligned_5000.yaml"),
+    }
+    if config["run"]["variant"] not in baselines or config.get("status") != "authorized_perfusion_pilot":
+        raise ValueError("Perfusion pilot training variant or authorization differs")
+    cohort, baseline_path = baselines[config["run"]["variant"]]
+    baseline = read_config(PROJECT_ROOT / baseline_path)
+    expected_args = dict(baseline["args"])
+    expected_args.pop("token_local_kv")
+    expected_args["perfusion_subject"] = True
+    if config["args"] != expected_args or config.get("data_manifest") != baseline["data_manifest"]:
+        raise ValueError("Perfusion P1 must match B0 training except Subject adaptation")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from experiments.perfusion_subject_pilot.data_contract import verify_training_data
+
+    source = config.get("perfusion_source", {})
+    if source.get("cohort") != cohort:
+        raise ValueError("Perfusion source cohort differs from its B0")
+    concepts = Path(expand_value(config["args"]["concepts_list"], environment)).resolve()
+    manifest = Path(expand_value(source["asset_manifest"], environment)).resolve()
+    return verify_training_data(cohort, concepts, manifest,
+                                source["concepts_sha256"], source["asset_manifest_sha256"])
 
 
 def git_output(*args: str) -> str:
@@ -473,7 +505,7 @@ def managed_output_args(stage: str, run_dir: Path) -> dict[str, str]:
         return {"output-dir": str(run_dir / "data")}
     if stage == "train":
         return {"output_dir": str(run_dir / "checkpoints")}
-    if stage in {"generate", "generate_emission_transfer", "generate_emission_transfer_quick", "generate_emission_transfer_all", "generate_subject_statue_reconstruction", "generate_two_stage_subject_inpaint", "generate_multiview", "generate_material_multiview", "generate_two_object"}:
+    if stage in {"generate", "generate_emission_transfer", "generate_emission_transfer_quick", "generate_emission_transfer_all", "generate_subject_statue_reconstruction", "generate_two_stage_subject_inpaint", "generate_multiview", "generate_material_multiview", "generate_two_object", "generate_perfusion_subject"}:
         return {"output-dir": str(run_dir / "inference")}
     if stage == "generate_mailbox_context_priors":
         return {"output-dir": str(run_dir / "data")}
@@ -552,6 +584,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_joint_color_material_train_inputs(config, environment)
     validate_unpaired_emission_material_train_inputs(config, environment)
     validate_mailbox_matte_train_inputs(config, environment)
+    perfusion_training_data = validate_perfusion_subject_train_inputs(config, environment)
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"
@@ -627,6 +660,8 @@ def main(argv: list[str] | None = None) -> int:
         "command": command,
         "managed_outputs": managed_output_args(config["stage"], run_dir),
     }
+    if perfusion_training_data is not None:
+        manifest["perfusion_training_data"] = perfusion_training_data
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if cli.dry_run:
         print(f"Dry run created: {run_dir}")

@@ -1,0 +1,13 @@
+{
+  "schema": "perfusion_subject_pilot/v1",
+  "cohort": "balanced_aligned",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "baseline_protocol": "experiments/subject_material_composition_v1/protocols/mailbox_caption_aligned_subject_inference_v2.json",
+  "baseline_protocol_sha256": "ab69cfff9a9931d3fa075181beca321a14ab0cea726487dd7120436f75f4c6fa",
+  "safety_checker": "enabled",
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "arms": ["B0", "P1"],
+  "groups": ["plain", "red", "blue"],
+  "conditions": ["subject_only", "subject_material"],
+  "interpretation": "B0 is the frozen caption-aligned balanced token-local K/V Subject. P1 uses the same ten training rows with Key-Locking and rank-1 Value. Red is held out as a color word in this cohort. Compare within this cohort; do not attribute cross-cohort differences to adaptation alone."
+}

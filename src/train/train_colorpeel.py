@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import math
 import os
 import random
+import sys
 import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
@@ -637,6 +638,11 @@ def parse_args(input_args=None):
         help="Learn zero-initialized K/V residuals gated only to explicit modifier-token positions.",
     )
     parser.add_argument(
+        "--perfusion_subject",
+        action="store_true",
+        help="Lock <S*> Keys to mailbox and train token-local rank-1 Subject Value edits.",
+    )
+    parser.add_argument(
         "--k_learning_rate",
         type=float,
         default=None,
@@ -1026,6 +1032,24 @@ def main(args):
     vae.to(accelerator.device, dtype=weight_dtype)
 
     attention_class = CustomDiffusionAttnProcessor
+    perfusion_key_reference = None
+    if args.perfusion_subject:
+        if args.token_local_kv or args.enable_xformers_memory_efficient_attention:
+            raise ValueError("Perfusion Subject is separate from token-local K/V and xFormers")
+        if (args.freeze_model != "crossattn_kv" or args.modifier_token != ["<S*>"]
+                or args.initializer_token != ["mailbox"] or args.k_learning_rate is not None
+                or args.v_learning_rate is not None or args.with_prior_preservation
+                or args.validation_prompt):
+            raise ValueError("Perfusion Subject requires one mailbox-initialized <S*> and the frozen pilot protocol")
+        repo_root = str(Path(__file__).resolve().parents[2])
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from experiments.perfusion_subject_pilot.perfusion_attention import (
+            PerfusionSubjectAttnProcessor, mailbox_key_reference, REFERENCE_NAME,
+        )
+        perfusion_key_reference = mailbox_key_reference(text_encoder, tokenizer)
+        if accelerator.is_main_process:
+            torch.save(perfusion_key_reference.cpu(), Path(args.output_dir) / REFERENCE_NAME)
     if args.token_local_kv:
         if args.enable_xformers_memory_efficient_attention:
             raise ValueError("token-local K/V does not support xFormers attention processors")
@@ -1077,7 +1101,11 @@ def main(args):
             hidden_size = unet.config.block_out_channels[block_id]
         layer_name = name.split(".processor")[0]
         if cross_attention_dim is not None:
-            if args.token_local_kv:
+            if args.perfusion_subject:
+                custom_diffusion_attn_procs[name] = PerfusionSubjectAttnProcessor(
+                    hidden_size=hidden_size, cross_attention_dim=cross_attention_dim
+                ).to(unet.device)
+            elif args.token_local_kv:
                 custom_diffusion_attn_procs[name] = TokenLocalKVAttnProcessor(
                     hidden_size=hidden_size, cross_attention_dim=cross_attention_dim
                 ).to(unet.device)
@@ -1098,12 +1126,15 @@ def main(args):
                 ).to(unet.device)
                 custom_diffusion_attn_procs[name].load_state_dict(weights)
         else:
-            custom_diffusion_attn_procs[name] = attention_class(
-                train_kv=False,
-                train_q_out=False,
-                hidden_size=hidden_size,
-                cross_attention_dim=cross_attention_dim,
-            )
+            if args.perfusion_subject:
+                custom_diffusion_attn_procs[name] = PerfusionSubjectAttnProcessor()
+            else:
+                custom_diffusion_attn_procs[name] = attention_class(
+                    train_kv=False,
+                    train_q_out=False,
+                    hidden_size=hidden_size,
+                    cross_attention_dim=cross_attention_dim,
+                )
     del st
 
     unet.set_attn_processor(custom_diffusion_attn_procs)
@@ -1320,6 +1351,11 @@ def main(args):
                     token_local_kwargs["cross_attention_kwargs"] = {
                         "modifier_token_mask": build_modifier_token_mask(batch["input_ids"], modifier_token_id)
                     }
+                elif args.perfusion_subject:
+                    token_local_kwargs["cross_attention_kwargs"] = {
+                        "modifier_token_mask": build_modifier_token_mask(batch["input_ids"], modifier_token_id),
+                        "key_reference": perfusion_key_reference,
+                    }
                 
                 # Predict the noise residual
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states, **token_local_kwargs).sample
@@ -1411,6 +1447,11 @@ def main(args):
                     if args.token_local_kv:
                         class_token_local_kwargs["cross_attention_kwargs"] = {
                             "modifier_token_mask": build_modifier_token_mask(batch["class_input_ids"], modifier_token_id)
+                        }
+                    elif args.perfusion_subject:
+                        class_token_local_kwargs["cross_attention_kwargs"] = {
+                            "modifier_token_mask": build_modifier_token_mask(batch["class_input_ids"], modifier_token_id),
+                            "key_reference": perfusion_key_reference,
                         }
                     class_model_pred = unet(
                         class_noisy_latents, class_timesteps, class_encoder_hidden_states, **class_token_local_kwargs
@@ -1590,13 +1631,28 @@ def main(args):
             )
             write_json(Path(args.output_dir) / "token_local_kv_audit.json", token_local_audit or {})
             unet.save_attn_procs(args.output_dir, weight_name=TOKEN_LOCAL_KV_WEIGHT_NAME)
+        elif args.perfusion_subject:
+            from experiments.perfusion_subject_pilot.perfusion_attention import (
+                REFERENCE_PROMPT, WEIGHT_NAME, subject_state_dict,
+            )
+            write_json(Path(args.output_dir) / "adaptation_config.json", {
+                "adaptation_mode": "perfusion_subject_rank1",
+                "weight_name": WEIGHT_NAME,
+                "modifier_tokens": args.modifier_token,
+                "key_reference_prompt": REFERENCE_PROMPT,
+                "key_reference_name": REFERENCE_NAME,
+                "value_rank": 1,
+                "value_alpha": 1.0,
+                "invariant": "only <S*> uses the frozen mailbox Key and rank-1 Value residual",
+            })
+            torch.save(subject_state_dict(unet), Path(args.output_dir) / WEIGHT_NAME)
         else:
             unet.save_attn_procs(args.output_dir)
         save_new_embed(text_encoder, modifier_token_id, accelerator, args, args.output_dir)
 
         # Final inference
         # Load previous pipeline
-        if args.token_local_kv:
+        if args.token_local_kv or args.perfusion_subject:
             pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 revision=args.revision,
@@ -1613,7 +1669,7 @@ def main(args):
         pipeline = pipeline.to(accelerator.device)
 
         # load attention processors
-        if not args.token_local_kv:
+        if not (args.token_local_kv or args.perfusion_subject):
             pipeline.unet.load_attn_procs(args.output_dir, weight_name="pytorch_custom_diffusion_weights.bin")
             for token in args.modifier_token:
                 pipeline.load_textual_inversion(args.output_dir, weight_name=f"{token}.bin")

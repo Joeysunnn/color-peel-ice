@@ -1,0 +1,7 @@
+schema_version: 1
+status: authorized_perfusion_pilot
+stage: generate_perfusion_subject
+run: {study: perfusion_subject_pilot, variant: matched_b0_p1_comparison_36, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3"}
+data_manifest: experiments/perfusion_subject_pilot/protocols/comparison_v1.json
+args: {protocol: experiments/perfusion_subject_pilot/protocols/comparison_v1.json, subject-run: "${COLORPEEL_PERFUSION_SUBJECT_RUN}", device: cuda:0}
