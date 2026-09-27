@@ -22,13 +22,15 @@ from scripts.methods.colorpeel_ice.generate_subject_material_diagnostic import (
 )
 
 CONDITIONS = ("subject_only", "subject_literal_matte", "subject_material", "subject_literal_metal")
-ARMS = ("baseline", "matte_only", "balanced")
+OLD_ARMS = ("baseline", "matte_only", "balanced")
+ALIGNED_ARMS = ("baseline", "matte_only_aligned", "balanced_aligned")
 
 
 def verify_sources(protocol_path: Path, run_root: Path):
     protocol = read_json(protocol_path)
     baseline_path = REPO_ROOT / protocol["baseline_protocol"]
-    if (protocol.get("schema") != "mailbox_matte_subject_inference/v1"
+    schema = protocol.get("schema")
+    if (schema not in {"mailbox_matte_subject_inference/v1", "mailbox_matte_subject_inference/v2"}
             or protocol.get("base_model") != "CompVis/stable-diffusion-v1-4"
             or protocol.get("safety_checker") != "enabled"
             or protocol.get("sampling") != {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5}
@@ -38,8 +40,18 @@ def verify_sources(protocol_path: Path, run_root: Path):
     baseline, baseline_dir, material_dir = verify_baseline(baseline_path, run_root)
     if protocol["sampling"] != baseline["sampling"]:
         raise ValueError("mailbox inference sampling differs from baseline")
+    if schema.endswith("/v2"):
+        caption_path = REPO_ROOT / protocol["caption_protocol"]
+        caption = read_json(caption_path)
+        if (sha256(caption_path) != protocol["caption_protocol_sha256"]
+                or caption.get("schema") != "mailbox_caption_alignment/v1"
+                or list(caption.get("caption_color_by_source_color", {}).values()) != protocol.get("evaluation_colors")
+                or protocol.get("heldout_colors") != ["red"]
+                or protocol.get("scene_prompt") != "a photo of <S*> mailbox on a city street"):
+            raise ValueError("mailbox caption-aligned inference colors differ")
     subjects = {"baseline": baseline_dir}
-    if [item.get("id") for item in protocol.get("new_subject_arms", [])] != list(ARMS[1:]):
+    arms = ALIGNED_ARMS if schema.endswith("/v2") else OLD_ARMS
+    if [item.get("id") for item in protocol.get("new_subject_arms", [])] != list(arms[1:]):
         raise ValueError("mailbox inference arms differ")
     for item in protocol["new_subject_arms"]:
         run = (run_root / item["training_run_relative_to_COLORPEEL_RUN_ROOT"]).resolve()
@@ -58,17 +70,37 @@ def verify_sources(protocol_path: Path, run_root: Path):
 
 
 def manifest_rows(protocol: dict, baseline: dict) -> list[dict]:
-    matte_prompts = protocol["subject_literal_matte_prompts"]
-    groups = baseline["groups"]
-    if ([group["id"] for group in groups] != ["red", "blue", "city_street"]
-            or set(matte_prompts) != {group["id"] for group in groups}):
-        raise ValueError("mailbox comparison groups differ")
+    if protocol["schema"].endswith("/v2"):
+        groups = []
+        for color in protocol["evaluation_colors"] + protocol["heldout_colors"]:
+            stem = f"a photo of <S*> mailbox in {color} color"
+            groups.append({"id": color, "prompts": {
+                "subject_only": stem,
+                "subject_literal_matte": stem + " made of matte plastic",
+                "subject_material": stem + " made of <M*>",
+                "subject_literal_metal": stem + " made of metal",
+            }})
+        stem = protocol["scene_prompt"]
+        groups.append({"id": "city_street", "prompts": {
+            "subject_only": stem,
+            "subject_literal_matte": stem.replace(" on a city street", " made of matte plastic on a city street"),
+            "subject_material": stem.replace(" on a city street", " made of <M*> on a city street"),
+            "subject_literal_metal": stem.replace(" on a city street", " made of metal on a city street"),
+        }})
+        arms = ALIGNED_ARMS
+    else:
+        matte_prompts = protocol["subject_literal_matte_prompts"]
+        groups = baseline["groups"]
+        if ([group["id"] for group in groups] != ["red", "blue", "city_street"]
+                or set(matte_prompts) != {group["id"] for group in groups}):
+            raise ValueError("mailbox comparison groups differ")
+        arms = OLD_ARMS
     rows = []
-    for arm in ARMS:
+    for arm in arms:
         for group in groups:
             group_id = group["id"]
             original = group["prompts"]
-            prompts = {
+            prompts = original if protocol["schema"].endswith("/v2") else {
                 "subject_only": original["subject_only"],
                 "subject_literal_matte": matte_prompts[group_id],
                 "subject_material": original["subject_material"],
@@ -84,8 +116,9 @@ def manifest_rows(protocol: dict, baseline: dict) -> list[dict]:
                     rows.append({"id": sample_id, "arm": arm, "group": group_id,
                                  "condition": condition, "prompt": prompt, "seed": seed,
                                  "image_path": f"images/{arm}/{group_id}/{sample_id}.png"})
-    if len(rows) != 108:
-        raise ValueError("expected 108 mailbox comparison samples")
+    expected_rows = 252 if protocol["schema"].endswith("/v2") else 108
+    if len(rows) != expected_rows:
+        raise ValueError(f"expected {expected_rows} mailbox comparison samples")
     return rows
 
 
@@ -118,7 +151,7 @@ def generate(protocol: dict, subjects: dict, material_dir: Path,
 
     sampling = protocol["sampling"]
     with (output_dir / "generation_status.jsonl").open("w", encoding="utf-8") as ledger:
-        for arm in ARMS:
+        for arm in subjects:
             pipe = load_pipeline(protocol, subjects[arm], material_dir, device)
             for row in rows:
                 if row["arm"] != arm:

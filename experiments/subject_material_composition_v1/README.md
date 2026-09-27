@@ -70,3 +70,8 @@ five color words in the concepts. The first follow-up uses the same two
 token-local K/V arms and 5,000-step settings to isolate the caption change.
 Their configs are `configs/mailbox_subject_matte_only_caption_aligned_5000.yaml`
 and `configs/mailbox_subject_balanced_caption_aligned_5000.yaml`.
+`protocols/mailbox_caption_aligned_subject_inference_v2.json` compares their
+completed checkpoints with the old S baseline on all five reviewed colors,
+held-out red, and a city-street prompt. It fixes seeds 42–44, 100 steps,
+CFG 3.5, and S-only, literal matte, S+M, and literal metal conditions (252
+samples). Red tests transfer from the base model; it is not a training caption.
