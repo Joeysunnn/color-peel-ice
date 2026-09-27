@@ -75,3 +75,8 @@ completed checkpoints with the old S baseline on all five reviewed colors,
 held-out red, and a city-street prompt. It fixes seeds 42–44, 100 steps,
 CFG 3.5, and S-only, literal matte, S+M, and literal metal conditions (252
 samples). Red tests transfer from the base model; it is not a training caption.
+The completed 252-image ledger and the project owner's qualitative surface and
+color review are recorded in
+`diagnostics/mailbox_caption_aligned_subject_review_20260927.md`. Balanced S is
+the stronger material-control candidate in that review; color remains imperfect
+and no S checkpoint has been validated as fully disentangled.
