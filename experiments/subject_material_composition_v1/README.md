@@ -68,3 +68,5 @@ of what was actually run. The aligned staging script copies the already
 reviewed 5 matte and 5 metal images with the same masks and changes only the
 five color words in the concepts. The first follow-up uses the same two
 token-local K/V arms and 5,000-step settings to isolate the caption change.
+Their configs are `configs/mailbox_subject_matte_only_caption_aligned_5000.yaml`
+and `configs/mailbox_subject_balanced_caption_aligned_5000.yaml`.
