@@ -1,0 +1,16 @@
+{
+  "schema": "mailbox_caption_alignment/v1",
+  "source_staging_provenance_sha256": "f62b28d654bf00f76e025ce058217611c2a04bd9c140a8e813c6d721f41d19fa",
+  "source_concepts_sha256": {
+    "matte_only": "bfc27749d0384ea1625fb90a0610c1267f7d163ebb2b886607d314eeae3682a0",
+    "balanced": "e3ca417a33e49582549dee278b2a9c740d0019586cd51f8aac843dda8894c6f6"
+  },
+  "caption_color_by_source_color": {
+    "red": "pink",
+    "green": "green",
+    "cyan": "cyan",
+    "blue": "blue",
+    "magenta": "purple"
+  },
+  "training_prompt_template": "a photo of <S*> mailbox in {color} color"
+}

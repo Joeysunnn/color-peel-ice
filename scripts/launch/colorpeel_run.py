@@ -119,6 +119,8 @@ def read_config(path: Path) -> dict[str, Any]:
         if (config["run"]["variant"] not in {
                 "mailbox_subject_matte_only_token_local_kv_5000",
                 "mailbox_subject_balanced_metal_matte_token_local_kv_5000",
+                "mailbox_subject_matte_only_caption_aligned_5000",
+                "mailbox_subject_balanced_caption_aligned_5000",
             } or config.get("status") != "authorized_after_preview_review"):
             raise ValueError("mailbox subject/material training requires reviewed authorization")
     stage_managed_arguments = set(MANAGED_ARGUMENTS)
@@ -392,14 +394,28 @@ def validate_mailbox_matte_train_inputs(config: dict[str, Any], environment: dic
         raise ValueError("mailbox matte staging provenance differs")
     provenance = matte.read_json(provenance_path)
     variant = config["run"]["variant"]
-    concepts_name = ("matte_only_concepts.json" if variant == "mailbox_subject_matte_only_token_local_kv_5000"
+    concepts_name = ("matte_only_concepts.json" if "matte_only" in variant
                      else "balanced_concepts.json")
     concepts = staging / concepts_name
     assets = staging / "training_assets_manifest.jsonl"
-    if (provenance.get("protocol_sha256") != matte.sha256(protocol_path)
+    aligned = variant.endswith("_caption_aligned_5000")
+    if aligned:
+        caption_path = (PROJECT_ROOT / source["caption_protocol"]).resolve()
+        caption = matte.read_json(caption_path)
+        if (matte.sha256(caption_path) != source["caption_protocol_sha256"]
+                or caption.get("schema") != "mailbox_caption_alignment/v1"
+                or caption.get("caption_color_by_source_color") != {
+                    "red": "pink", "green": "green", "cyan": "cyan", "blue": "blue", "magenta": "purple"}
+                or caption.get("training_prompt_template") != "a photo of <S*> mailbox in {color} color"
+                or matte.sha256(preview.parent / "staged" / "staging_provenance.json") != caption["source_staging_provenance_sha256"]
+                or provenance.get("caption_protocol_sha256") != matte.sha256(caption_path)
+                or provenance.get("source_staging_provenance_sha256") != caption["source_staging_provenance_sha256"]):
+            raise ValueError("mailbox caption-aligned source differs")
+    elif (provenance.get("protocol_sha256") != matte.sha256(protocol_path)
             or provenance.get("preview_manifest_sha256") != matte.sha256(preview / "preview_manifest.json")
-            or provenance.get("review_sha256") != matte.sha256(review_path)
-            or provenance.get(concepts_name.removesuffix(".json") + "_sha256") != matte.sha256(concepts)
+            or provenance.get("review_sha256") != matte.sha256(review_path)):
+        raise ValueError("mailbox matte staged provenance differs")
+    if (provenance.get(concepts_name.removesuffix(".json") + "_sha256") != matte.sha256(concepts)
             or provenance.get("training_assets_manifest_sha256") != matte.sha256(assets)
             or matte.sha256(concepts) != source["concepts_sha256"]):
         raise ValueError("mailbox matte staged data differs from approved preview")
@@ -407,8 +423,24 @@ def validate_mailbox_matte_train_inputs(config: dict[str, Any], environment: dic
             or Path(expand_value(config["data_manifest"], environment)).resolve() != assets):
         raise ValueError("mailbox matte config must use reviewed staged data")
     records = [json.loads(line) for line in assets.read_text(encoding="utf-8").splitlines()]
-    if len(records) != 10 or len(matte.read_json(concepts)) != (5 if "matte_only" in variant else 10):
+    concept_rows = matte.read_json(concepts)
+    if len(records) != 10 or len(concept_rows) != (5 if "matte_only" in variant else 10):
         raise ValueError("mailbox matte staged row count differs")
+    if aligned:
+        expected = []
+        for record in records:
+            if "matte_only" in variant and record["material"] != "matte":
+                continue
+            color = caption["caption_color_by_source_color"][record["color"]]
+            prompt = caption["training_prompt_template"].format(color=color)
+            if "balanced" in variant:
+                prompt += (" made of glossy painted metal" if record["material"] == "metal"
+                           else " made of matte plastic")
+            expected.append({"instance_prompt": [prompt],
+                             "instance_data_dir": str(staging / record["color"] / record["material"] / "images"),
+                             "instance_mask_dir": str(staging / record["color"] / record["material"] / "masks")})
+        if concept_rows != expected:
+            raise ValueError("mailbox caption-aligned concepts differ")
     for record in records:
         for field in ("image", "mask"):
             path = Path(record[field]).resolve()

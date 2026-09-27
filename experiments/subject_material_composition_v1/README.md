@@ -53,3 +53,18 @@ and apparent surface separately; filtered images remain in the status ledger.
 The completed prompt-alignment diagnosis is in
 `diagnostics/mailbox_matte_subject_prompt_alignment_20260926.md`; neither new S
 checkpoint passed the color and scene controls.
+
+## Caption-aligned mailbox follow-up
+
+The project owner reviewed `mailbox_matte_preview_v2.jpg` and fixed the five
+future mailbox supervision words, in image-column order, to **pink, green,
+cyan, blue, purple**. SD v1.4 training captions use the corresponding English
+words. Source image identifiers remain `red, green, cyan, blue, magenta` so
+the original pixels, hashes, and historical experiments stay reproducible.
+The source-to-caption mapping is locked in
+`protocols/mailbox_caption_alignment_v1.json`. All new mailbox S training and
+its matched inference should use this mapping; older protocols remain records
+of what was actually run. The aligned staging script copies the already
+reviewed 5 matte and 5 metal images with the same masks and changes only the
+five color words in the concepts. The first follow-up uses the same two
+token-local K/V arms and 5,000-step settings to isolate the caption change.
