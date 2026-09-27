@@ -13,9 +13,9 @@
       "training_variant": "mailbox_subject_matte_only_caption_aligned_5000",
       "training_manifest_sha256": "776ca8558a0bc64733dce939a3eba3917a3dfad0a3264d5ed59632e7be7a82c5",
       "checkpoint_sha256": {
-        "weights": "f4d0eb7867d2743c83be57802227a1a7aa369922649d8efaab2b120e8693e02a5",
+        "weights": "f4d0eb7867d2743c83be57802227a1a7a369922649d8efaab2b120e8693e02a5",
         "adaptation": "b355938f9ba048cad27347a4f7262fe3857eeba463979604406c2cd8e0173b27",
-        "token": "5ffe72462a6d5de1437022a0bd822a26c11c32bf6861a5dde3947e2015ff67c34"
+        "token": "5ffe72462a6d5de1437022a0bd822a26c11c32bf6861a5dde3947e2015f67c34"
       }
     },
     {
@@ -24,7 +24,7 @@
       "training_variant": "mailbox_subject_balanced_caption_aligned_5000",
       "training_manifest_sha256": "2e63bef00c640367edb464b40a5448ab4e128354174e3522e419ca44101b07c4",
       "checkpoint_sha256": {
-        "weights": "36a700658f98b2e0172c62223b9d152aff7d6fece67a3837dd7826e8ba8ffda0f",
+        "weights": "36a700658f98b2e0172c62223b9d152af7d6fece67a3837dd7826e8ba8ffda0f",
         "adaptation": "b355938f9ba048cad27347a4f7262fe3857eeba463979604406c2cd8e0173b27",
         "token": "6b3a168c79018a94b2e5b90ba56e28337ff5369201ed07342cf88e098ddf2479"
       }
