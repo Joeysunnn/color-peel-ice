@@ -46,31 +46,32 @@ class FullPerfusionAttnProcessor(nn.Module):
         # For J concepts this is the C^-1 metric projection onto their joint span.
         # It is algebraically equivalent to Appendix B's Cholesky/QR construction,
         # while avoiding a 768x768 Cholesky factorization on every UNet call.
-        states = encoder_hidden_states.float()
-        anchors = anchors.detach().to(device=states.device, dtype=torch.float32)
-        inv_cov = inv_cov.detach().to(device=states.device, dtype=torch.float32)
-        weighted_anchors = inv_cov @ anchors.T
-        gram = anchors @ weighted_anchors
-        similarities = states @ weighted_anchors
-        energies = gram.diagonal()
-        if torch.any(energies <= 0):
-            raise ValueError("Perfusion anchors need positive covariance energy")
-        if concepts == 2:
-            overlap = gram[0, 1] / torch.sqrt(energies[0] * energies[1])
-            if torch.abs(overlap) >= 1 - 1e-5:
-                raise ValueError("Perfusion anchors must span independent directions")
-        coefficients = torch.linalg.solve(gram, similarities.reshape(-1, concepts).T).T
-        coefficients = coefficients.reshape(*similarities.shape)
-        orthogonal = states - coefficients @ anchors
+        with torch.cuda.amp.autocast(enabled=False):
+            states = encoder_hidden_states.float()
+            anchors = anchors.detach().to(device=states.device, dtype=torch.float32)
+            inv_cov = inv_cov.detach().to(device=states.device, dtype=torch.float32)
+            weighted_anchors = inv_cov @ anchors.T
+            gram = anchors @ weighted_anchors
+            similarities = states @ weighted_anchors
+            energies = gram.diagonal()
+            if torch.any(energies <= 0):
+                raise ValueError("Perfusion anchors need positive covariance energy")
+            if concepts == 2:
+                overlap = gram[0, 1] / torch.sqrt(energies[0] * energies[1])
+                if torch.abs(overlap) >= 1 - 1e-5:
+                    raise ValueError("Perfusion anchors must span independent directions")
+            coefficients = torch.linalg.solve(gram, similarities.reshape(-1, concepts).T).T
+            coefficients = coefficients.reshape(*similarities.shape)
+            orthogonal = states - coefficients @ anchors
 
-        beta = torch.as_tensor(beta, device=states.device, dtype=torch.float32)
-        tau = torch.as_tensor(tau, device=states.device, dtype=torch.float32)
-        if (beta.ndim > 1 or tau.ndim > 1
-                or beta.numel() not in (1, concepts) or tau.numel() not in (1, concepts)
-                or not torch.isfinite(beta).all() or not torch.isfinite(tau).all()
-                or torch.any(tau <= 0)):
-            raise ValueError("beta and positive tau must be scalar or per-concept")
-        gates = torch.sigmoid((similarities / energies - beta) / tau)
+            beta = torch.as_tensor(beta, device=states.device, dtype=torch.float32)
+            tau = torch.as_tensor(tau, device=states.device, dtype=torch.float32)
+            if (beta.ndim > 1 or tau.ndim > 1
+                    or beta.numel() not in (1, concepts) or tau.numel() not in (1, concepts)
+                    or not torch.isfinite(beta).all() or not torch.isfinite(tau).all()
+                    or torch.any(tau <= 0)):
+                raise ValueError("beta and positive tau must be scalar or per-concept")
+            gates = torch.sigmoid((similarities / energies - beta) / tau)
         key = attn.to_k(orthogonal.to(encoder_hidden_states.dtype))
         value = attn.to_v(orthogonal.to(encoder_hidden_states.dtype))
         key = key + gates.to(key.dtype) @ self.key_outputs.to(key.dtype)

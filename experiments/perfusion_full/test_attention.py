@@ -93,3 +93,21 @@ def test_bad_joint_anchors_fail_and_self_attention_has_no_edit_parameters():
             attention, torch.ones(1, 2, 3), torch.eye(3),
             torch.tensor([[1., 0., 0.], [2., 0., 0.]]), .75, .1,
         )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA needed for autocast check")
+def test_metric_projection_keeps_float32_under_cuda_autocast():
+    attention = DummyAttention()
+    attention.to_k.to("cuda")
+    attention.to_v.to("cuda")
+    processor = FullPerfusionAttnProcessor(
+        2, 3, key_outputs=torch.tensor([[3., 4.]]),
+        value_outputs=torch.tensor([[5., 6.]]),
+    ).to("cuda")
+    with torch.cuda.amp.autocast():
+        key, value = processor.project_kv(
+            attention, torch.ones(1, 3, 3, device="cuda"),
+            torch.eye(3, device="cuda"), torch.tensor([[1., 0., 0.]], device="cuda"),
+            .75, .1,
+        )
+    assert key.isfinite().all() and value.isfinite().all()
