@@ -21,7 +21,9 @@ The full method changes training duration, soft masks, covariance, and attention
 - `prepare_soft_masks.py`: CLIPSeg object-mask preparation and image/source audit.
 - `attention.py`: Eq. (3)/(4) projections.
 - `train.py`, `configs/`: independent Subject and Material training.
-- `inference.py`, `validate.py`, `compare.py`: paper-style selection and project-matched generation.
+- `inference.py`, `validate.py`, `rescore_validation.py`: paper-style selection; the rescore script records and corrects the first validation-summary aggregation without rerendering.
+- `compare.py`, `subject_token_probe.py`, `material_probe.py`, `review_sheets.py`: project-matched generation and targeted visual probes.
 - `test_*.py`: mechanism, covariance, and mask checks.
+- `report_20260928.md`: run paths, validation scores, visual findings, and limits.
 
 Server artifacts live under `/home/r12user5/Documents/Jiawei/colorpeel-runs/perfusion_full/`. Existing checkpoints and outputs are read-only inputs.

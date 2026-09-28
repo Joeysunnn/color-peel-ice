@@ -106,10 +106,11 @@ def validate(config_path: Path, train_run: Path, output_dir: Path, device: str,
                                      "clip_i": image_score, "clip_t": text_score,
                                      "harmonic": harmonic}) + "\n")
             ledger.flush()
+        mean_i = sum(image_scores) / len(image_scores) if harmonics else None
+        mean_t = sum(text_scores) / len(text_scores) if harmonics else None
         row = {"step": step, "valid_count": len(harmonics),
-               "clip_i": sum(image_scores) / len(image_scores) if harmonics else None,
-               "clip_t": sum(text_scores) / len(text_scores) if harmonics else None,
-               "harmonic": sum(harmonics) / len(harmonics) if harmonics else None}
+               "clip_i": mean_i, "clip_t": mean_t,
+               "harmonic": 2 * mean_i * mean_t / (mean_i + mean_t) if harmonics else None}
         summary.append(row)
         print(json.dumps(row), flush=True)
         del pipe
