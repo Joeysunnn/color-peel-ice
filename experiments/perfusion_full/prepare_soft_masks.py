@@ -204,7 +204,11 @@ def main() -> None:
         batch = {key: value.to(args.device) for key, value in batch.items()}
         with torch.inference_mode():
             logits = model(**batch).logits
-        return logits[0].detach().cpu()
+        if logits.ndim == 2:
+            return logits.detach().cpu()
+        if logits.ndim == 3 and logits.shape[0] == 1:
+            return logits[0].detach().cpu()
+        raise ValueError(f"unexpected CLIPSeg logits shape: {tuple(logits.shape)}")
 
     provenance = prepare(args.concepts, args.query, args.output_dir, predict, {
         "model": MODEL_ID,

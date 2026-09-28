@@ -1,0 +1,17 @@
+cohort: original
+token: "<S*>"
+superclass: mailbox
+reference_prompt: "A photo of a mailbox"
+soft_mask_root: /home/r12user5/Documents/Jiawei/colorpeel-runs/perfusion_full/masks_original_clipseg_v2
+covariance_root: /home/r12user5/Documents/Jiawei/colorpeel-runs/perfusion_full/covariance_laion_100k_v1
+base_model: CompVis/stable-diffusion-v1-4
+seed: 42
+steps: 400
+batch_size: 16
+microbatch: 1
+beta: 0.75
+tau: 0.1
+lr_value: 0.03
+lr_embedding: 0.006
+checkpoint_every: 25
+hflip: none
