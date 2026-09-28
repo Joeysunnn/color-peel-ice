@@ -23,6 +23,8 @@ Before the full runs, use `smoke_forward.py` with the selected run root on the s
 
 Each cohort generates 36 new images: B0/P1 × plain/red/blue × Subject-only/Subject+selected-M × seeds 42–44. Red and blue prompt strings, CFG 3.5, 100 sampling steps, and the selected `<M*>` checkpoint come from the frozen mailbox diagnostic. The plain group adds a no-color-word control to both arms. Safety-filtered outputs are recorded as unavailable for visual review. Review mailbox identity, ordinary red/blue prompt response, metal appearance in Subject-only, and whether adding `<M*>` changes material while retaining identity.
 
+After generation, `bundle_comparison.py --run <evaluation-run>/inference --protocol <comparison-protocol> --output <evaluation-run>/review` validates all 36 image hashes and writes paired B0/P1 sheets for plain, red, and blue. Each sheet keeps the same seed and condition on one row.
+
 The two P1 training runs and two evaluation runs use separate immutable directories under `$COLORPEEL_RUN_ROOT/perfusion_subject_pilot/`. Run them through `scripts/launch/colorpeel_run.py` with new run IDs after committing code and verifying a clean checkout. Set `COLORPEEL_PERFUSION_SUBJECT_RUN` to the matching completed P1 training directory for each evaluation config. Never reuse a dry-run or completed run directory.
 
 The original cohort's red source caption is known to mismatch the visual source color, while red is held out in the balanced aligned cohort. Treat that as an interpretation limit, not as evidence about the adapter alone. Key-Locking may also weaken Subject identity over long training; inspect identity and prompt response together at the matched 5000-step endpoints.
