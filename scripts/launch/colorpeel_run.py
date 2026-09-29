@@ -164,6 +164,37 @@ def validate_perfusion_subject_train_inputs(config: dict[str, Any], environment:
                                 source["concepts_sha256"], source["asset_manifest_sha256"])
 
 
+def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> dict | None:
+    if config["stage"] != "train" or config["run"]["study"] != "lora_kv_subject_v1":
+        return None
+    source = config.get("lora_source", {})
+    cohort = source.get("cohort")
+    mode = config["args"].get("subject_lora_mode")
+    baselines = {
+        "original": "experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_mailbox_category_token_local_kv_5000.yaml",
+        "balanced_aligned": "experiments/subject_material_composition_v1/configs/mailbox_subject_balanced_caption_aligned_5000.yaml",
+    }
+    modes = {"full_kv", "token_local_kv", "full_v", "token_local_v"}
+    if (cohort not in baselines or mode not in modes
+            or config["run"]["variant"] != f"{cohort}_{mode}_r4_5000"
+            or config.get("status") != "authorized_lora_subject_ablation"):
+        raise ValueError("Subject LoRA cohort, mode or status differs")
+    baseline = read_config(PROJECT_ROOT / baselines[cohort])
+    expected_args = dict(baseline["args"])
+    expected_args.pop("token_local_kv")
+    expected_args.update(subject_lora_mode=mode, subject_lora_rank=4, subject_lora_alpha=4)
+    if config["args"] != expected_args or config.get("data_manifest") != baseline["data_manifest"]:
+        raise ValueError("Subject LoRA must match token-local B0 training except adapter mode")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from experiments.perfusion_subject_pilot.data_contract import verify_training_data
+
+    concepts = Path(expand_value(config["args"]["concepts_list"], environment)).resolve()
+    manifest = Path(expand_value(source["asset_manifest"], environment)).resolve()
+    return verify_training_data(cohort, concepts, manifest,
+                                source["concepts_sha256"], source["asset_manifest_sha256"])
+
+
 def git_output(*args: str) -> str:
     return subprocess.check_output(
         ["git", *args], cwd=PROJECT_ROOT, text=True, stderr=subprocess.STDOUT
@@ -585,6 +616,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_unpaired_emission_material_train_inputs(config, environment)
     validate_mailbox_matte_train_inputs(config, environment)
     perfusion_training_data = validate_perfusion_subject_train_inputs(config, environment)
+    lora_training_data = validate_lora_subject_train_inputs(config, environment)
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"
@@ -662,6 +694,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     if perfusion_training_data is not None:
         manifest["perfusion_training_data"] = perfusion_training_data
+    if lora_training_data is not None:
+        manifest["lora_training_data"] = lora_training_data
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if cli.dry_run:
         print(f"Dry run created: {run_dir}")

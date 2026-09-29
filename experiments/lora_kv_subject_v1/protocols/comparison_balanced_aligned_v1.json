@@ -1,0 +1,16 @@
+{
+  "schema": "lora_kv_subject_comparison/v1",
+  "cohort": "balanced_aligned",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "reference_protocol": "experiments/perfusion_subject_pilot/protocols/balanced_comparison_v1.json",
+  "reference_protocol_sha256": "3d5364d4b3d4ea1783e1a75bbc8c24a223e13eff450f8bc27267e68d531ed7a3",
+  "material_selection": "experiments/material_token_local_pilot_v1/configs/selected_material_source.json",
+  "material_selection_sha256": "1aefb6c8d941e73b369cfee2301429046c970c8786158b94e9b9452289bd1d90",
+  "training_data": {"cohort": "balanced_aligned", "concepts_sha256": "109e2b336bde5a465db4cf9a29cc578f83cda48899fe2f91b4956aafcc0010f3", "asset_manifest_sha256": "05bd9f15dbca82a33531dae0cd9620a14554200556c384e53fbc64bc2e782e90", "row_count": 10},
+  "lora": {"rank": 4, "alpha": 4.0},
+  "arms": ["full_kv", "token_local_kv", "full_v", "token_local_v"],
+  "groups": ["plain", "red", "blue"],
+  "conditions": ["subject_only", "subject_material"],
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "safety_checker": "enabled"
+}

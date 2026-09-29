@@ -71,6 +71,7 @@ check_min_version("0.17.0.dev0")
 
 logger = get_logger(__name__)
 TOKEN_LOCAL_KV_WEIGHT_NAME = "pytorch_token_local_kv_weights.bin"
+SUBJECT_LORA_KV_WEIGHT_NAME = "pytorch_lora_kv_weights.bin"
 
 
 def freeze_params(params):
@@ -643,6 +644,14 @@ def parse_args(input_args=None):
         help="Lock <S*> Keys to mailbox and train token-local rank-1 Subject Value edits.",
     )
     parser.add_argument(
+        "--subject_lora_mode",
+        choices=["full_kv", "token_local_kv", "full_v", "token_local_v"],
+        default=None,
+        help="Train a Subject-only LoRA K/V adapter in the selected four-arm comparison mode.",
+    )
+    parser.add_argument("--subject_lora_rank", type=int, default=4)
+    parser.add_argument("--subject_lora_alpha", type=float, default=4.0)
+    parser.add_argument(
         "--k_learning_rate",
         type=float,
         default=None,
@@ -1057,6 +1066,17 @@ def main(args):
             raise ValueError("token-local K/V requires --freeze_model crossattn_kv")
         if len(modifier_token_id) != 1:
             raise ValueError("token-local K/V currently supports exactly one modifier token")
+    if args.subject_lora_mode:
+        if (args.token_local_kv or args.perfusion_subject or args.enable_xformers_memory_efficient_attention
+                or args.freeze_model != "crossattn_kv" or args.modifier_token != ["<S*>"]
+                or args.initializer_token != ["mailbox"] or args.k_learning_rate is not None
+                or args.v_learning_rate is not None or args.subject_lora_rank < 1
+                or args.subject_lora_alpha <= 0):
+            raise ValueError("Subject LoRA requires one mailbox-initialized <S*>, frozen base K/V, and a positive rank/alpha")
+        repo_root = str(Path(__file__).resolve().parents[2])
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from experiments.lora_kv_subject_v1.attention import SubjectLoraKVAttnProcessor
     if args.enable_xformers_memory_efficient_attention:
         if is_xformers_available():
             import xformers
@@ -1101,7 +1121,13 @@ def main(args):
             hidden_size = unet.config.block_out_channels[block_id]
         layer_name = name.split(".processor")[0]
         if cross_attention_dim is not None:
-            if args.perfusion_subject:
+            if args.subject_lora_mode:
+                custom_diffusion_attn_procs[name] = SubjectLoraKVAttnProcessor(
+                    hidden_size=hidden_size, cross_attention_dim=cross_attention_dim,
+                    mode=args.subject_lora_mode, rank=args.subject_lora_rank,
+                    alpha=args.subject_lora_alpha,
+                ).to(unet.device)
+            elif args.perfusion_subject:
                 custom_diffusion_attn_procs[name] = PerfusionSubjectAttnProcessor(
                     hidden_size=hidden_size, cross_attention_dim=cross_attention_dim
                 ).to(unet.device)
@@ -1126,7 +1152,13 @@ def main(args):
                 ).to(unet.device)
                 custom_diffusion_attn_procs[name].load_state_dict(weights)
         else:
-            if args.perfusion_subject:
+            if args.subject_lora_mode:
+                custom_diffusion_attn_procs[name] = SubjectLoraKVAttnProcessor(
+                    hidden_size=hidden_size, cross_attention_dim=None,
+                    mode=args.subject_lora_mode, rank=args.subject_lora_rank,
+                    alpha=args.subject_lora_alpha,
+                )
+            elif args.perfusion_subject:
                 custom_diffusion_attn_procs[name] = PerfusionSubjectAttnProcessor()
             else:
                 custom_diffusion_attn_procs[name] = attention_class(
@@ -1347,7 +1379,7 @@ def main(args):
                 # Get the text embedding for conditioning
                 encoder_hidden_states = text_encoder(batch["input_ids"])[0]
                 token_local_kwargs = {}
-                if args.token_local_kv:
+                if args.token_local_kv or args.subject_lora_mode in {"token_local_kv", "token_local_v"}:
                     token_local_kwargs["cross_attention_kwargs"] = {
                         "modifier_token_mask": build_modifier_token_mask(batch["input_ids"], modifier_token_id)
                     }
@@ -1444,7 +1476,7 @@ def main(args):
                     class_noisy_latents = noise_scheduler.add_noise(class_latents, class_noise, class_timesteps)
                     class_encoder_hidden_states = text_encoder(batch["class_input_ids"])[0]
                     class_token_local_kwargs = {}
-                    if args.token_local_kv:
+                    if args.token_local_kv or args.subject_lora_mode in {"token_local_kv", "token_local_v"}:
                         class_token_local_kwargs["cross_attention_kwargs"] = {
                             "modifier_token_mask": build_modifier_token_mask(batch["class_input_ids"], modifier_token_id)
                         }
@@ -1619,7 +1651,18 @@ def main(args):
                 "weight_decay": args.adam_weight_decay,
             }
             write_json(Path(args.output_dir) / "embedding_update_audit.json", embedding_audit_payload)
-        if args.token_local_kv:
+        if args.subject_lora_mode:
+            from experiments.lora_kv_subject_v1.attention import subject_lora_state_dict
+            write_json(Path(args.output_dir) / "adaptation_config.json", {
+                "adaptation_mode": "lora_subject_kv",
+                "mode": args.subject_lora_mode,
+                "rank": args.subject_lora_rank,
+                "alpha": args.subject_lora_alpha,
+                "weight_name": SUBJECT_LORA_KV_WEIGHT_NAME,
+                "modifier_tokens": args.modifier_token,
+            })
+            torch.save(subject_lora_state_dict(unet), Path(args.output_dir) / SUBJECT_LORA_KV_WEIGHT_NAME)
+        elif args.token_local_kv:
             write_json(
                 Path(args.output_dir) / "adaptation_config.json",
                 {
@@ -1652,7 +1695,7 @@ def main(args):
 
         # Final inference
         # Load previous pipeline
-        if args.token_local_kv or args.perfusion_subject:
+        if args.token_local_kv or args.perfusion_subject or args.subject_lora_mode:
             pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 revision=args.revision,
@@ -1669,7 +1712,7 @@ def main(args):
         pipeline = pipeline.to(accelerator.device)
 
         # load attention processors
-        if not (args.token_local_kv or args.perfusion_subject):
+        if not (args.token_local_kv or args.perfusion_subject or args.subject_lora_mode):
             pipeline.unet.load_attn_procs(args.output_dir, weight_name="pytorch_custom_diffusion_weights.bin")
             for token in args.modifier_token:
                 pipeline.load_textual_inversion(args.output_dir, weight_name=f"{token}.bin")

@@ -1,0 +1,8 @@
+schema_version: 1
+status: authorized_lora_subject_ablation
+stage: train
+run: {study: lora_kv_subject_v1, variant: original_full_v_r4_5000, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "3", COLORPEEL_EXPOSURE_MATCHED_BASE5_CONCEPTS: "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-190100__natural_image_subject_color_pilot__subject_exposure_matched_v2_assets__c3844f1__42/concepts.json"}
+data_manifest: experiments/natural_image_subject_color_pilot/configs/d1_subject_recolor_mailbox_category_token_local_kv_5000_protocol_v1.json
+lora_source: {cohort: original, asset_manifest: "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260918-190100__natural_image_subject_color_pilot__subject_exposure_matched_v2_assets__c3844f1__42/staging_manifest.json", concepts_sha256: 3ec9f8f244cc9df320152cef76d5b5f5dbb211e62d39b16cf1f9fb40db541596, asset_manifest_sha256: cb41741d83030021eeae1c48cd7e437f5c9385ec98cd5052d8e2ebd00885624a}
+args: {pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4, concepts_list: "${COLORPEEL_EXPOSURE_MATCHED_BASE5_CONCEPTS}", resolution: 512, train_batch_size: 1, learning_rate: 1.0e-5, kv_learning_rate: 1.0e-5, subject_lora_mode: full_v, subject_lora_rank: 4, subject_lora_alpha: 4, scale_lr: true, lr_scheduler: constant, lr_warmup_steps: 0, max_train_steps: 5000, checkpointing_steps: 1000, seed: 42, mixed_precision: "no", cos_weight: 0.0, gradient_accumulation_steps: 1, max_grad_norm: 1.0, dataloader_num_workers: 2, adam_beta1: 0.9, adam_beta2: 0.999, adam_weight_decay: 0.0, adam_epsilon: 1.0e-8, hflip: false, modifier_token: "<S*>", initializer_token: mailbox}
