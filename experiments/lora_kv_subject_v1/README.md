@@ -13,4 +13,6 @@ Only cross-attention K/V can change. Q, output projections, self-attention, the 
 
 Train with `scripts/launch/colorpeel_run.py` and one of the eight files in `configs/`. A run directory must be new and named `TIMESTAMP__lora_kv_subject_v1__VARIANT__COMMIT7__42` below `$COLORPEEL_RUN_ROOT/lora_kv_subject_v1/`. Each run saves its own `checkpoints/pytorch_lora_kv_weights.bin`, `<S*>.bin`, and `adaptation_config.json`.
 
+The four modes are assigned to identical V100 GPUs 0–3, respectively, so the first four runs can train concurrently. The second cohort reuses the same device assignment.
+
 After all four arms in a cohort succeed, run `evaluate.py` with its corresponding `protocols/comparison_*_v1.json` and the four `checkpoints/` directories. The evaluator checks each source run, loads the fixed selected token-local `<M*>`, and produces a matched 72-image comparison (4 modes × plain/red/blue × Subject-only/Subject+Material × seeds 42–44, 100 PNDM steps, CFG 3.5). Safety-filtered outputs are recorded separately in `generation_status.jsonl`. The full-position modes also change ordinary text positions and the unconditional CFG branch by design.
