@@ -96,13 +96,12 @@ def verify_subject_checkpoint(checkpoint: Path, arm: str, protocol: dict) -> dic
     manifest_path = checkpoint.parent / "manifest.json"
     manifest = read_json(manifest_path)
     expected_variant = f"{protocol['cohort']}_{arm}_r{protocol['lora']['rank']}_5000"
-    if (manifest.get("status") != "succeeded"
+    if (manifest.get("status") != "succeeded" or manifest.get("returncode") != 0
             or manifest.get("stage") != "train"
             or manifest.get("run", {}).get("study") != "lora_kv_subject_v1"
             or manifest.get("run", {}).get("variant") != expected_variant):
         raise ValueError(f"Subject training run differs from {expected_variant}: {checkpoint}")
-    if (manifest.get("lora_training_data") is not None
-            and manifest["lora_training_data"] != protocol["training_data"]):
+    if manifest.get("lora_training_data") != protocol["training_data"]:
         raise ValueError(f"Subject training data differs from {protocol['cohort']}: {checkpoint}")
     adaptation = read_json(checkpoint / "adaptation_config.json")
     if (adaptation.get("adaptation_mode") != "lora_subject_kv"
