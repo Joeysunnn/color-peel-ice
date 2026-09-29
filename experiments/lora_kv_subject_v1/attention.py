@@ -149,15 +149,15 @@ def install_subject_lora_kv(unet, state, mode, rank, alpha, material_state=None)
         local_state = processor.state_dict()
         with torch.no_grad():
             for key, parameter in local_state.items():
-                    is_material = key.startswith("material_delta_")
-                    source_key = key.removeprefix("material_") if is_material else key
-                    full_key = f"{name}.{source_key}"
-                    source = material_state if is_material else state
+                is_material = key.startswith("material_delta_")
+                source_key = key.removeprefix("material_") if is_material else key
+                full_key = f"{name}.{source_key}"
+                source = material_state if is_material else state
                 value = source.get(full_key)
                 if not isinstance(value, torch.Tensor) or value.shape != parameter.shape:
                     raise ValueError(f"missing or mismatched attention tensor: {full_key}")
                 parameter.copy_(value)
-                    (expected_material if is_material else expected_subject).add(full_key)
+                (expected_material if is_material else expected_subject).add(full_key)
             processor.load_state_dict(local_state)
         processors[name] = processor.to(device=attn.to_k.weight.device, dtype=attn.to_k.weight.dtype)
         if material_state is not None:
