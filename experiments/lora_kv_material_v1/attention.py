@@ -11,6 +11,7 @@ from src.train.custom_attention.attention_processor_custom import LoRALinearLaye
 class DualTokenLocalLoraKVAttnProcessor(SubjectLoraKVAttnProcessor):
     def __init__(self, hidden_size=None, cross_attention_dim=None, rank=4, alpha=4):
         super().__init__(hidden_size, cross_attention_dim, "token_local_kv", rank, alpha)
+        self.material_key_scale = 1.0
         self.material_value_scale = 1.0
         if cross_attention_dim is not None:
             self.material_to_k_lora = LoRALinearLayer(cross_attention_dim, hidden_size, rank, alpha)
@@ -34,7 +35,9 @@ class DualTokenLocalLoraKVAttnProcessor(SubjectLoraKVAttnProcessor):
         material_gate = material_mask.to(device=base_k.device).unsqueeze(-1)
         key = torch.where(subject_gate, base_k + self.to_k_lora(encoder_hidden_states), base_k)
         value = torch.where(subject_gate, base_v + self.to_v_lora(encoder_hidden_states), base_v)
-        key = torch.where(material_gate, key + self.material_to_k_lora(encoder_hidden_states), key)
+        key = torch.where(material_gate,
+                          key + self.material_key_scale * self.material_to_k_lora(encoder_hidden_states),
+                          key)
         value = torch.where(material_gate,
                             value + self.material_value_scale * self.material_to_v_lora(encoder_hidden_states),
                             value)

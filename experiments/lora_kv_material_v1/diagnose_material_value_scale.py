@@ -1,4 +1,4 @@
-"""Sweep only the new Material Value residual at fixed Subject and Material Keys."""
+"""Sweep one new Material K/V residual while the other projections stay fixed."""
 
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ from experiments.lora_kv_material_v1.evaluate import (
 )
 
 
-SCALES = {"v0": 0.0, "v1": 1.0, "v1p5": 1.5, "v2": 2.0}
-COLUMNS = ("subject_only", *SCALES, "new_material_only")
+SCALE_VALUES = {"0": 0.0, "1": 1.0, "1p5": 1.5, "2": 2.0}
 
 
-def make_sheets(protocol: dict, source: Path, output: Path, rows: list[dict]) -> dict[str, str]:
+def make_sheets(protocol: dict, source: Path, output: Path, rows: list[dict],
+                scales: dict[str, float]) -> dict[str, str]:
     from PIL import Image, ImageDraw
 
     old = {row["id"]: row for row in
@@ -36,20 +36,21 @@ def make_sheets(protocol: dict, source: Path, output: Path, rows: list[dict]) ->
     sheet_dir = output / "contact_sheets"
     sheet_dir.mkdir()
     tile, left, top, gap = 256, 135, 34, 8
+    columns = ("subject_only", *scales, "new_material_only")
     sheets = {}
     for group in protocol["groups"]:
-        sheet = Image.new("RGB", (left + len(COLUMNS) * (tile + gap),
+        sheet = Image.new("RGB", (left + len(columns) * (tile + gap),
                                   top + len(protocol["sampling"]["seeds"]) * (tile + gap)), "white")
         draw = ImageDraw.Draw(sheet)
-        for col, condition in enumerate(COLUMNS):
+        for col, condition in enumerate(columns):
             draw.text((left + col * (tile + gap), 8), condition, fill="black")
         for row_index, seed in enumerate(protocol["sampling"]["seeds"]):
             y = top + row_index * (tile + gap)
             draw.text((8, y + 8), f"{group}\nseed {seed}", fill="black")
-            for col, condition in enumerate(COLUMNS):
+            for col, condition in enumerate(columns):
                 sample_id = f"{condition}__{group}__seed{seed}"
-                record = new[sample_id] if condition in SCALES else old[sample_id]
-                root = output if condition in SCALES else source
+                record = new[sample_id] if condition in scales else old[sample_id]
+                root = output if condition in scales else source
                 path = root / record["image_path"]
                 if sha256(path) != record["image_sha256"]:
                     raise ValueError(f"source or generated image hash changed: {path}")
@@ -72,8 +73,12 @@ def main() -> None:
     parser.add_argument("--source-comparison", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--scale-target", choices=("value", "key"), default="value")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    prefix = "v" if args.scale_target == "value" else "k"
+    scales = {prefix + suffix: scale for suffix, scale in SCALE_VALUES.items()}
+    scale_field = args.scale_target + "_scale"
     protocol = read_json(args.protocol)
     if (protocol.get("schema") != "lora_kv_material_comparison/v1"
             or protocol.get("groups") != ["plain", "red", "blue"]
@@ -100,10 +105,10 @@ def main() -> None:
     if len(base_rows) != 9 or args.output_dir.exists():
         raise ValueError("expected nine fixed S+M prompts and a fresh output directory")
     rows = [{"id": f"{label}__{row['group']}__seed{row['seed']}",
-             "value_scale": scale, "group": row["group"], "seed": row["seed"],
+             scale_field: scale, "group": row["group"], "seed": row["seed"],
              "prompt": row["prompt"],
              "image_path": f"images/{label}/{row['group']}/seed{row['seed']}.png"}
-            for label, scale in SCALES.items() for row in base_rows]
+            for label, scale in scales.items() for row in base_rows]
     args.output_dir.mkdir(parents=True)
     provenance = {"status": "dry_run" if args.dry_run else "running",
                   "protocol_sha256": sha256(args.protocol),
@@ -111,36 +116,43 @@ def main() -> None:
                   "source_provenance_sha256": sha256(source / "provenance.json"),
                   "subject_checkpoint_sha256": subject_hashes,
                   "new_material_checkpoint_sha256": material_hashes,
-                  "fixed_key_scale": 1.0, "value_scales": SCALES}
+                  "scale_target": args.scale_target, "scales": scales,
+                  "fixed_other_projection_scale": 1.0}
     provenance_path = args.output_dir / "provenance.json"
     provenance_path.write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
     with (args.output_dir / "generation_manifest.jsonl").open("w") as handle:
         for row in rows:
             handle.write(json.dumps(row, sort_keys=True) + "\n")
     if args.dry_run:
-        print(f"{len(rows)} Value-scale controls: {args.output_dir}")
+        print(f"{len(rows)} {args.scale_target}-scale controls: {args.output_dir}")
         return
     import torch
     from experiments.lora_kv_material_v1.attention import DualTokenLocalLoraKVAttnProcessor
+    if args.scale_target == "key":
+        from experiments.lora_kv_material_v1.diagnose_attention_mass import attention_measurements
 
     previous = {row["id"]: row for row in
                 (json.loads(line) for line in (source / "generation_status.jsonl").read_text().splitlines())}
     with (args.output_dir / "generation_status.jsonl").open("w") as ledger:
-        for label, scale in SCALES.items():
+        for label, scale in scales.items():
             pipe = load_pipeline(protocol, subject, new_material, "new", args.device)
             for processor in pipe.unet.attn_processors.values():
                 if not isinstance(processor, DualTokenLocalLoraKVAttnProcessor):
-                    raise ValueError("unexpected attention processor in Material Value sweep")
-                processor.material_value_scale = scale
+                    raise ValueError("unexpected attention processor in Material scale sweep")
+                setattr(processor, f"material_{args.scale_target}_scale", scale)
             for row in rows:
-                if row["value_scale"] != scale:
+                if row[scale_field] != scale:
                     continue
-                result = pipe(row["prompt"],
-                              num_inference_steps=protocol["sampling"]["num_inference_steps"],
-                              guidance_scale=protocol["sampling"]["guidance_scale"],
-                              generator=torch.Generator(device=args.device).manual_seed(row["seed"]),
-                              cross_attention_kwargs=token_masks(
-                                  pipe, row["prompt"], protocol["sampling"]["guidance_scale"]))
+                masks = token_masks(pipe, row["prompt"], protocol["sampling"]["guidance_scale"])
+                if args.scale_target == "key":
+                    result, attention, layers = attention_measurements(
+                        pipe, masks, row["prompt"], row["seed"], protocol["sampling"], args.device)
+                else:
+                    result = pipe(row["prompt"],
+                                  num_inference_steps=protocol["sampling"]["num_inference_steps"],
+                                  guidance_scale=protocol["sampling"]["guidance_scale"],
+                                  generator=torch.Generator(device=args.device).manual_seed(row["seed"]),
+                                  cross_attention_kwargs=masks)
                 path = args.output_dir / row["image_path"]
                 path.parent.mkdir(parents=True, exist_ok=True)
                 result.images[0].save(path)
@@ -150,20 +162,24 @@ def main() -> None:
                 filtered = bool(flags[0]) if flags is not None else False
                 record = {**row, "status": "safety_filtered" if filtered else "ok",
                           "image_sha256": sha256(path), "nsfw_content_detected": filtered}
-                if label == "v1":
+                if args.scale_target == "key":
+                    record["attention"] = attention
+                    record["material_attention_by_layer"] = {
+                        name: values["material"]["all"] for name, values in layers.items()}
+                if scale == 1.0:
                     original = previous[f"subject_new_material__{row['group']}__seed{row['seed']}"]
                     if (record["image_sha256"] != original["image_sha256"]
                             or record["status"] != original["status"]):
-                        raise ValueError("unit Material Value scale did not reproduce the source image")
+                        raise ValueError("unit Material scale did not reproduce the source image")
                 ledger.write(json.dumps(record, sort_keys=True) + "\n")
                 ledger.flush()
             del pipe
             gc.collect()
             torch.cuda.empty_cache()
-    provenance["contact_sheet_sha256"] = make_sheets(protocol, source, args.output_dir, rows)
+    provenance["contact_sheet_sha256"] = make_sheets(protocol, source, args.output_dir, rows, scales)
     provenance["status"] = "succeeded"
     provenance_path.write_text(json.dumps(provenance, indent=2, sort_keys=True) + "\n")
-    print(f"{len(rows)} Value-scale controls: {args.output_dir}")
+    print(f"{len(rows)} {args.scale_target}-scale controls: {args.output_dir}")
 
 
 if __name__ == "__main__":
