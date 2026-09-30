@@ -649,8 +649,14 @@ def parse_args(input_args=None):
         default=None,
         help="Train a Subject-only LoRA K/V adapter in the selected four-arm comparison mode.",
     )
+    parser.add_argument(
+        "--material_lora_mode", dest="subject_lora_mode", choices=["token_local_kv"], default=None,
+        help="Train the same token-local K/V LoRA adapter for <M*>.",
+    )
     parser.add_argument("--subject_lora_rank", type=int, default=4)
     parser.add_argument("--subject_lora_alpha", type=float, default=4.0)
+    parser.add_argument("--material_lora_rank", dest="subject_lora_rank", type=int, default=4)
+    parser.add_argument("--material_lora_alpha", dest="subject_lora_alpha", type=float, default=4.0)
     parser.add_argument(
         "--k_learning_rate",
         type=float,
@@ -1067,12 +1073,16 @@ def main(args):
         if len(modifier_token_id) != 1:
             raise ValueError("token-local K/V currently supports exactly one modifier token")
     if args.subject_lora_mode:
+        lora_token = args.modifier_token[0] if args.modifier_token and len(args.modifier_token) == 1 else None
+        lora_initializer = args.initializer_token[0] if args.initializer_token and len(args.initializer_token) == 1 else None
+        valid_concept = ((lora_token, lora_initializer) == ("<S*>", "mailbox")
+                         or ((lora_token, lora_initializer) == ("<M*>", "metal")
+                             and args.subject_lora_mode == "token_local_kv"))
         if (args.token_local_kv or args.perfusion_subject or args.enable_xformers_memory_efficient_attention
-                or args.freeze_model != "crossattn_kv" or args.modifier_token != ["<S*>"]
-                or args.initializer_token != ["mailbox"] or args.k_learning_rate is not None
+                or args.freeze_model != "crossattn_kv" or not valid_concept or args.k_learning_rate is not None
                 or args.v_learning_rate is not None or args.subject_lora_rank < 1
                 or args.subject_lora_alpha <= 0):
-            raise ValueError("Subject LoRA requires one mailbox-initialized <S*>, frozen base K/V, and a positive rank/alpha")
+            raise ValueError("LoRA requires one supported modifier token, frozen base K/V, and positive rank/alpha")
         repo_root = str(Path(__file__).resolve().parents[2])
         if repo_root not in sys.path:
             sys.path.insert(0, repo_root)
@@ -1654,7 +1664,7 @@ def main(args):
         if args.subject_lora_mode:
             from experiments.lora_kv_subject_v1.attention import subject_lora_state_dict
             write_json(Path(args.output_dir) / "adaptation_config.json", {
-                "adaptation_mode": "lora_subject_kv",
+                "adaptation_mode": "lora_material_kv" if args.modifier_token == ["<M*>"] else "lora_subject_kv",
                 "mode": args.subject_lora_mode,
                 "rank": args.subject_lora_rank,
                 "alpha": args.subject_lora_alpha,

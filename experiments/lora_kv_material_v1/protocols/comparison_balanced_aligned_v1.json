@@ -1,0 +1,15 @@
+{
+  "schema": "lora_kv_material_comparison/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "subject_comparison": "experiments/lora_kv_subject_v1/protocols/comparison_balanced_aligned_v1.json",
+  "subject_comparison_sha256": "93e8e2e912eb2154bbb7b6d76e2edb95a86dcf112d1ce1bcbb7b13eba2c744dc",
+  "material_only_reference": "experiments/subject_material_composition_v1/protocols/mailbox_metal_diagnostic_v1.json",
+  "material_only_reference_sha256": "2c660f047ececb9b602fdf94284ff4c11db62a68fb3e82f1d2ad0fabc7893373",
+  "subject_arm": "token_local_kv",
+  "material_training": {"study": "lora_kv_material_v1", "variant": "ground_reflection_token_local_kv_r4_5000", "seed": 42},
+  "material_lora": {"mode": "token_local_kv", "rank": 4, "alpha": 4.0},
+  "conditions": ["subject_only", "subject_old_material", "subject_new_material", "new_material_only"],
+  "groups": ["plain", "red", "blue"],
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "safety_checker": "enabled"
+}

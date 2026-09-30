@@ -195,6 +195,30 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
                                 source["concepts_sha256"], source["asset_manifest_sha256"])
 
 
+def validate_lora_material_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> dict | None:
+    if config["stage"] != "train" or config["run"]["study"] != "lora_kv_material_v1":
+        return None
+    baseline = read_config(PROJECT_ROOT / "experiments/material_token_local_pilot_v1/configs/train_token_local_kv_ground_reflection.yaml")
+    expected_args = dict(baseline["args"])
+    expected_args.pop("token_local_kv")
+    expected_args.update(material_lora_mode="token_local_kv", material_lora_rank=4, material_lora_alpha=4)
+    if (config.get("status") != "authorized_lora_material_training"
+            or config["run"] != {"study": "lora_kv_material_v1", "variant": "ground_reflection_token_local_kv_r4_5000", "seed": 42}
+            or config["args"] != expected_args
+            or config.get("data_manifest") != baseline["data_manifest"]
+            or config.get("material_pilot_authorization") != baseline["material_pilot_authorization"]):
+        raise ValueError("Material LoRA must match selected Material training except adapter mode")
+    from src.methods.colorpeel_ice import prepare_material_token_local_pilot as pilot
+
+    staging = Path(expand_value(config["material_pilot_authorization"]["staging_root"], environment)).resolve()
+    return {
+        "cohort": "ground_reflection_72",
+        "concepts_sha256": pilot.sha256(staging / "concepts.json"),
+        "asset_manifest_sha256": pilot.sha256(staging / "training_assets_manifest.jsonl"),
+        "row_count": 72,
+    }
+
+
 def git_output(*args: str) -> str:
     return subprocess.check_output(
         ["git", *args], cwd=PROJECT_ROOT, text=True, stderr=subprocess.STDOUT
@@ -250,7 +274,8 @@ def expand_value(value: Any, environment: dict[str, str]) -> Any:
 
 
 def validate_material_pilot_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> None:
-    if config["stage"] != "train" or config["run"]["study"] != "material_token_local_pilot_v1":
+    if (config["stage"] != "train" or config["run"]["study"] not in
+            {"material_token_local_pilot_v1", "lora_kv_material_v1"}):
         return
     authorization = config.get("material_pilot_authorization")
     if not isinstance(authorization, dict) or not all(
@@ -264,7 +289,9 @@ def validate_material_pilot_train_inputs(config: dict[str, Any], environment: di
     preview_root = Path(expand_value(authorization["preview_root"], environment)).resolve()
     review_record = Path(expand_value(authorization["review_record"], environment)).resolve()
     staging_root = Path(expand_value(authorization["staging_root"], environment)).resolve()
-    comparison = config["run"]["variant"] == "standalone_metal_ground_reflection_token_local_kv_5000"
+    comparison = config["run"]["variant"] in {
+        "standalone_metal_ground_reflection_token_local_kv_5000", "ground_reflection_token_local_kv_r4_5000",
+    }
     protocol_path = (pilot.EXPERIMENT_ROOT / "protocols" / "material_token_local_pilot_v1_ground_reflection.json"
                      if comparison else pilot.DEFAULT_PROTOCOL)
     protocol = pilot.validate_protocol(pilot.read_json(protocol_path))
@@ -617,6 +644,9 @@ def main(argv: list[str] | None = None) -> int:
     validate_mailbox_matte_train_inputs(config, environment)
     perfusion_training_data = validate_perfusion_subject_train_inputs(config, environment)
     lora_training_data = validate_lora_subject_train_inputs(config, environment)
+    material_lora_training_data = validate_lora_material_train_inputs(config, environment)
+    if material_lora_training_data is not None:
+        lora_training_data = material_lora_training_data
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"
