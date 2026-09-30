@@ -62,7 +62,8 @@ def attention_measurements(pipe, masks: dict, prompt: str, seed: int,
             handle.remove()
     by_layer = {}
     for name, values in layer_values.items():
-        if len(values["material"]) != sampling["num_inference_steps"]:
+        if len(values["material"]) not in {sampling["num_inference_steps"],
+                                           sampling["num_inference_steps"] + 1}:
             raise ValueError(f"unexpected attention calls at {name}: {len(values['material'])}")
         by_layer[name] = {}
         for token_name, sequence in values.items():
@@ -70,6 +71,7 @@ def attention_measurements(pipe, masks: dict, prompt: str, seed: int,
                 continue
             tensor = torch.stack(sequence)
             by_layer[name][token_name] = {
+                "calls": len(sequence),
                 "all": tensor.mean().item(),
                 "early20": tensor[:20].mean().item(),
                 "late20": tensor[-20:].mean().item(),
