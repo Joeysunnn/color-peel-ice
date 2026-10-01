@@ -1,5 +1,7 @@
 # Material extraction: next experimental direction (2026-10-01)
 
+**Scope correction (2026-10-01):** This note addresses only how a synthetic CLEVR Material training set might improve the existing `<M*>` LoRA. The project owner's intended question is the broader ICE task: extract material from a natural source image and construct material counterfactual image pairs. The corrected research protocol is in `../subject_material_composition_v1/diagnostics/natural_material_counterfactual_design_20261001.md`. Do not use the synthetic caption-only pilot below as the answer to that broader question.
+
 ## Objective and current evidence
 
 Here, "extract material" means learning an `<M*>` conditioning signal that transfers metallic surface appearance across objects while ordinary prompt words retain shape and color control. It does not mean estimating physical roughness/metallicity maps from one image.
