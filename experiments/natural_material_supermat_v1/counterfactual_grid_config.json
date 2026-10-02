@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "phase": "post_calibration_only",
+  "enabled": false,
+  "requires_explicit_human_approval": true,
+  "shapes": ["sphere", "cube", "cylinder", "cone"],
+  "colors": ["red", "blue", "green", "yellow"],
+  "lighting_conditions": ["soft_front", "side_directional", "top_environment"],
+  "viewpoints": ["frontish", "oblique_45"],
+  "expected_images": 96,
+  "material_policy": "one_fixed_canonical_roughness_metallic_pair"
+}

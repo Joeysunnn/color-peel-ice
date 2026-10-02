@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "code_repository": "https://github.com/hyj542682306/SuperMat",
+  "checkpoint_repository": "oyiya/SuperMat",
+  "checkpoint_file": "supermat.pth",
+  "base_model": "sd2-community/stable-diffusion-2-1",
+  "image_size": 512,
+  "seed": 42,
+  "device": "cuda:0",
+  "input_policy": "original_natural_image_with_binary_object_mask_as_alpha",
+  "output_maps": ["albedo.png", "roughness.png", "metallic.png", "orm.png"],
+  "aggregation_map_policy": "separate_roughness_and_metallic_8bit_maps_divided_by_255",
+  "material_region": "configs/mailbox_body_region.json"
+}
