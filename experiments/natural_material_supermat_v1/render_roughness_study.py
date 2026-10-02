@@ -21,6 +21,7 @@ from pathlib import Path
 
 import bpy
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import render_calibration as base
 
 
