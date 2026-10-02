@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,11 @@ def digest(path):
 
 def save_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+
+
+def project_commit():
+    root = Path(__file__).resolve().parents[2]
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
 
 
 def prepare(args):
@@ -60,6 +66,8 @@ def prepare(args):
         "supermat_input": "source_mailbox.png",
         "supermat_input_sha256": digest(out / "source_mailbox.png"),
         "gray_composite_sha256": digest(out / "source_gray_composite.png"),
+        "project_git_commit": project_commit(),
+        "pipeline_sha256": digest(__file__),
     })
 
 
@@ -96,6 +104,8 @@ def aggregate(args):
         "region_mask_sha256": digest(args.region_mask),
         "albedo_map_sha256": digest(maps / "albedo.png"),
         "supermat_run": str(maps.resolve()),
+        "project_git_commit": project_commit(),
+        "pipeline_sha256": digest(__file__),
     }
     save_json(args.output, result)
 
@@ -104,7 +114,7 @@ def roundtrip(args):
     canonical = json.loads(Path(args.canonical).read_text())
     entries = []
     for name in ("soft_front", "side_directional", "top_environment"):
-        maps = Path(args.maps_root) / name
+        maps = Path(args.maps_root) / name / "input_rgba"
         mask = Image.open(Path(args.calibration_root) / name / "object_mask.png").convert("L")
         # Exclude silhouettes and antialiasing from the scalar comparison.
         mask = mask.filter(ImageFilter.MinFilter(11))
@@ -121,6 +131,8 @@ def roundtrip(args):
     save_json(args.output, {
         "schema_version": 1,
         "canonical_sha256": digest(args.canonical),
+        "project_git_commit": project_commit(),
+        "pipeline_sha256": digest(__file__),
         "interpretation": "SuperMat-to-Cycles-to-SuperMat transfer diagnostic; same-estimator agreement is not ground truth",
         "results": entries,
     })
