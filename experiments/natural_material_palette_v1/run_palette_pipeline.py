@@ -101,16 +101,23 @@ def main():
             raise FileNotFoundError("Generation manifest missing")
         if (sample / "decompose_manifest.json").exists():
             raise FileExistsError("Decomposition already recorded")
-        from pytorch_lightning import Trainer
-        data = capture.get_data(predict_dir=sample, predict_ds="sd")
-        module = capture.get_inference_module(pt=args.decomposer)
-        trainer = Trainer(default_root_dir=sample, accelerator="gpu", devices=1,
-                          precision=16, logger=False, enable_checkpointing=False)
-        trainer.predict(module, data)
-        outputs = sorted(p for p in lora_dir.rglob("*.png")
-                         if p.stem.endswith(("_albedo", "_normals", "_roughness")))
-        if len(outputs) != 3:
-            raise RuntimeError(f"Expected one A/N/R triplet, found {len(outputs)}: {outputs}")
+        def maps():
+            return sorted(p for folder in ("outputs", "out_renorm")
+                          for p in (lora_dir / folder).glob("*.png")
+                          if p.stem.endswith(("_albedo", "_normals", "_roughness")))
+
+        outputs = maps()
+        if not outputs:
+            from pytorch_lightning import Trainer
+            data = capture.get_data(predict_dir=sample, predict_ds="sd")
+            module = capture.get_inference_module(pt=args.decomposer)
+            trainer = Trainer(default_root_dir=sample, accelerator="gpu", devices=1,
+                              precision=16, logger=False, enable_checkpointing=False)
+            trainer.predict(module, data)
+            outputs = maps()
+        if len(outputs) != 6 or any(len([p for p in outputs if p.parent.name == folder]) != 3
+                                    for folder in ("outputs", "out_renorm")):
+            raise RuntimeError(f"Expected raw and renorm A/N/R triplets, found: {outputs}")
         record(sample, "decompose", args.sample_id,
                [sample / "generate_manifest.json", args.decomposer], outputs, args)
 
