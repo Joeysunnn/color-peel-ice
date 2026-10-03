@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "experiment_id": "natural_mailbox_subject_eroded_material_v1",
+  "source_sample_id": "010_D1GT_81_130",
+  "source_image_sha256": "ba9c6624d9998cdfcd16308b0cf8fd8f3778909d8655efe2ba9cebba370483d0",
+  "original_object_mask_sha256": "1b226d6b66c95c49ff2dddb734ff2c9efac172cddf6d3231bd12eebbad5d7157",
+  "material_region_file": "assets/subject_eroded_mask.png",
+  "material_region_origin": "masks/color_mask.png in the original subject mask derivation; an eroded object occupancy mask, not a homogeneous material segmentation",
+  "material_region_sha256": "cda18d34383e361b5d6e51e49387b3f32a56732a2e7b9fa5221ee064aaa166fbb",
+  "supermat_input_policy": "original natural image with the original full object mask as RGBA alpha; keep identical to pilot source input",
+  "supermat_input_sha256": "1ba1e5010c6732b9cd241f6bdf7cdaee4404210b2e9e89e65d822ff713433670",
+  "aggregation": "median of separate 8-bit SuperMat roughness and metallic maps divided by 255 within the subject eroded mask; record quantiles and IQR",
+  "rendering": "use the extracted roughness and metallic values directly in the existing 3-light Cycles Principled calibration profile",
+  "excluded_operations": ["roughness sweep", "metallic override to zero", "counterfactual grid", "material token training"]
+}
