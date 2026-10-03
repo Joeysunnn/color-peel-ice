@@ -24,8 +24,19 @@ def write_json(path, data):
 
 
 def set_material(obj, material, profile):
+    uv_generated = False
     if not obj.data.uv_layers:
-        raise ValueError("CLEVR sphere has no UV coordinates for spatial maps")
+        for selected in bpy.context.selected_objects:
+            selected.select_set(False)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.sphere_project()
+        bpy.ops.object.mode_set(mode="OBJECT")
+        uv_generated = True
+        if not obj.data.uv_layers:
+            raise RuntimeError("Blender sphere projection did not create UVs")
     shader = bpy.data.materials.new("MaterialPaletteSpatialPreview")
     shader.use_nodes = True
     nodes = shader.node_tree.nodes
@@ -52,6 +63,7 @@ def set_material(obj, material, profile):
     links.new(bsdf.outputs["BSDF"], output.inputs["Surface"])
     obj.data.materials.clear()
     obj.data.materials.append(shader)
+    return uv_generated
 
 
 def main():
@@ -87,7 +99,7 @@ def main():
             if obj.type == "MESH" and obj.name != "Ground":
                 bpy.data.objects.remove(obj, do_unlink=True)
         obj = base.append_sphere(args.sphere_blendfile.resolve(), profile)
-        set_material(obj, material, profile)
+        uv_generated = set_material(obj, material, profile)
         camera = base.configure_camera(obj, profile)
         folder = args.output_root / name
         folder.mkdir()
@@ -108,6 +120,8 @@ def main():
                   "base_color_linear_rgba": profile["material"]["base_color_linear_rgba"],
                   "metallic_assumption": 0.0, "normal_map_strength": 1.0,
                   "normal_map_space_assumption": "TANGENT",
+                  "sphere_uv_generated": uv_generated,
+                  "sphere_uv_method": "Blender uv.sphere_project when asset has no UVs",
                   "renderer_profile_sha256": sha(args.profile),
                   "material_json_sha256": sha(args.material_json),
                   "base_scene_sha256": sha(args.base_scene_blendfile),

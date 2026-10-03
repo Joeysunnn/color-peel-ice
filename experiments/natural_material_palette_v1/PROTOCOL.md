@@ -22,6 +22,8 @@ uses neutral gray Base Color, the spatial Roughness and Normal maps, and
 `metallic=0` as an explicit dielectric preview assumption. It must not be
 reported as measured metallicity. Keep all output images and exact input,
 checkpoint, script, model-revision, seed, crop, rendering and Git hashes.
+The existing CLEVR sphere asset has no UV map; generate spherical UVs on the
+appended mesh for spatial texture preview and record that geometry operation.
 The released predictor saves 8-bit PNG maps. Report that quantization and do
 not claim float precision from them. Keep both raw and source-color-renormalized
 texture decompositions; use raw as the primary analysis before excluding
