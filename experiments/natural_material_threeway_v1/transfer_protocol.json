@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "objects": ["cone", "mailbox"],
+  "colors": ["gray", "red", "blue"],
+  "literal_material": {
+    "mailbox": "painted metal",
+    "metal_spoon": "polished metal",
+    "wood_spoon": "wood"
+  },
+  "subject_checkpoint_relative_to_run_root": "subject_material_composition_v1/20260927-172227__subject_material_composition_v1__mailbox_subject_balanced_caption_aligned_5000__daf7547__42/checkpoints",
+  "subject_weights_sha256": "36a700658f98b2e0172c62223b9d152af7d6fece67a3837dd7826e8ba8ffda0f"
+}
