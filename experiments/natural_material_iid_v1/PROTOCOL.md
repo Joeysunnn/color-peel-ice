@@ -33,3 +33,8 @@ and checkpoint hashes, model config, raw maps, PNG previews, candidate seeds,
 VLM prior, selection checks, renderer metadata, and Git commits. Render only
 a small three-light neutral-gray sphere sheet if an M* is accepted. Do not
 generate the 96-image grid or train `<M*>`.
+
+The primary mailbox ROI is the small painted-lid mask from the earlier direct
+extraction. Reaggregate the same raw IID samples with the larger subject-eroded
+mask as a mask-sensitivity check. This changes only the spatial aggregation,
+not the generated hypotheses or VLM prior; keep its output directory separate.

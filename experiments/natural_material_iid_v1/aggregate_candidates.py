@@ -39,18 +39,21 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--run-root", type=Path, required=True)
+    parser.add_argument("--mask-dir", default="masks")
+    parser.add_argument("--output-dir", default="canonical")
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
     run_root, project_root = args.run_root.resolve(), args.project_root.resolve()
     candidate_manifest = run_root / "candidates/manifest.json"
     if not candidate_manifest.is_file():
         raise FileNotFoundError(candidate_manifest)
-    output_root = run_root / "canonical"
+    output_root = run_root / args.output_dir
     output_root.mkdir(exist_ok=False)
     summary = []
     for sample in config["samples"]:
         sample_id = sample["id"]
-        mask = np.asarray(Image.open(run_root / "masks" / f"{sample_id}.png").convert("L")) >= 128
+        mask_path = run_root / args.mask_dir / f"{sample_id}.png"
+        mask = np.asarray(Image.open(mask_path).convert("L")) >= 128
         if mask.sum() < 1000:
             raise ValueError(f"Material region too small: {sample_id}")
         prior_path = run_root / "vlm_priors" / f"{sample_id}.json"
@@ -103,7 +106,8 @@ def main():
             "accepted_candidate_uncertainty": {"roughness": accepted_r, "metallic": accepted_m},
             "semantic_prior": prior, "opacity_check": "not_testable_without_transmission_map",
             "parameter_origin": "median of accepted IID hypothesis region medians; VLM gates only",
-            "material_region_mask_sha256": sha(run_root / "masks" / f"{sample_id}.png"),
+            "material_region_mask_path": str(mask_path),
+            "material_region_mask_sha256": sha(mask_path),
             "vlm_prior_sha256": sha(prior_path),
             "candidate_manifest_sha256": sha(candidate_manifest),
             "config_sha256": sha(args.config), "script_sha256": sha(__file__),
