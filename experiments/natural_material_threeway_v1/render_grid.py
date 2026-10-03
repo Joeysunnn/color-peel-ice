@@ -55,7 +55,7 @@ def render_one(args, material, profile, grid, spec, index):
     for existing in list(scene.objects):
         if existing.type == "MESH" and existing.name != "Ground":
             bpy.data.objects.remove(existing, do_unlink=True)
-    obj = append_shape(shape, args.shape_dir, profile["object"]["scale"])
+    obj = append_shape(shape, args.shape_dir, grid["object_scale"])
     own_profile = dict(profile)
     own_profile["material"] = {"base_color_linear_rgba": grid["colors_linear_rgba"][color]}
     base.set_material(obj, material, own_profile)
@@ -80,6 +80,8 @@ def render_one(args, material, profile, grid, spec, index):
         "split": "held_out_shape" if shape == grid["held_out_shape"] else "train",
         "roughness": material["roughness"], "metallic": material["metallic"],
         "base_color_linear_rgba": grid["colors_linear_rgba"][color],
+        "object_scale": grid["object_scale"],
+        "world_strength": profile["lighting_conditions"][light]["world_strength"],
         "camera": camera_record, "lights": lights, "cuda_devices": devices,
         "cycles_samples": scene.cycles.samples,
         "image_sha256": base.sha256(image),
@@ -130,6 +132,8 @@ def main():
                          "grid_config": base.sha256(args.grid_config),
                          "profile": base.sha256(args.profile),
                          "base_scene": base.sha256(args.base_scene),
+                         "shape_assets": {name: base.sha256(args.shape_dir / f"{asset}.blend")
+                                          for name, asset in ASSETS.items()},
                          "script": base.sha256(Path(__file__))},
         "blender_version": list(bpy.app.version), "records": records,
     })

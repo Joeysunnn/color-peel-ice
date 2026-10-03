@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "seed": 42000,
+  "object_scale": 2.0,
   "shapes": ["sphere", "cube", "cylinder", "cone"],
   "held_out_shape": "cone",
   "colors_linear_rgba": {
