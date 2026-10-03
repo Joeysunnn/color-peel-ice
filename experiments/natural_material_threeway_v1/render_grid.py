@@ -130,7 +130,7 @@ def main():
                          "grid_config": base.sha256(args.grid_config),
                          "profile": base.sha256(args.profile),
                          "base_scene": base.sha256(args.base_scene),
-                         "script": base.sha256(__file__)},
+                         "script": base.sha256(Path(__file__))},
         "blender_version": list(bpy.app.version), "records": records,
     })
 
