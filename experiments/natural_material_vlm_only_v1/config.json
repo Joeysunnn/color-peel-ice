@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "seed": 42,
+  "max_new_tokens": 128,
+  "labels_to_renderer_presets": {
+    "painted_or_coated_metal": {"roughness": 0.45, "metallic": 0.0},
+    "bare_polished_metal": {"roughness": 0.18, "metallic": 1.0},
+    "glossy_plastic": {"roughness": 0.22, "metallic": 0.0},
+    "matte_plastic": {"roughness": 0.70, "metallic": 0.0}
+  },
+  "unmapped_label": "uncertain",
+  "samples": [
+    {
+      "id": "mailbox",
+      "image": "experiments/natural_material_supermat_v1/assets/source_mailbox.jpg",
+      "mask": "experiments/natural_material_supermat_v1/assets/subject_eroded_mask.png",
+      "target": "the orange mailbox surface"
+    },
+    {
+      "id": "spoon_positive_control",
+      "image": "experiments/natural_material_supermat_v1/positive_control/assets/spoon_bowl_crop512.png",
+      "mask": "experiments/natural_material_supermat_v1/positive_control/assets/object_mask.png",
+      "target": "the spoon bowl surface"
+    }
+  ]
+}
