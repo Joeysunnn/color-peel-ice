@@ -33,16 +33,20 @@ def main():
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--iid-root", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument("--openclip-weight", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
     run_root, iid_root = args.run_root.resolve(), args.iid_root.resolve()
     checkpoint = args.checkpoint.resolve()
+    openclip_weight = args.openclip_weight.resolve()
     output_root = run_root / "candidates"
     if output_root.exists():
         raise FileExistsError(output_root)
     if len(config["iid_candidate_seeds"]) != config["iid_samples_per_image"]:
         raise ValueError("Seed list does not match candidate count")
+    if not openclip_weight.is_file():
+        raise FileNotFoundError(openclip_weight)
     sys.path.insert(0, str(iid_root))
     import torch
     from omegaconf import OmegaConf
@@ -111,7 +115,10 @@ def main():
                 "ddim_steps": int(model_config.ddim_config.S),
                 "ddim_eta": float(model_config.ddim_config.eta),
                 "checkpoint_sha256": sha(checkpoint), "config_sha256": sha(args.config),
+                "openclip_weight_sha256": sha(openclip_weight),
+                "openclip_weight_path": str(openclip_weight),
                 "script_sha256": sha(__file__), "device": str(device),
+                "torch_version": torch.__version__,
                 "input_policy": "official linear loader and 480x640 resize; padded RGB source",
                 "candidate_policy": "one explicit seed per official model.sample call; retain all five channels before averaging",
                 "candidates": rows}
