@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "seed": 42000,
+  "shapes": ["sphere", "cube", "cylinder", "cone"],
+  "held_out_shape": "cone",
+  "colors_linear_rgba": {
+    "red": [0.7, 0.045, 0.045, 1.0],
+    "blue": [0.045, 0.08, 0.7, 1.0],
+    "green": [0.045, 0.55, 0.08, 1.0],
+    "yellow": [0.7, 0.55, 0.045, 1.0]
+  },
+  "viewpoints": ["frontish", "oblique_45"],
+  "light_profile": "experiments/natural_material_supermat_v1/renderer_profile.json"
+}
