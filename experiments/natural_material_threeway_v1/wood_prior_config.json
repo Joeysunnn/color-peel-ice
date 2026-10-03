@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "max_new_tokens": 128,
+  "samples": [
+    {
+      "id": "wood_spoon",
+      "image": "experiments/natural_material_threeway_v1/assets/wood_spoon_crop.png",
+      "vlm_mask": "experiments/natural_material_threeway_v1/assets/wood_spoon_bowl_region.png",
+      "target": "the visible wooden spoon bowl surface"
+    }
+  ]
+}
