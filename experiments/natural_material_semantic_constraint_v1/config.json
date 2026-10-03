@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "max_new_tokens": 128,
+  "quality_gate": {"minimum_pixels": 1000, "maximum_roughness_iqr": 0.12, "maximum_metallic_iqr": 0.20},
+  "semantic_gates": {
+    "surface_family": {
+      "coated_or_painted": {"metallic_max": 0.15},
+      "bare_metal": {"metallic_min": 0.50},
+      "plastic": {"metallic_max": 0.15},
+      "uncertain": {}
+    },
+    "gloss": {
+      "matte": {"roughness_min": 0.45},
+      "semi_gloss": {"roughness_min": 0.20, "roughness_max": 0.65},
+      "glossy": {"roughness_max": 0.45},
+      "uncertain": {}
+    }
+  },
+  "opacity_policy": "record_only_no_transmission_map_available",
+  "samples": [
+    {
+      "id": "mailbox",
+      "image": "experiments/natural_material_supermat_v1/assets/source_mailbox.jpg",
+      "vlm_mask": "experiments/natural_material_supermat_v1/assets/subject_eroded_mask.png",
+      "target": "the visible orange mailbox finish",
+      "candidate_masks": {
+        "small_painted_lid": "experiments/natural_material_supermat_v1/assets/material_region_preliminary.png",
+        "subject_eroded": "experiments/natural_material_supermat_v1/assets/subject_eroded_mask.png"
+      }
+    },
+    {
+      "id": "spoon_positive_control",
+      "image": "experiments/natural_material_supermat_v1/positive_control/assets/spoon_bowl_crop512.png",
+      "vlm_mask": "experiments/natural_material_supermat_v1/positive_control/assets/object_mask.png",
+      "target": "the visible spoon bowl surface",
+      "candidate_masks": {
+        "spoon_bowl_interior": "experiments/natural_material_supermat_v1/positive_control/assets/material_region.png"
+      }
+    }
+  ]
+}
