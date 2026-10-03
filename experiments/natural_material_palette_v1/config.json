@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "crop_threshold": 0.99,
+  "max_train_steps": 800,
+  "generation_resolution": 1024,
+  "generation_steps": 50,
+  "generation_prompt": "p1",
+  "samples": [
+    {
+      "id": "mailbox",
+      "image": "experiments/natural_material_supermat_v1/assets/source_mailbox.jpg",
+      "mask": "experiments/natural_material_supermat_v1/assets/subject_eroded_mask.png",
+      "patch_sizes": [64],
+      "crop_note": "The official descending-scale crop stops at one 128px patch, then skips this mask; 64px yields at least two 99%-pure patches."
+    },
+    {
+      "id": "spoon_positive_control",
+      "image": "experiments/natural_material_supermat_v1/positive_control/assets/spoon_bowl_crop512.png",
+      "mask": "experiments/natural_material_supermat_v1/positive_control/assets/material_region.png",
+      "patch_sizes": [512, 256, 192, 128, 64],
+      "crop_note": "Official crop scales and 99%-pure threshold."
+    }
+  ]
+}
