@@ -47,6 +47,8 @@ def main():
     parser.add_argument("--sd15-root", type=Path, required=True)
     parser.add_argument("--decomposer", type=Path, required=True)
     args = parser.parse_args()
+    for name in ("config", "project_root", "run_root", "official_root", "sd15_root", "decomposer"):
+        setattr(args, name, getattr(args, name).resolve())
     config = json.loads(args.config.read_text())
     sample = args.run_root / "samples" / args.sample_id
     if not (args.run_root / "input_manifest.json").is_file() or not sample.is_dir():
