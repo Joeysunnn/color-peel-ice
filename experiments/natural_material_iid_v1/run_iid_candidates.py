@@ -88,12 +88,13 @@ def main():
                 prediction = model.sample(batch_size=1, conditioning_img=image)
                 prediction = Resize(size=image.shape[-2:])(prediction)[0]
             maps = prediction.cpu().float().numpy()
-            if maps.shape != (5, 480, 640) or not np.isfinite(maps).all():
+            if maps.shape != (6, 480, 640) or not np.isfinite(maps).all():
                 raise ValueError(f"Invalid IID sample {sample_id}/{index}: {maps.shape}")
             folder = sample_dir / f"candidate_{index:02d}"
             folder.mkdir()
             raw_path = folder / "raw_maps.npz"
-            np.savez_compressed(raw_path, albedo=maps[:3], roughness=maps[3], metallic=maps[4])
+            np.savez_compressed(raw_path, albedo=maps[:3], roughness=maps[3],
+                                metallic=maps[4], brdf_aux=maps[5])
             png_hashes = {
                 "albedo": save_png(np.transpose(maps[:3], (1, 2, 0)), folder / "albedo.png"),
                 "roughness": save_png(maps[3], folder / "roughness.png"),
@@ -102,6 +103,8 @@ def main():
             record = {"sample_id": sample_id, "candidate_index": index, "seed": seed,
                       "raw_maps_sha256": sha(raw_path), "png_sha256": png_hashes,
                       "raw_min": float(maps.min()), "raw_max": float(maps.max()),
+                      "brdf_aux_min": float(maps[5].min()),
+                      "brdf_aux_max": float(maps[5].max()),
                       "out_of_range_fraction": float(np.mean((maps < 0) | (maps > 1))),
                       "input_sha256": sha(input_path)}
             (folder / "metadata.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -120,7 +123,7 @@ def main():
                 "script_sha256": sha(__file__), "device": str(device),
                 "torch_version": torch.__version__,
                 "input_policy": "official linear loader and 480x640 resize; padded RGB source",
-                "candidate_policy": "one explicit seed per official model.sample call; retain all five channels before averaging",
+                "candidate_policy": "one explicit seed per official model.sample call; retain all six channels before averaging; R/M are channels 3/4",
                 "candidates": rows}
     (output_root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 

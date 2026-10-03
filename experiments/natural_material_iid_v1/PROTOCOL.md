@@ -2,10 +2,12 @@
 
 This independent V2 uncertainty baseline follows the [IID paper](https://arxiv.org/abs/2312.12274)
 and [official implementation](https://github.com/Peter-Kocsis/IntrinsicImageDiffusion).
-Run only the material-diffusion stage, which outputs 5 channels: Albedo RGB,
-Roughness, and Metallic. Its released checkpoint is `iid_e250.pth`. The
+Run only the material-diffusion stage. The model returns 6 channels: Albedo
+RGB and a 3-channel BRDF packing whose first two channels are Roughness and
+Metallic. The third BRDF channel is retained for audit and excluded from M*.
+Its released checkpoint is `iid_e250.pth`. The
 official stage-2 CLI averages 10 samples before saving, so `run_iid_candidates.py`
-calls the unmodified official model and saves all 10 raw five-channel tensors
+calls the unmodified official model and saves all 10 raw six-channel tensors
 before any average. Its per-candidate seeds are fixed in `config.json`.
 
 The paper reports 50 DDIM steps for its experiments; the released model config
