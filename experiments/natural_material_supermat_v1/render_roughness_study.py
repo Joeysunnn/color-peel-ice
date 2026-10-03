@@ -7,14 +7,17 @@ blender --background --python-exit-code 1 --python render_roughness_study.py -- 
   --profile renderer_profile.json --output-root new_study_run \
   --base-scene-blendfile base_scene.blend --sphere-blendfile Sphere.blend
 
-The validation phase additionally requires --calibrated-roughness. Each phase
-must have a new output directory. This entrypoint cannot generate the full grid.
+The validation phases additionally require --calibrated-roughness. Use
+--phase validation_v2 --cube-blendfile SmoothCube_v2.blend to validate with the
+CLEVR smooth cube asset. Each phase must have a new output directory. This
+entrypoint cannot generate the full grid.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -28,13 +31,14 @@ import render_calibration as base
 def parse_args() -> argparse.Namespace:
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--phase", choices=("sweep", "validation"), required=True)
+    parser.add_argument("--phase", choices=("sweep", "validation", "validation_v2"), required=True)
     parser.add_argument("--study-config", type=Path, required=True)
     parser.add_argument("--source-material-json", type=Path, required=True)
     parser.add_argument("--profile", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--base-scene-blendfile", type=Path, required=True)
     parser.add_argument("--sphere-blendfile", type=Path, required=True)
+    parser.add_argument("--cube-blendfile", type=Path)
     parser.add_argument("--calibrated-roughness", type=float)
     return parser.parse_args(argv)
 
@@ -45,6 +49,9 @@ def validate(args: argparse.Namespace) -> tuple[dict, dict]:
     for path in paths:
         if not path.is_file():
             raise FileNotFoundError(path)
+    if args.phase == "validation_v2" and (args.cube_blendfile is None or
+                                          not args.cube_blendfile.is_file()):
+        raise ValueError("validation_v2 requires --cube-blendfile SmoothCube_v2.blend")
     if (args.output_root / args.phase).exists():
         raise FileExistsError(f"Phase output already exists: {args.output_root / args.phase}")
     study = json.loads(args.study_config.read_text(encoding="utf-8"))
@@ -61,8 +68,9 @@ def validate(args: argparse.Namespace) -> tuple[dict, dict]:
         raise ValueError("This study fixes the dielectric coating metallic input at zero")
     if study["validation_colors_linear_rgba"]["gray"] != profile["material"]["base_color_linear_rgba"]:
         raise ValueError("Sweep gray must match the existing calibration renderer profile")
-    if args.phase == "validation" and (args.calibrated_roughness is None or
-                                        not 0 <= args.calibrated_roughness <= 1):
+    if args.phase in ("validation", "validation_v2") and (
+            args.calibrated_roughness is None or
+            not 0 <= args.calibrated_roughness <= 1):
         raise ValueError("Validation requires --calibrated-roughness in [0, 1]")
     if args.phase == "sweep" and args.calibrated_roughness is not None:
         raise ValueError("--calibrated-roughness is only for validation")
@@ -80,6 +88,17 @@ def add_cube(profile: dict):
     return obj
 
 
+def append_clevr_cube(path: Path, profile: dict):
+    """Use the CLEVR smooth cube asset and its established scale correction."""
+    cube_profile = deepcopy(profile)
+    cube_profile["object"]["asset_name"] = "SmoothCube_v2"
+    obj = base.append_sphere(path, cube_profile)
+    scale = profile["object"]["scale"] / math.sqrt(2)
+    obj.location = (0.0, 0.0, scale)
+    obj.scale = (scale, scale, scale)
+    return obj
+
+
 def render_cell(args: argparse.Namespace, profile: dict, phase: str, cell_id: str,
                 shape: str, color_name: str, base_color: list[float], roughness: float,
                 light_name: str, condition: dict, hashes: dict) -> dict:
@@ -92,7 +111,8 @@ def render_cell(args: argparse.Namespace, profile: dict, phase: str, cell_id: st
     if shape == "sphere":
         obj = base.append_sphere(args.sphere_blendfile, profile)
     elif shape == "cube":
-        obj = add_cube(profile)
+        obj = (append_clevr_cube(args.cube_blendfile, profile)
+               if phase == "validation_v2" else add_cube(profile))
     else:
         raise ValueError(f"Unsupported shape: {shape}")
     material = {"roughness": roughness, "metallic": 0.0}
@@ -138,6 +158,11 @@ def render_cell(args: argparse.Namespace, profile: dict, phase: str, cell_id: st
         },
         "geometry": ({"asset_name": profile["object"]["asset_name"],
                       "scale": profile["object"]["scale"]} if shape == "sphere" else
+                     {"asset_name": "SmoothCube_v2",
+                      "asset_sha256": hashes["clevr_cube_blend"],
+                      "scale": profile["object"]["scale"] / math.sqrt(2),
+                      "location": [0.0, 0.0, profile["object"]["scale"] / math.sqrt(2)]}
+                     if phase == "validation_v2" else
                      {"primitive": "cube", "size": 2.0,
                       "scale": profile["object"]["scale"],
                       "location": [0.0, 0.0, profile["object"]["scale"]]}),
@@ -158,6 +183,8 @@ def main() -> None:
     for name in ("study_config", "source_material_json", "profile", "output_root",
                  "base_scene_blendfile", "sphere_blendfile"):
         setattr(args, name, getattr(args, name).resolve())
+    if args.cube_blendfile is not None:
+        args.cube_blendfile = args.cube_blendfile.resolve()
     study, profile = validate(args)
     hashes = {
         "study_config": base.sha256(args.study_config),
@@ -166,6 +193,8 @@ def main() -> None:
         "clevr_base_scene_blend": base.sha256(args.base_scene_blendfile),
         "clevr_sphere_blend": base.sha256(args.sphere_blendfile),
     }
+    if args.phase == "validation_v2":
+        hashes["clevr_cube_blend"] = base.sha256(args.cube_blendfile)
     phase_dir = args.output_root / args.phase
     phase_dir.mkdir(parents=True)
     records = []
@@ -184,7 +213,7 @@ def main() -> None:
             for color_name, color in study["validation_colors_linear_rgba"].items():
                 for light_name, condition in profile["lighting_conditions"].items():
                     cell_id = f"{shape}_{color_name}_{light_name}"
-                    records.append(render_cell(args, profile, "validation", cell_id,
+                    records.append(render_cell(args, profile, args.phase, cell_id,
                                                shape, color_name, color,
                                                args.calibrated_roughness, light_name,
                                                condition, hashes))
