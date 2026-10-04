@@ -1,4 +1,4 @@
-"""Prepare a caption-only metal-spoon ablation from the completed full-map staging."""
+"""Prepare a caption-only ablation from completed full-map staging."""
 
 import argparse
 import hashlib
@@ -9,7 +9,7 @@ from pathlib import Path
 CAPTION = "a photo of an object made of <M*>"
 SHAPES = ("cube", "cylinder", "sphere")
 STUDY = "natural_material_caption_ablation_v1"
-VARIANT = "metal_spoon_generic_caption_token_local_kv_5000"
+MATERIALS = ("mailbox", "metal_spoon", "wood_spoon")
 
 
 def sha256(path):
@@ -26,20 +26,22 @@ def main():
                         help="Completed full-map grid run containing configs/ and staging/")
     parser.add_argument("--output", type=Path, required=True,
                         help="Fresh ablation staging directory; must not exist")
+    parser.add_argument("--material-id", choices=MATERIALS, default="metal_spoon")
     args = parser.parse_args()
     source = args.source_run.resolve()
     output = args.output.resolve()
     if output.exists():
         raise FileExistsError(output)
-    source_config_path = source / "configs" / "metal_spoon.json"
-    source_staging = source / "staging" / "metal_spoon"
+    material = args.material_id
+    source_config_path = source / "configs" / f"{material}.json"
+    source_staging = source / "staging" / material
     source_concepts_path = source_staging / "concepts.json"
     source_assets_path = source_staging / "training_assets_manifest.jsonl"
     source_config = json.loads(source_config_path.read_text())
     source_concepts = json.loads(source_concepts_path.read_text())
     rows = [json.loads(line) for line in source_assets_path.read_text().splitlines()]
     if (source_config["run"] != {"study": "natural_material_fullmaps_v1",
-                                  "variant": "metal_spoon_fullmaps_token_local_kv_5000",
+                                  "variant": f"{material}_fullmaps_token_local_kv_5000",
                                   "seed": 42}
             or Path(source_config["args"]["concepts_list"]).resolve() != source_concepts_path
             or Path(source_config["data_manifest"]).resolve() != source_assets_path
@@ -83,7 +85,8 @@ def main():
     concepts = [{**by_shape[shape], "instance_prompt": [CAPTION]} for shape in SHAPES]
     config = json.loads(json.dumps(source_config))
     config["status"] = "authorized_caption_only_diagnostic"
-    config["run"] = {"study": STUDY, "variant": VARIANT, "seed": 42}
+    config["run"] = {"study": STUDY,
+                     "variant": f"{material}_generic_caption_token_local_kv_5000", "seed": 42}
     config["args"]["concepts_list"] = str(output / "concepts.json")
     config["data_manifest"] = str(output / "training_assets_manifest.jsonl")
     config["ablation_source"] = {
