@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "material_id": "metal_spoon",
+  "steps": [1000, 2000, 3000, 4000, 5000],
+  "objects": ["cone", "mailbox"],
+  "sampling": {
+    "seeds": [42, 43, 44],
+    "num_inference_steps": 100,
+    "guidance_scale": 3.5
+  },
+  "prompt_template": "a photo of a {object} made of <M*>",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "reuse_step_5000_transfer": false
+}
