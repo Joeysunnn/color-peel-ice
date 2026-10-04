@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "seed": 42000,
+  "object_scale": 2.0,
+  "texture_repeats": 1.0,
+  "shapes": ["sphere", "cube", "cylinder", "cone"],
+  "held_out_shape": "cone",
+  "azimuth_degrees": [0, 45, 90, 135],
+  "camera_height_offsets": [0, 2.0],
+  "light_profile": "experiments/natural_material_fullmaps_v1/renderer_profile_v2.json"
+}
