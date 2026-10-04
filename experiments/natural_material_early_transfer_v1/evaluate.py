@@ -32,6 +32,8 @@ def make_sheets(output):
 
     folder = output / "contact_sheets"
     folder.mkdir()
+    filtered = {(row["step"], row["object"], row["seed"]): row["safety_filtered"]
+                for row in (json.loads(line) for line in (output / "status.jsonl").read_text().splitlines())}
     for obj in OBJECTS:
         image = Image.new("RGB", (3 * 264 + 100, 5 * 264 + 35), "white")
         draw = ImageDraw.Draw(image)
@@ -43,6 +45,8 @@ def make_sheets(output):
                 with Image.open(output / "images" / f"step{step}" / obj / f"seed{seed}.png") as tile:
                     image.paste(tile.convert("RGB").resize((256, 256)),
                                 (100 + col * 264, 35 + row * 264))
+                if filtered[(step, obj, seed)]:
+                    draw.text((104 + col * 264, 39 + row * 264), "SAFETY FILTERED", fill="red")
         image.save(folder / f"{obj}.jpg", quality=90)
 
 
@@ -80,7 +84,7 @@ def main():
     if args.output.exists():
         raise FileExistsError(args.output)
     if args.verify_only:
-        print(f"Verified {args.study}/{args.material}: paired snapshots at {STEPS}")
+        print(f"Snapshot files present for {args.study}/{args.material} at {STEPS}")
         return
 
     import torch
