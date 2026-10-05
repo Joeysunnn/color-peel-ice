@@ -8,7 +8,7 @@
     "seed": 42
   },
   "environment": {
-    "CUDA_VISIBLE_DEVICES": "2"
+    "CUDA_VISIBLE_DEVICES": "1"
   },
   "data_manifest": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2/staging/wood_spoon/training_assets_manifest.jsonl",
   "fullmap_source": {

@@ -19,8 +19,8 @@ and required initializer.
 Save its JSON output with the new run artifacts. Launch from a clean server
 checkout updated through GitHub fetch/fast-forward as required by
 `doc/project-layout.md`. Use a fresh immutable run directory for every dry run
-and actual run. The configs target GPUs 0, 2, and 2; run metal spoon and wood
-spoon sequentially unless an independently free GPU is selected and recorded.
+and actual run. The configs target GPUs 0, 2, and 1; confirm each is free
+before starting concurrent jobs.
 
 ```bash
 export COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs
