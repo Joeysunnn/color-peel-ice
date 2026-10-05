@@ -1,0 +1,13 @@
+{
+  "schema": "natural_material_fullmaps_lora_five_object_transfer/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "objects": ["vase", "chair", "mug", "sofa", "mailbox"],
+  "arms": ["base", "literal", "token"],
+  "prompt_template": "a photo of a {object} made of <M*>",
+  "literal_material": {
+    "mailbox": "red painted metal",
+    "metal_spoon": "polished stainless steel",
+    "wood_spoon": "light wood"
+  },
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5}
+}

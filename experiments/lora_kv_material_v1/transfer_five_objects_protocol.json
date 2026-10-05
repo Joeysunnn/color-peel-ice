@@ -1,0 +1,10 @@
+{
+  "schema": "lora_kv_material_five_object_transfer/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "objects": ["vase", "chair", "mug", "sofa", "mailbox"],
+  "arms": ["base", "literal", "token"],
+  "prompt_template": "a photo of a {object} made of <M*>",
+  "literal_material": "polished metal",
+  "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "checkpoint_weights_sha256": "9713ae80319aabb7ec08faa4349cfa2e03918bab915228bfa447afea6d7f170b"
+}

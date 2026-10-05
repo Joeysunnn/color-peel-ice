@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "status": "authorized_fullmap_material_lora_training",
+  "stage": "train",
+  "run": {
+    "study": "natural_material_fullmaps_lora_v1",
+    "variant": "wood_spoon_fullmaps_token_local_kv_lora_r4_5000",
+    "seed": 42
+  },
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "2"
+  },
+  "data_manifest": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2/staging/wood_spoon/training_assets_manifest.jsonl",
+  "fullmap_source": {
+    "config": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2/configs/wood_spoon.json",
+    "training_run": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/20261004-114311__natural_material_fullmaps_v1__wood_spoon_fullmaps_token_local_kv_5000__241c32a__42"
+  },
+  "args": {
+    "pretrained_model_name_or_path": "CompVis/stable-diffusion-v1-4",
+    "concepts_list": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2/staging/wood_spoon/concepts.json",
+    "resolution": 512,
+    "train_batch_size": 1,
+    "learning_rate": 0.00001,
+    "kv_learning_rate": 0.00001,
+    "material_lora_mode": "token_local_kv",
+    "material_lora_rank": 4,
+    "material_lora_alpha": 4,
+    "freeze_model": "crossattn_kv",
+    "scale_lr": true,
+    "lr_scheduler": "constant",
+    "lr_warmup_steps": 0,
+    "max_train_steps": 5000,
+    "checkpointing_steps": 1000,
+    "seed": 42,
+    "mixed_precision": "no",
+    "cos_weight": 0,
+    "gradient_accumulation_steps": 1,
+    "max_grad_norm": 1,
+    "dataloader_num_workers": 2,
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_weight_decay": 0,
+    "adam_epsilon": 1e-8,
+    "hflip": false,
+    "modifier_token": "<M*>",
+    "initializer_token": "material"
+  }
+}
