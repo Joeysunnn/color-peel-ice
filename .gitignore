@@ -7,3 +7,9 @@ train_assets/
 models/
 Results/
 train_outputs/
+
+# Local Git/Codex handoff and recovery bundles.
+.codex-*.bundle
+
+# Generated experiment review artifacts stay outside version control.
+experiments/**/review/

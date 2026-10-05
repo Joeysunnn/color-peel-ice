@@ -35,10 +35,11 @@ def parse(raw):
     }
     if set(data) != set(allowed) | {"evidence"}:
         raise ValueError(f"Wrong fields: {raw}")
-    for key, values in allowed.items():
-        if data[key] not in values:
-            raise ValueError(f"Wrong {key}: {raw}")
-    return data
+    if any(not isinstance(value, str) or len(value) > 160 for value in data.values()):
+        raise ValueError(f"Non-string or excessive field: {raw}")
+    deviations = {key: data[key] for key, values in allowed.items()
+                  if data[key] not in values}
+    return data, deviations
 
 
 def main():
@@ -80,11 +81,12 @@ def main():
                 [ids[len(input_ids):] for input_ids, ids in zip(inputs.input_ids, output)],
                 skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
             try:
-                label, error = parse(raw), None
+                (label, deviations), error = parse(raw), None
             except (ValueError, json.JSONDecodeError) as exc:
-                label, error = None, str(exc)
+                label, deviations, error = None, {}, str(exc)
             ledger.write(json.dumps({**row, "image_sha256": sha(path),
                                      "prediction": label, "raw_response": raw,
+                                     "schema_deviations": deviations,
                                      "parse_error": error}) + "\n")
             ledger.flush()
     (args.output / "provenance.json").write_text(json.dumps({

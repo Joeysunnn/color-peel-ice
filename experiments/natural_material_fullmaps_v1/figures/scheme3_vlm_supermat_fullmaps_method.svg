@@ -1,0 +1,242 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1120" viewBox="0 0 1920 1120">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#EDF3F7"/>
+    </linearGradient>
+    <linearGradient id="semantic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#E6F7F4"/>
+      <stop offset="1" stop-color="#CDEEE8"/>
+    </linearGradient>
+    <linearGradient id="physical" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EDF4FF"/>
+      <stop offset="1" stop-color="#D9E8FF"/>
+    </linearGradient>
+    <linearGradient id="gate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF7E7"/>
+      <stop offset="1" stop-color="#FFE6B8"/>
+    </linearGradient>
+    <linearGradient id="canon" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F3EEFF"/>
+      <stop offset="1" stop-color="#E0D6FF"/>
+    </linearGradient>
+    <linearGradient id="render" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF0EB"/>
+      <stop offset="1" stop-color="#FFDCCE"/>
+    </linearGradient>
+    <linearGradient id="train" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EAF8EF"/>
+      <stop offset="1" stop-color="#D3F0DD"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#294255" flood-opacity="0.13"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M0 0 L12 6 L0 12 z" fill="#52697B"/>
+    </marker>
+    <marker id="arrowTeal" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M0 0 L12 6 L0 12 z" fill="#14877E"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M0 0 L12 6 L0 12 z" fill="#356FC1"/>
+    </marker>
+    <style>
+      .title { font: 700 38px Arial, Helvetica, sans-serif; fill: #173042; }
+      .subtitle { font: 400 18px Arial, Helvetica, sans-serif; fill: #5B7080; }
+      .step { font: 700 14px Arial, Helvetica, sans-serif; letter-spacing: 1.4px; fill: #FFFFFF; }
+      .head { font: 700 23px Arial, Helvetica, sans-serif; fill: #193447; }
+      .body { font: 400 16px Arial, Helvetica, sans-serif; fill: #304B5D; }
+      .small { font: 400 14px Arial, Helvetica, sans-serif; fill: #587080; }
+      .tiny { font: 400 12px Arial, Helvetica, sans-serif; fill: #607482; }
+      .mono { font: 600 16px Consolas, Menlo, monospace; fill: #213F52; }
+      .monoLarge { font: 700 20px Consolas, Menlo, monospace; fill: #213F52; }
+      .white { fill: #FFFFFF; }
+      .line { fill: none; stroke: #52697B; stroke-width: 3.5; marker-end: url(#arrow); }
+      .tealLine { fill: none; stroke: #14877E; stroke-width: 4; marker-end: url(#arrowTeal); }
+      .blueLine { fill: none; stroke: #356FC1; stroke-width: 4; marker-end: url(#arrowBlue); }
+      .dash { fill: none; stroke: #6F8493; stroke-width: 3; stroke-dasharray: 9 8; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1120" fill="url(#bg)"/>
+  <text x="58" y="65" class="title">Full-Map Scheme 3: VLM-Constrained SuperMat Material Learning</text>
+  <text x="60" y="101" class="subtitle">Preserve complete Albedo, Roughness, and Metallic maps → retain source color and visible pattern → learn a transferable material token</text>
+
+  <!-- 01 Input -->
+  <g filter="url(#shadow)"><rect x="50" y="150" width="225" height="480" rx="22" fill="#FFFFFF" stroke="#D8E3EA" stroke-width="2"/></g>
+  <rect x="50" y="150" width="225" height="52" rx="22" fill="#35556B"/>
+  <text x="74" y="183" class="step">01 · INPUT</text>
+  <text x="76" y="244" class="head">Natural image</text>
+  <rect x="76" y="269" width="173" height="148" rx="15" fill="#EAEFF2"/>
+  <rect x="105" y="328" width="116" height="58" rx="29" fill="#E4512E"/>
+  <path d="M105 357 C105 320 127 301 163 301 C199 301 221 320 221 357" fill="#F26A3E"/>
+  <rect x="157" y="301" width="12" height="85" fill="#D64225" opacity="0.5"/>
+  <rect x="104" y="386" width="15" height="18" rx="3" fill="#315066"/>
+  <rect x="208" y="386" width="15" height="18" rx="3" fill="#315066"/>
+  <path d="M99 292 L99 409" stroke="#C5D0D6" stroke-width="3"/>
+  <text x="76" y="454" class="body">Target object +</text>
+  <text x="76" y="480" class="body">candidate material masks</text>
+  <rect x="76" y="510" width="76" height="31" rx="15" fill="#ECF2F5"/>
+  <circle cx="91" cy="525" r="7" fill="#E4512E"/>
+  <text x="104" y="530" class="small">RGB</text>
+  <rect x="160" y="510" width="89" height="31" rx="15" fill="#ECF2F5"/>
+  <circle cx="176" cy="525" r="7" fill="#11A7A0"/>
+  <text x="190" y="530" class="small">Masks</text>
+  <text x="76" y="576" class="small">Examples:</text>
+  <text x="76" y="600" class="small">mailbox</text>
+  <text x="76" y="622" class="small">metal spoon · wood spoon</text>
+
+  <!-- branch arrows -->
+  <path d="M275 356 H304 V260 H330" class="tealLine"/>
+  <path d="M275 390 H304 V502 H330" class="blueLine"/>
+
+  <!-- 02A semantic -->
+  <g filter="url(#shadow)"><rect x="330" y="150" width="315" height="212" rx="22" fill="url(#semantic)" stroke="#98DDD5" stroke-width="2"/></g>
+  <rect x="330" y="150" width="315" height="52" rx="22" fill="#198D83"/>
+  <text x="354" y="183" class="step">02A · SEMANTIC STREAM</text>
+  <text x="356" y="240" class="head">VLM semantic prior</text>
+  <text x="356" y="270" class="body">Masked crop → Qwen3-VL</text>
+  <rect x="356" y="292" width="92" height="32" rx="16" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="455" y="292" width="72" height="32" rx="16" fill="#FFFFFF" opacity="0.85"/>
+  <rect x="534" y="292" width="85" height="32" rx="16" fill="#FFFFFF" opacity="0.85"/>
+  <text x="369" y="313" class="tiny">surface family</text>
+  <text x="473" y="313" class="tiny">gloss</text>
+  <text x="550" y="313" class="tiny">opacity</text>
+  <text x="356" y="347" class="tiny">Categorical metadata only · no PBR map edits</text>
+
+  <!-- 02B physical -->
+  <g filter="url(#shadow)"><rect x="330" y="390" width="315" height="240" rx="22" fill="url(#physical)" stroke="#A9C9F7" stroke-width="2"/></g>
+  <rect x="330" y="390" width="315" height="52" rx="22" fill="#3974C4"/>
+  <text x="354" y="423" class="step">02B · PHYSICAL STREAM</text>
+  <text x="356" y="480" class="head">SuperMat PBR estimate</text>
+  <text x="356" y="509" class="body">Whole-object RGBA → per-pixel maps</text>
+  <rect x="356" y="531" width="80" height="68" rx="10" fill="#C87949"/>
+  <path d="M356 575 C380 557 405 593 436 565 L436 599 L356 599 Z" fill="#8F4F31" opacity="0.55"/>
+  <rect x="447" y="531" width="80" height="68" rx="10" fill="#929A9E"/>
+  <path d="M447 539 L527 594" stroke="#C9CED0" stroke-width="20" opacity="0.55"/>
+  <rect x="538" y="531" width="80" height="68" rx="10" fill="#252C34"/>
+  <circle cx="578" cy="565" r="22" fill="#AEB3B7"/>
+  <text x="371" y="620" class="tiny">Albedo A</text>
+  <text x="454" y="620" class="tiny">Roughness R</text>
+  <text x="552" y="620" class="tiny">Metallic M</text>
+
+  <!-- 03 Gate -->
+  <path d="M645 256 H680 V296 H710" class="tealLine"/>
+  <path d="M645 506 H680 V460 H710" class="blueLine"/>
+  <g filter="url(#shadow)"><rect x="710" y="150" width="305" height="480" rx="22" fill="url(#gate)" stroke="#F2B84F" stroke-width="2"/></g>
+  <rect x="710" y="150" width="305" height="52" rx="22" fill="#DE8A19"/>
+  <text x="734" y="183" class="step">03 · SEMANTIC CONSTRAINT</text>
+  <text x="736" y="242" class="head">Compatibility gate</text>
+  <text x="736" y="271" class="body">Evaluate each candidate region</text>
+  <circle cx="748" cy="310" r="8" fill="#198D83"/>
+  <text x="768" y="316" class="body">Family ↔ metallicity</text>
+  <text x="768" y="342" class="small">painted/coated · bare metal · wood</text>
+  <circle cx="748" cy="381" r="8" fill="#198D83"/>
+  <text x="768" y="387" class="body">Gloss ↔ roughness</text>
+  <text x="768" y="413" class="small">matte · semi-gloss · glossy</text>
+  <circle cx="748" cy="452" r="8" fill="#3974C4"/>
+  <text x="768" y="458" class="body">Reliability checks</text>
+  <text x="768" y="484" class="small">mask size · R/M dispersion</text>
+  <circle cx="748" cy="523" r="8" fill="#8FA1AD"/>
+  <text x="768" y="529" class="body">Opacity: recorded only</text>
+  <text x="768" y="555" class="small">No transmission map is available</text>
+  <rect x="736" y="579" width="253" height="34" rx="12" fill="#FFFFFF" stroke="#F04A3A" stroke-width="2"/>
+  <text x="766" y="601" style="font:700 14px Arial; fill:#D73526">VLM never overwrites A, R, or M</text>
+
+  <!-- 04 canonical maps -->
+  <path d="M1015 390 H1050" class="line"/>
+  <g filter="url(#shadow)"><rect x="1050" y="150" width="385" height="480" rx="22" fill="url(#canon)" stroke="#BCA4F4" stroke-width="2"/></g>
+  <rect x="1050" y="150" width="385" height="52" rx="22" fill="#7953B8"/>
+  <text x="1074" y="183" class="step">04 · FULL-MAP CANONICALIZATION</text>
+  <text x="1076" y="242" class="head">Select + preserve maps</text>
+  <text x="1076" y="278" class="body">1. Reject incompatible material regions</text>
+  <text x="1076" y="311" class="body">2. Select a reliable, concentrated region</text>
+  <text x="1076" y="344" class="body">3. Crop the tight material bounding box</text>
+  <text x="1076" y="377" class="body">4. Fill only pixels outside the region mask</text>
+  <rect x="1076" y="410" width="333" height="112" rx="17" fill="#FFFFFF" stroke="#AA91E1" stroke-width="2"/>
+  <text x="1145" y="444" style="font:700 18px Arial; fill:#6842A4">Canonical full-map material</text>
+  <text x="1120" y="483" class="monoLarge">M*(u,v) = {A, R, M}</text>
+  <text x="1115" y="508" class="tiny">spatially varying maps, not two scalar medians</text>
+  <rect x="1076" y="544" width="333" height="58" rx="12" fill="#F9F7FF"/>
+  <text x="1094" y="568" class="small">Keep source hue, color variation, and</text>
+  <text x="1094" y="590" class="small">visible pattern. No normal map in SuperMat.</text>
+
+  <!-- 05 renderer -->
+  <path d="M1435 390 H1470" class="line"/>
+  <g filter="url(#shadow)"><rect x="1470" y="150" width="400" height="480" rx="22" fill="url(#render)" stroke="#F0A58A" stroke-width="2"/></g>
+  <rect x="1470" y="150" width="400" height="52" rx="22" fill="#D86137"/>
+  <text x="1494" y="183" class="step">05 · CONTROLLED RENDERING</text>
+  <text x="1496" y="242" class="head">Cycles + Principled BSDF</text>
+  <text x="1496" y="278" class="mono">Base Color ← A(u,v)</text>
+  <text x="1496" y="307" class="mono">Roughness  ← R(u,v)</text>
+  <text x="1496" y="336" class="mono">Metallic   ← M(u,v)</text>
+  <text x="1496" y="374" class="body">Object-space box projection</text>
+  <text x="1496" y="403" class="body">Fixed source maps within each material</text>
+  <text x="1496" y="432" class="body">No red / blue / green / yellow sweep</text>
+
+  <!-- shape icons -->
+  <circle cx="1530" cy="495" r="27" fill="#B97A55" stroke="#7F4D35" stroke-width="2"/>
+  <rect x="1582" y="468" width="54" height="54" rx="4" fill="#C8875D" stroke="#7F4D35" stroke-width="2"/>
+  <ellipse cx="1690" cy="477" rx="29" ry="10" fill="#D49A73" stroke="#7F4D35" stroke-width="2"/>
+  <rect x="1661" y="477" width="58" height="38" fill="#B97A55" stroke="#7F4D35" stroke-width="2"/>
+  <ellipse cx="1690" cy="515" rx="29" ry="10" fill="#9D6849" stroke="#7F4D35" stroke-width="2"/>
+  <path d="M1760 522 L1788 468 L1816 522 Z" fill="#C8875D" stroke="#7F4D35" stroke-width="2"/>
+  <text x="1496" y="559" class="small">Vary: shape · lighting · viewpoint</text>
+  <text x="1496" y="586" class="small">4 shapes × 3 lights × 8 views = 96</text>
+  <text x="1496" y="611" class="tiny">Single-view box projection is an explicit approximation.</text>
+
+  <!-- bottom: modification -->
+  <g filter="url(#shadow)"><rect x="50" y="705" width="550" height="315" rx="22" fill="#FFFFFF" stroke="#CCD9E1" stroke-width="2"/></g>
+  <rect x="50" y="705" width="550" height="50" rx="22" fill="#35556B"/>
+  <text x="74" y="737" class="step">WHAT CHANGED FROM THE R/M-ONLY VERSION</text>
+  <text x="78" y="797" class="small">Previous scalar material</text>
+  <text x="78" y="829" class="mono">M* = {median(R), median(M)}</text>
+  <text x="78" y="855" class="small">Albedo hue and visible texture were discarded.</text>
+  <path d="M78 882 H570" stroke="#D7E1E7" stroke-width="2"/>
+  <text x="78" y="920" style="font:700 15px Arial; fill:#6842A4">Current full-map material</text>
+  <text x="78" y="952" class="monoLarge">M*(u,v) = {A(u,v), R(u,v), M(u,v)}</text>
+  <text x="78" y="983" class="small">Source color and visible pattern are intentionally retained.</text>
+  <text x="78" y="1006" class="small">Color–material entanglement is accepted in this pilot.</text>
+
+  <!-- bottom dataset -->
+  <path d="M1670 630 V671 H1020 V705" class="dash"/>
+  <g filter="url(#shadow)"><rect x="640" y="705" width="570" height="315" rx="22" fill="#FFFFFF" stroke="#CCD9E1" stroke-width="2"/></g>
+  <rect x="640" y="705" width="570" height="50" rx="22" fill="#A74D2D"/>
+  <text x="664" y="737" class="step">06 · COUNTERFACTUAL DATASET</text>
+  <text x="668" y="797" class="head">Hold material maps fixed</text>
+  <rect x="668" y="824" width="236" height="142" rx="16" fill="#F8F2EF"/>
+  <text x="690" y="855" style="font:700 15px Arial; fill:#8E432A">FIXED PER SOURCE</text>
+  <text x="690" y="887" class="body">Albedo / color / pattern</text>
+  <text x="690" y="915" class="body">Roughness map</text>
+  <text x="690" y="943" class="body">Metallic map</text>
+  <rect x="927" y="824" width="251" height="142" rx="16" fill="#F1F6F9"/>
+  <text x="949" y="855" style="font:700 15px Arial; fill:#35556B">VARIED</text>
+  <text x="949" y="887" class="body">Shape</text>
+  <text x="949" y="915" class="body">Lighting</text>
+  <text x="949" y="943" class="body">Viewpoint</text>
+  <text x="668" y="995" class="small">72 train: sphere / cube / cylinder · 24 held-out: cone</text>
+
+  <!-- bottom training -->
+  <path d="M1210 862 H1250" class="line"/>
+  <g filter="url(#shadow)"><rect x="1250" y="705" width="620" height="315" rx="22" fill="url(#train)" stroke="#91CDA6" stroke-width="2"/></g>
+  <rect x="1250" y="705" width="620" height="50" rx="22" fill="#2E8A51"/>
+  <text x="1274" y="737" class="step">07 · MATERIAL TOKEN LEARNING + TRANSFER</text>
+  <text x="1278" y="797" class="head">Original token-local K/V</text>
+  <text x="1278" y="831" class="mono">a photo of a {shape} made of &lt;M*&gt;</text>
+  <text x="1278" y="863" class="body">Train &lt;M*&gt; embedding + token-local K/V</text>
+  <text x="1278" y="893" class="body">Base SD and ordinary-token paths remain frozen</text>
+  <rect x="1278" y="920" width="564" height="70" rx="14" fill="#FFFFFF" opacity="0.84"/>
+  <text x="1298" y="946" style="font:700 15px Arial; fill:#276F43">Transfer question</text>
+  <text x="1298" y="972" class="small">Does &lt;M*&gt; reproduce source color, visible pattern, and reflectance</text>
+  <text x="1298" y="992" class="small">on an unseen cone or a fixed mailbox subject?</text>
+
+  <!-- information-flow legend -->
+  <g transform="translate(1270 1050)">
+    <line x1="0" y1="0" x2="48" y2="0" stroke="#14877E" stroke-width="4"/>
+    <text x="58" y="5" class="tiny">semantic labels</text>
+    <line x1="175" y1="0" x2="223" y2="0" stroke="#356FC1" stroke-width="4"/>
+    <text x="233" y="5" class="tiny">numeric maps</text>
+    <line x1="347" y1="0" x2="395" y2="0" stroke="#738796" stroke-width="3" stroke-dasharray="9 8"/>
+    <text x="405" y="5" class="tiny">data flow</text>
+  </g>
+</svg>

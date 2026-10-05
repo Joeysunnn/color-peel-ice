@@ -9,7 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(os.environ.get("COLORPEEL_PROJECT_ROOT", Path(__file__).resolve().parents[3]))
+ROOT = Path(os.environ.get("COLORPEEL_PROJECT_ROOT", Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(ROOT))
 from experiments.natural_material_threeway_v1.evaluate_transfer import masks, pipeline
 
