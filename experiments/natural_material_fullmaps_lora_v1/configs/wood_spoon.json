@@ -43,6 +43,6 @@
     "adam_epsilon": 1e-8,
     "hflip": false,
     "modifier_token": "<M*>",
-    "initializer_token": "material"
+    "initializer_token": "metal"
   }
 }

@@ -1,4 +1,4 @@
-"""Verify that a full-map Material LoRA config changes only the adapter."""
+"""Verify the reviewed full-map data and Material LoRA config differences."""
 
 import argparse
 import hashlib
@@ -65,7 +65,7 @@ def main():
     if expected.pop("token_local_kv") is not True:
         raise ValueError("Source is not original token-local K/V training")
     expected.update(material_lora_mode="token_local_kv", material_lora_rank=4,
-                    material_lora_alpha=4)
+                    material_lora_alpha=4, initializer_token="metal")
     if (expanded(config["args"]["concepts_list"]) !=
             expanded(source_config["args"]["concepts_list"])
             or expanded(config["data_manifest"]) != expanded(source_config["data_manifest"])):

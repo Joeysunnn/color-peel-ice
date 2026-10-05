@@ -4,14 +4,18 @@ This study trains one independent rank-4, alpha-4 token-local K/V Material LoRA
 for each of the three reviewed SuperMat counterfactual datasets: painted
 mailbox, metal spoon, and wood spoon. The 72 training images, object masks,
 captions, SD 1.4 base, optimizer, seed 42, and 5,000-step schedule come from
-`natural_material_fullmaps_v1`. Only the adaptation changes from the original
-token-local K/V weights to `material_lora_mode=token_local_kv`. The three
+`natural_material_fullmaps_v1`. The adaptation changes from the original
+token-local K/V weights to `material_lora_mode=token_local_kv`. The token
+initializer changes from `material` to `metal`, as required by the existing
+Material LoRA training entrypoint. This affects the initial token embedding,
+so the two studies are not a single-variable adapter ablation. The three
 2026-10-04 full-map checkpoints are **not LoRA checkpoints** and must not be
 reported as this study's result.
 
 The training configs are tracked in `configs/`. Before each run,
 `verify_training_source.py` checks the completed source run, source config,
-72 staged image/mask hashes, and that the new config changes only the adapter.
+72 staged image/mask hashes, and that the new config changes only the adapter
+and required initializer.
 Save its JSON output with the new run artifacts. Launch from a clean server
 checkout updated through GitHub fetch/fast-forward as required by
 `doc/project-layout.md`. Use a fresh immutable run directory for every dry run
