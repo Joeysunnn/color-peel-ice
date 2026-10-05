@@ -3,6 +3,7 @@
 import argparse
 import gc
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -196,7 +197,9 @@ def main():
                   "final_transfer": str(final_transfer),
                   "final_transfer_provenance_sha256": sha(final_transfer / "provenance.json"),
                   "final_adapter_sha256": sha(final / WEIGHTS),
-                  "source_snapshots": {}, "row_count": len(entries)}
+                  "source_snapshots": {}, "row_count": len(entries),
+                  "device": args.device,
+                  "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
     provenance_path = args.output / "provenance.json"
     provenance_path.write_text(json.dumps(provenance, indent=2) + "\n")
     with (args.output / "status.jsonl").open("w") as ledger:
