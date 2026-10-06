@@ -165,7 +165,9 @@ def validate_perfusion_subject_train_inputs(config: dict[str, Any], environment:
 
 
 def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> dict | None:
-    if config["stage"] != "train" or config["run"]["study"] != "lora_kv_subject_v1":
+    study = config["run"]["study"]
+    if config["stage"] != "train" or study not in {
+            "lora_kv_subject_v1", "lora_kv_subject_step_ablation_v1"}:
         return None
     source = config.get("lora_source", {})
     cohort = source.get("cohort")
@@ -175,14 +177,31 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
         "balanced_aligned": "experiments/subject_material_composition_v1/configs/mailbox_subject_balanced_caption_aligned_5000.yaml",
     }
     modes = {"full_kv", "token_local_kv", "full_v", "token_local_v"}
+    if study == "lora_kv_subject_v1":
+        steps = 5000
+        expected_status = "authorized_lora_subject_ablation"
+    else:
+        steps = 3000
+        expected_status = "authorized_lora_subject_step_ablation"
     if (cohort not in baselines or mode not in modes
-            or config["run"]["variant"] != f"{cohort}_{mode}_r4_5000"
-            or config.get("status") != "authorized_lora_subject_ablation"):
+            or (study == "lora_kv_subject_step_ablation_v1" and cohort != "balanced_aligned")
+            or config["run"] != {
+                "study": study,
+                "variant": f"{cohort}_{mode}_r4_{steps}",
+                "seed": 42,
+            }
+            or config.get("status") != expected_status):
         raise ValueError("Subject LoRA cohort, mode or status differs")
     baseline = read_config(PROJECT_ROOT / baselines[cohort])
     expected_args = dict(baseline["args"])
     expected_args.pop("token_local_kv")
-    expected_args.update(subject_lora_mode=mode, subject_lora_rank=4, subject_lora_alpha=4)
+    expected_args.update(
+        subject_lora_mode=mode,
+        subject_lora_rank=4,
+        subject_lora_alpha=4,
+        max_train_steps=steps,
+        checkpointing_steps=1000,
+    )
     if config["args"] != expected_args or config.get("data_manifest") != baseline["data_manifest"]:
         raise ValueError("Subject LoRA must match token-local B0 training except adapter mode")
     if str(PROJECT_ROOT) not in sys.path:
@@ -644,6 +663,10 @@ def main(argv: list[str] | None = None) -> int:
     validate_mailbox_matte_train_inputs(config, environment)
     perfusion_training_data = validate_perfusion_subject_train_inputs(config, environment)
     lora_training_data = validate_lora_subject_train_inputs(config, environment)
+    if (config["run"]["study"] == "lora_kv_subject_step_ablation_v1"
+            and run_dir.parent != Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
+            / config["run"]["study"]):
+        raise ValueError("Subject step-ablation run must be directly below its study directory")
     material_lora_training_data = validate_lora_material_train_inputs(config, environment)
     if material_lora_training_data is not None:
         lora_training_data = material_lora_training_data
