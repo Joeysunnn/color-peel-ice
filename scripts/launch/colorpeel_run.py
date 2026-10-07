@@ -167,7 +167,10 @@ def validate_perfusion_subject_train_inputs(config: dict[str, Any], environment:
 def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> dict | None:
     study = config["run"]["study"]
     if config["stage"] != "train" or study not in {
-            "lora_kv_subject_v1", "lora_kv_subject_step_ablation_v1"}:
+            "lora_kv_subject_v1",
+            "lora_kv_subject_step_ablation_v1",
+            "lora_kv_subject_alpha8_step_ablation_v1",
+    }:
         return None
     source = config.get("lora_source", {})
     cohort = source.get("cohort")
@@ -179,15 +182,27 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
     modes = {"full_kv", "token_local_kv", "full_v", "token_local_v"}
     if study == "lora_kv_subject_v1":
         steps = 5000
+        alpha = 4
+        variant = f"{cohort}_{mode}_r4_{steps}"
         expected_status = "authorized_lora_subject_ablation"
+    elif study == "lora_kv_subject_alpha8_step_ablation_v1":
+        steps = 3000
+        alpha = 8
+        variant = f"{cohort}_{mode}_r4_a8_{steps}"
+        expected_status = "authorized_lora_subject_alpha8_step_ablation"
     else:
         steps = 3000
+        alpha = 4
+        variant = f"{cohort}_{mode}_r4_{steps}"
         expected_status = "authorized_lora_subject_step_ablation"
     if (cohort not in baselines or mode not in modes
-            or (study == "lora_kv_subject_step_ablation_v1" and cohort != "balanced_aligned")
+            or (study in {
+                "lora_kv_subject_step_ablation_v1",
+                "lora_kv_subject_alpha8_step_ablation_v1",
+            } and cohort != "balanced_aligned")
             or config["run"] != {
                 "study": study,
-                "variant": f"{cohort}_{mode}_r4_{steps}",
+                "variant": variant,
                 "seed": 42,
             }
             or config.get("status") != expected_status):
@@ -198,7 +213,7 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
     expected_args.update(
         subject_lora_mode=mode,
         subject_lora_rank=4,
-        subject_lora_alpha=4,
+        subject_lora_alpha=alpha,
         max_train_steps=steps,
         checkpointing_steps=1000,
     )
@@ -663,7 +678,10 @@ def main(argv: list[str] | None = None) -> int:
     validate_mailbox_matte_train_inputs(config, environment)
     perfusion_training_data = validate_perfusion_subject_train_inputs(config, environment)
     lora_training_data = validate_lora_subject_train_inputs(config, environment)
-    if (config["run"]["study"] == "lora_kv_subject_step_ablation_v1"
+    if (config["run"]["study"] in {
+            "lora_kv_subject_step_ablation_v1",
+            "lora_kv_subject_alpha8_step_ablation_v1",
+    }
             and run_dir.parent != Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
             / config["run"]["study"]):
         raise ValueError("Subject step-ablation run must be directly below its study directory")

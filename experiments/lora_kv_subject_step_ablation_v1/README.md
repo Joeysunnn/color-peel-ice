@@ -29,4 +29,5 @@ positional control.
 Launch each file in `configs/` with `scripts/launch/colorpeel_run.py` into a new
 directory below `$COLORPEEL_RUN_ROOT/lora_kv_subject_step_ablation_v1/`. Run
 names must follow the standard `TIMESTAMP__STUDY__VARIANT__COMMIT7__42` form.
-The four configs retain the existing GPU assignment 0--3.
+The GPU assignment is encoded explicitly in each config and may be adjusted in
+committed config-only changes when cluster availability changes.
