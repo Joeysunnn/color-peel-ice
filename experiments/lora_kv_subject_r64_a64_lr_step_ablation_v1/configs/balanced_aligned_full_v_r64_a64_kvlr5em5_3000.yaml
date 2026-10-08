@@ -1,0 +1,8 @@
+schema_version: 1
+status: authorized_lora_subject_r64_a64_lr_step_ablation
+stage: train
+run: {study: lora_kv_subject_r64_a64_lr_step_ablation_v1, variant: balanced_aligned_full_v_r64_a64_kvlr5em5_3000, seed: 42}
+environment: {CUDA_VISIBLE_DEVICES: "1", COLORPEEL_MAILBOX_MATTE_ROOT: "/home/r12user5/Documents/Jiawei/colorpeel-runs/subject_material_composition_v1/20260926-134221__subject_material_composition_v1__mailbox_matte_preview_v2__10a0fb9__42"}
+data_manifest: "${COLORPEEL_MAILBOX_MATTE_ROOT}/caption_aligned_staged/training_assets_manifest.jsonl"
+lora_source: {cohort: balanced_aligned, asset_manifest: "${COLORPEEL_MAILBOX_MATTE_ROOT}/caption_aligned_staged/training_assets_manifest.jsonl", concepts_sha256: 109e2b336bde5a465db4cf9a29cc578f83cda48899fe2f91b4956aafcc0010f3, asset_manifest_sha256: 05bd9f15dbca82a33531dae0cd9620a14554200556c384e53fbc64bc2e782e90}
+args: {pretrained_model_name_or_path: CompVis/stable-diffusion-v1-4, concepts_list: "${COLORPEEL_MAILBOX_MATTE_ROOT}/caption_aligned_staged/balanced_concepts.json", resolution: 512, train_batch_size: 1, learning_rate: 1.0e-5, kv_learning_rate: 5.0e-5, subject_lora_mode: full_v, subject_lora_rank: 64, subject_lora_alpha: 64, scale_lr: true, lr_scheduler: constant, lr_warmup_steps: 0, max_train_steps: 3000, checkpoint_steps: [600, 1000, 2000, 3000], seed: 42, mixed_precision: "no", cos_weight: 0.0, gradient_accumulation_steps: 1, max_grad_norm: 1.0, dataloader_num_workers: 2, adam_beta1: 0.9, adam_beta2: 0.999, adam_weight_decay: 0.0, adam_epsilon: 1.0e-8, hflip: false, modifier_token: "<S*>", initializer_token: mailbox}

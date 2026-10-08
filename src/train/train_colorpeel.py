@@ -12,6 +12,7 @@ import sys
 import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
+from checkpoint_utils import should_save_checkpoint, validate_checkpoint_plan
 from initializer_token_utils import single_token_initializer_id
 from instance_mask_utils import (
     load_latent_instance_mask,
@@ -438,6 +439,7 @@ def save_new_embed(text_encoder, modifier_token_id, accelerator, args, output_di
         learned_embeds_dict[y] = learned_embeds[x]
         torch.save(learned_embeds_dict, f"{output_dir}/{y}.bin")
 
+
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Custom Diffusion training script.")
     parser.add_argument(
@@ -589,6 +591,16 @@ def parse_args(input_args=None):
             "Save a checkpoint of the training state every X updates. These checkpoints can be used both as final"
             " checkpoints in case they are better than the last checkpoint, and are also suitable for resuming"
             " training using `--resume_from_checkpoint`."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint_steps",
+        type=int,
+        nargs="+",
+        default=None,
+        help=(
+            "Save training-state checkpoints at these exact optimization steps. "
+            "When provided, this takes precedence over --checkpointing_steps."
         ),
     )
     parser.add_argument(
@@ -1320,6 +1332,8 @@ def main(args):
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
+    checkpoint_steps = validate_checkpoint_plan(
+        args.checkpoint_steps, args.checkpointing_steps, args.max_train_steps)
 
     # Observation-only audit state. This snapshots the full embedding table but
     # does not change the official full-parameter AdamW optimizer above.
@@ -1570,7 +1584,8 @@ def main(args):
                 progress_bar.update(1)
                 global_step += 1
 
-                if global_step % args.checkpointing_steps == 0:
+                if should_save_checkpoint(
+                        global_step, checkpoint_steps, args.checkpointing_steps):
                     if accelerator.is_main_process:
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         accelerator.save_state(save_path)
