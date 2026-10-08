@@ -1,0 +1,34 @@
+{
+  "schema": "lora_kv_subject_alpha8_step_ablation/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "training_study": "lora_kv_subject_alpha8_step_ablation_v1",
+  "training_data": {
+    "cohort": "balanced_aligned",
+    "concepts_sha256": "109e2b336bde5a465db4cf9a29cc578f83cda48899fe2f91b4956aafcc0010f3",
+    "asset_manifest_sha256": "05bd9f15dbca82a33531dae0cd9620a14554200556c384e53fbc64bc2e782e90",
+    "row_count": 10
+  },
+  "lora": {"rank": 4, "alpha": 8.0},
+  "arms": ["full_kv", "token_local_kv", "full_v", "token_local_v"],
+  "snapshot_steps": [1000, 2000, 3000],
+  "material_checkpoint": {
+    "run_relative_to_COLORPEEL_RUN_ROOT": "lora_kv_material_v1/20260930-120700__lora_kv_material_v1__ground_reflection_token_local_kv_r4_5000__56dbb0e__42",
+    "training_manifest_sha256": "a6bba5d3af0d9fd8fb45fe6f84a9d6afd1c846079b970f61bcb904ae4b58652a",
+    "directory_relative_to_training_run": "checkpoints",
+    "mode": "token_local_kv",
+    "rank": 4,
+    "alpha": 4.0,
+    "weights_sha256": "9713ae80319aabb7ec08faa4349cfa2e03918bab915228bfa447afea6d7f170b",
+    "adaptation_config_sha256": "cefde5e7bf5a623a7d682646e8d7f07de28c5339453ff399efe916a2fbe32280",
+    "token_embedding_sha256": "ef012da735605359db80033052fff3b06710b1bb081bb59782ac039ce192c7c6"
+  },
+  "groups": [
+    {"id": "plain", "subject_prompt": "a photo of <S*> mailbox"},
+    {"id": "red", "subject_prompt": "a photo of <S*> mailbox in red color"},
+    {"id": "blue", "subject_prompt": "a photo of <S*> mailbox in blue color"}
+  ],
+  "conditions": ["subject_only", "subject_literal_material", "subject_material_token"],
+  "literal_material": "metal",
+  "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5},
+  "safety_checker": "enabled"
+}

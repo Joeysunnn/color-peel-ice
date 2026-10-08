@@ -15,3 +15,12 @@ and 3000 steps:
 All four configs target GPU 0 so they can be run serially. Run directories must
 be fresh direct children of
 `$COLORPEEL_RUN_ROOT/lora_kv_subject_alpha8_step_ablation_v1/`.
+
+The locked evaluation protocol in `protocols/comparison_v1.json` reuses the
+alpha=4 study's prompts, Material LoRA, seeds 42--46, 100 PNDM steps, and CFG
+3.5. For each adapter mode and Subject snapshot, it compares Subject only,
+Subject plus the literal word `metal`, and Subject plus `<M*>`.
+
+Run it with `experiments/lora_kv_subject_step_ablation_v1/evaluate.py`, passing
+this study's protocol, matching alpha=8 Subject run, fresh output directory,
+and CUDA device.

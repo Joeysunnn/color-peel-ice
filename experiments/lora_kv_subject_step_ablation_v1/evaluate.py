@@ -23,6 +23,20 @@ from scripts.launch.colorpeel_run import read_config
 WEIGHT_NAME = "pytorch_lora_kv_weights.bin"
 ARMS = ("full_kv", "token_local_kv", "full_v", "token_local_v")
 CONDITIONS = ("subject_only", "subject_literal_material", "subject_material_token")
+PROTOCOL_SPECS = {
+    "lora_kv_subject_step_ablation/v1": {
+        "training_study": "lora_kv_subject_step_ablation_v1",
+        "lora": {"rank": 4, "alpha": 4.0},
+        "variant": "balanced_aligned_{mode}_r4_3000",
+        "status": "authorized_lora_subject_step_ablation",
+    },
+    "lora_kv_subject_alpha8_step_ablation/v1": {
+        "training_study": "lora_kv_subject_alpha8_step_ablation_v1",
+        "lora": {"rank": 4, "alpha": 8.0},
+        "variant": "balanced_aligned_{mode}_r4_a8_3000",
+        "status": "authorized_lora_subject_alpha8_step_ablation",
+    },
+}
 
 
 def read_json(path: Path) -> dict:
@@ -38,16 +52,18 @@ def sha256(path: Path) -> str:
 
 
 def validate_protocol(protocol: dict) -> None:
-    if (protocol.get("schema") != "lora_kv_subject_step_ablation/v1"
-            or protocol.get("base_model") != "CompVis/stable-diffusion-v1-4"
-            or protocol.get("training_study") != "lora_kv_subject_step_ablation_v1"
+    spec = PROTOCOL_SPECS.get(protocol.get("schema"))
+    if spec is None:
+        raise ValueError("unexpected Subject step-ablation protocol")
+    if (protocol.get("base_model") != "CompVis/stable-diffusion-v1-4"
+            or protocol.get("training_study") != spec["training_study"]
             or protocol.get("training_data") != {
                 "cohort": "balanced_aligned",
                 "concepts_sha256": "109e2b336bde5a465db4cf9a29cc578f83cda48899fe2f91b4956aafcc0010f3",
                 "asset_manifest_sha256": "05bd9f15dbca82a33531dae0cd9620a14554200556c384e53fbc64bc2e782e90",
                 "row_count": 10,
             }
-            or protocol.get("lora") != {"rank": 4, "alpha": 4.0}
+            or protocol.get("lora") != spec["lora"]
             or protocol.get("arms") != list(ARMS)
             or protocol.get("snapshot_steps") != [1000, 2000, 3000]
             or protocol.get("material_checkpoint") != {
@@ -129,9 +145,10 @@ def verify_subject_run(run: Path, protocol: dict, mode: str, run_root: Path) -> 
         raise ValueError("Subject run belongs to a different study")
     manifest_path = run / "manifest.json"
     manifest = read_json(manifest_path)
+    spec = PROTOCOL_SPECS[protocol["schema"]]
     expected_run = {
         "study": protocol["training_study"],
-        "variant": f"balanced_aligned_{mode}_r4_3000",
+        "variant": spec["variant"].format(mode=mode),
         "seed": 42,
     }
     if (manifest.get("status") != "succeeded" or manifest.get("returncode") != 0
@@ -140,7 +157,10 @@ def verify_subject_run(run: Path, protocol: dict, mode: str, run_root: Path) -> 
         raise ValueError("Subject training manifest differs from the protocol")
     config = read_config(run / "config.yaml")
     if (config.get("run") != expected_run
+            or config.get("status") != spec["status"]
             or config.get("args", {}).get("subject_lora_mode") != mode
+            or config.get("args", {}).get("subject_lora_rank") != protocol["lora"]["rank"]
+            or config.get("args", {}).get("subject_lora_alpha") != protocol["lora"]["alpha"]
             or config.get("args", {}).get("max_train_steps") != 3000
             or config.get("args", {}).get("checkpointing_steps") != 1000):
         raise ValueError("Subject training config differs from the step ablation")
@@ -238,6 +258,20 @@ def checked_output_dir(output: Path, protected_runs: list[Path]) -> Path:
     return resolved
 
 
+def install_protocol_adapters(unet, subject_state: dict, material_state: dict,
+                              protocol: dict, mode: str) -> None:
+    from experiments.lora_kv_subject_step_ablation_v1.attention import (
+        install_subject_material_lora_kv,
+    )
+
+    install_subject_material_lora_kv(
+        unet, subject_state, material_state, mode,
+        protocol["lora"]["rank"], protocol["lora"]["alpha"],
+        material_rank=protocol["material_checkpoint"]["rank"],
+        material_alpha=protocol["material_checkpoint"]["alpha"],
+    )
+
+
 def load_pipeline(protocol: dict, subject: Path, material: Path, mode: str, device: str):
     import torch
     from diffusers import DiffusionPipeline, PNDMScheduler
@@ -246,20 +280,13 @@ def load_pipeline(protocol: dict, subject: Path, material: Path, mode: str, devi
     if train_root not in sys.path:
         sys.path.insert(0, train_root)
     from custom_attention.unet_2d_condition_custom import UNet2DConditionModel
-    from experiments.lora_kv_subject_step_ablation_v1.attention import (
-        install_subject_material_lora_kv,
-    )
-
     unet = UNet2DConditionModel.from_pretrained(
         protocol["base_model"], subfolder="unet", local_files_only=True,
         torch_dtype=torch.float16,
     )
     subject_state = torch.load(subject / WEIGHT_NAME, map_location="cpu")
     material_state = torch.load(material / WEIGHT_NAME, map_location="cpu")
-    install_subject_material_lora_kv(
-        unet, subject_state, material_state, mode,
-        protocol["lora"]["rank"], protocol["lora"]["alpha"],
-    )
+    install_protocol_adapters(unet, subject_state, material_state, protocol, mode)
     pipe = DiffusionPipeline.from_pretrained(
         protocol["base_model"], unet=unet, low_cpu_mem_usage=False,
         torch_dtype=torch.float16, local_files_only=True,
