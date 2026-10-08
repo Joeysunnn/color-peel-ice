@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "status": "authorized_natural_material_fullmaps_lora_r64_a64_lr_step_ablation",
+  "stage": "train",
+  "run": {"study": "natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1", "variant": "mailbox_fullmaps_token_local_kv_r64_a64_kvlr1em5_3000", "seed": 42},
+  "environment": {"CUDA_VISIBLE_DEVICES": "0"},
+  "data_manifest": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2/staging/mailbox/training_assets_manifest.jsonl",
+  "fullmap_source": {"config": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2/configs/mailbox.json", "training_run": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/20261004-114311__natural_material_fullmaps_v1__mailbox_fullmaps_token_local_kv_5000__241c32a__42"},
+  "source_lock": {"material_id": "mailbox", "concepts_sha256": "fbbeec56102b7da369050608124e5761263bf96d3d6cf9ae06eb70f8633be4ee", "training_assets_manifest_sha256": "20781a86c1d09c03a01b9b4ed98f5dbbf408bc99f7f6941b5818d6fdb65ae73c", "staging_manifest_sha256": "febabb9fe5844fda5bad12a7df44c14ba4282abe26e8e2863588f46b41905c2a", "source_grid_manifest_sha256": "9b7aa46c61165076559d42ab6828c08eed22382ae8ab458ede1e91c965f868e5"},
+  "args": {"pretrained_model_name_or_path": "CompVis/stable-diffusion-v1-4", "concepts_list": "${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2/staging/mailbox/concepts.json", "resolution": 512, "train_batch_size": 1, "learning_rate": 0.00001, "kv_learning_rate": 0.00001, "material_lora_mode": "token_local_kv", "material_lora_rank": 64, "material_lora_alpha": 64, "freeze_model": "crossattn_kv", "scale_lr": true, "lr_scheduler": "constant", "lr_warmup_steps": 0, "max_train_steps": 3000, "checkpoint_steps": [600, 1000, 2000, 3000], "seed": 42, "mixed_precision": "no", "cos_weight": 0, "gradient_accumulation_steps": 1, "max_grad_norm": 1, "dataloader_num_workers": 2, "adam_beta1": 0.9, "adam_beta2": 0.999, "adam_weight_decay": 0, "adam_epsilon": 1e-8, "hflip": false, "modifier_token": "<M*>", "initializer_token": "metal"}
+}

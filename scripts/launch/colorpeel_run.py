@@ -196,7 +196,80 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
 
 
 def validate_lora_material_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> dict | None:
-    if config["stage"] != "train" or config["run"]["study"] != "lora_kv_material_v1":
+    if config["stage"] != "train":
+        return None
+    study = config["run"]["study"]
+    if study == "natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1":
+        materials = {"mailbox", "metal_spoon", "wood_spoon"}
+        learning_rates = {1.0e-5: "1em5", 5.0e-5: "5em5"}
+        material = config.get("source_lock", {}).get("material_id")
+        kv_learning_rate = config.get("args", {}).get("kv_learning_rate")
+        if material not in materials or kv_learning_rate not in learning_rates:
+            raise ValueError("Material or K/V learning rate differs")
+        expected_run = {
+            "study": study,
+            "variant": (f"{material}_fullmaps_token_local_kv_r64_a64_"
+                        f"kvlr{learning_rates[kv_learning_rate]}_3000"),
+            "seed": 42,
+        }
+        baseline = read_config(
+            PROJECT_ROOT / "experiments" / "natural_material_fullmaps_lora_v1"
+            / "configs" / f"{material}.json")
+        expected_args = dict(baseline["args"])
+        expected_args.pop("checkpointing_steps")
+        expected_args.update(
+            kv_learning_rate=kv_learning_rate,
+            material_lora_rank=64,
+            material_lora_alpha=64,
+            max_train_steps=3000,
+            checkpoint_steps=[600, 1000, 2000, 3000],
+        )
+        if (config.get("status") != "authorized_natural_material_fullmaps_lora_r64_a64_lr_step_ablation"
+                or config["run"] != expected_run
+                or config["args"] != expected_args
+                or config.get("data_manifest") != baseline["data_manifest"]
+                or config.get("fullmap_source") != baseline["fullmap_source"]):
+            raise ValueError("Natural Material LoRA config differs from the locked ablation")
+
+        root = (Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
+                / "natural_material_fullmaps_v1"
+                / "run_20261004_fullmaps_threeway_lighting_v2")
+        staging = root / "staging" / material
+        concepts = Path(expand_value(config["args"]["concepts_list"], environment)).resolve()
+        assets = Path(expand_value(config["data_manifest"], environment)).resolve()
+        source_lock = config["source_lock"]
+        locked = {
+            "concepts_sha256": concepts,
+            "training_assets_manifest_sha256": assets,
+            "staging_manifest_sha256": staging / "staging_manifest.json",
+            "source_grid_manifest_sha256": root / "grids" / material / "manifest.json",
+        }
+        if concepts != staging / "concepts.json" or assets != staging / "training_assets_manifest.jsonl":
+            raise ValueError("Natural Material LoRA selects a different staging directory")
+        for key, path in locked.items():
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if source_lock.get(key) != digest:
+                raise ValueError(f"Natural Material source hash differs: {key}")
+        records = [json.loads(line) for line in assets.read_text(encoding="utf-8").splitlines()]
+        if (len(records) != 72
+                or {shape: sum(row["shape"] == shape for row in records)
+                    for shape in ("sphere", "cube", "cylinder")}
+                != {"sphere": 24, "cube": 24, "cylinder": 24}):
+            raise ValueError("Natural Material training split differs")
+        for record in records:
+            for field in ("image", "mask"):
+                path = Path(record[field]).resolve()
+                if (not path.is_relative_to(staging)
+                        or hashlib.sha256(path.read_bytes()).hexdigest() != record[f"{field}_sha256"]):
+                    raise ValueError(f"Natural Material staged {field} differs: {path}")
+        return {
+            "cohort": f"{material}_fullmaps_72",
+            "concepts_sha256": source_lock["concepts_sha256"],
+            "asset_manifest_sha256": source_lock["training_assets_manifest_sha256"],
+            "row_count": len(records),
+        }
+
+    if study != "lora_kv_material_v1":
         return None
     baseline = read_config(PROJECT_ROOT / "experiments/material_token_local_pilot_v1/configs/train_token_local_kv_ground_reflection.yaml")
     expected_args = dict(baseline["args"])
@@ -647,6 +720,10 @@ def main(argv: list[str] | None = None) -> int:
     material_lora_training_data = validate_lora_material_train_inputs(config, environment)
     if material_lora_training_data is not None:
         lora_training_data = material_lora_training_data
+    if (config["run"]["study"] == "natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1"
+            and run_dir.parent != Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
+            / config["run"]["study"]):
+        raise ValueError("Natural Material LoRA run must be directly below its study directory")
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"
