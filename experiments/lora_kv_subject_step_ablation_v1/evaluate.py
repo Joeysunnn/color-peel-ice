@@ -1,4 +1,4 @@
-"""Evaluate 1000/2000/3000-step Subject LoRA snapshots with a fixed Material LoRA."""
+"""Evaluate selected Subject LoRA snapshots with a fixed Material LoRA."""
 
 from __future__ import annotations
 
@@ -29,12 +29,40 @@ PROTOCOL_SPECS = {
         "lora": {"rank": 4, "alpha": 4.0},
         "variant": "balanced_aligned_{mode}_r4_3000",
         "status": "authorized_lora_subject_step_ablation",
+        "kv_learning_rate": 1.0e-5,
+        "snapshot_steps": [1000, 2000, 3000],
+        "checkpointing_steps": 1000,
+        "checkpoint_steps": None,
     },
     "lora_kv_subject_alpha8_step_ablation/v1": {
         "training_study": "lora_kv_subject_alpha8_step_ablation_v1",
         "lora": {"rank": 4, "alpha": 8.0},
         "variant": "balanced_aligned_{mode}_r4_a8_3000",
         "status": "authorized_lora_subject_alpha8_step_ablation",
+        "kv_learning_rate": 1.0e-5,
+        "snapshot_steps": [1000, 2000, 3000],
+        "checkpointing_steps": 1000,
+        "checkpoint_steps": None,
+    },
+    "lora_kv_subject_r64_a64_kvlr1em5_step_ablation/v1": {
+        "training_study": "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+        "lora": {"rank": 64, "alpha": 64.0},
+        "variant": "balanced_aligned_{mode}_r64_a64_kvlr1em5_3000",
+        "status": "authorized_lora_subject_r64_a64_lr_step_ablation",
+        "kv_learning_rate": 1.0e-5,
+        "snapshot_steps": [600, 1000, 2000, 3000],
+        "checkpointing_steps": None,
+        "checkpoint_steps": [600, 1000, 2000, 3000],
+    },
+    "lora_kv_subject_r64_a64_kvlr5em5_step_ablation/v1": {
+        "training_study": "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+        "lora": {"rank": 64, "alpha": 64.0},
+        "variant": "balanced_aligned_{mode}_r64_a64_kvlr5em5_3000",
+        "status": "authorized_lora_subject_r64_a64_lr_step_ablation",
+        "kv_learning_rate": 5.0e-5,
+        "snapshot_steps": [600, 1000, 2000, 3000],
+        "checkpointing_steps": None,
+        "checkpoint_steps": [600, 1000, 2000, 3000],
     },
 }
 
@@ -65,7 +93,7 @@ def validate_protocol(protocol: dict) -> None:
             }
             or protocol.get("lora") != spec["lora"]
             or protocol.get("arms") != list(ARMS)
-            or protocol.get("snapshot_steps") != [1000, 2000, 3000]
+            or protocol.get("snapshot_steps") != spec["snapshot_steps"]
             or protocol.get("material_checkpoint") != {
                 "run_relative_to_COLORPEEL_RUN_ROOT": (
                     "lora_kv_material_v1/"
@@ -161,8 +189,10 @@ def verify_subject_run(run: Path, protocol: dict, mode: str, run_root: Path) -> 
             or config.get("args", {}).get("subject_lora_mode") != mode
             or config.get("args", {}).get("subject_lora_rank") != protocol["lora"]["rank"]
             or config.get("args", {}).get("subject_lora_alpha") != protocol["lora"]["alpha"]
+            or config.get("args", {}).get("kv_learning_rate") != spec["kv_learning_rate"]
             or config.get("args", {}).get("max_train_steps") != 3000
-            or config.get("args", {}).get("checkpointing_steps") != 1000):
+            or config.get("args", {}).get("checkpointing_steps") != spec["checkpointing_steps"]
+            or config.get("args", {}).get("checkpoint_steps") != spec["checkpoint_steps"]):
         raise ValueError("Subject training config differs from the step ablation")
     checkpoint = run / "checkpoints"
     adaptation = read_json(checkpoint / "adaptation_config.json")
