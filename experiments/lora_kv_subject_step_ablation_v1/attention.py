@@ -10,11 +10,15 @@ from src.train.custom_attention.attention_processor_custom import LoRALinearLaye
 
 class SubjectMaterialLoraKVAttnProcessor(SubjectLoraKVAttnProcessor):
     def __init__(self, hidden_size=None, cross_attention_dim=None, subject_mode="full_kv",
-                 rank=4, alpha=4):
+                 rank=4, alpha=4, *, material_rank=None, material_alpha=None):
+        material_rank = rank if material_rank is None else material_rank
+        material_alpha = alpha if material_alpha is None else material_alpha
         super().__init__(hidden_size, cross_attention_dim, subject_mode, rank, alpha)
         if cross_attention_dim is not None:
-            self.material_to_k_lora = LoRALinearLayer(cross_attention_dim, hidden_size, rank, alpha)
-            self.material_to_v_lora = LoRALinearLayer(cross_attention_dim, hidden_size, rank, alpha)
+            self.material_to_k_lora = LoRALinearLayer(
+                cross_attention_dim, hidden_size, material_rank, material_alpha)
+            self.material_to_v_lora = LoRALinearLayer(
+                cross_attention_dim, hidden_size, material_rank, material_alpha)
 
     def project_kv(self, attn, encoder_hidden_states, modifier_token_mask=None):
         if not isinstance(modifier_token_mask, dict) or set(modifier_token_mask) != {"subject", "material"}:
@@ -50,8 +54,11 @@ class SubjectMaterialLoraKVAttnProcessor(SubjectLoraKVAttnProcessor):
 
 
 def install_subject_material_lora_kv(unet, subject_state, material_state, subject_mode,
-                                     rank=4, alpha=4) -> None:
+                                     rank=4, alpha=4, *, material_rank=None,
+                                     material_alpha=None) -> None:
     """Load independent Subject and Material LoRAs without changing base weights."""
+    material_rank = rank if material_rank is None else material_rank
+    material_alpha = alpha if material_alpha is None else material_alpha
     for label, state in (("Subject", subject_state), ("Material", material_state)):
         if (not isinstance(state, dict)
                 or not all(isinstance(key, str) and isinstance(value, torch.Tensor)
@@ -63,7 +70,8 @@ def install_subject_material_lora_kv(unet, subject_state, material_state, subjec
     for name in unet.attn_processors:
         if name.endswith("attn1.processor"):
             processors[name] = SubjectMaterialLoraKVAttnProcessor(
-                subject_mode=subject_mode, rank=rank, alpha=alpha)
+                subject_mode=subject_mode, rank=rank, alpha=alpha,
+                material_rank=material_rank, material_alpha=material_alpha)
             continue
         if not name.endswith("attn2.processor"):
             raise ValueError(f"unexpected attention processor: {name}")
@@ -72,7 +80,8 @@ def install_subject_material_lora_kv(unet, subject_state, material_state, subjec
         if attn.to_v.weight.shape != (hidden_size, cross_attention_dim):
             raise ValueError(f"base K/V shape differs: {name}")
         processor = SubjectMaterialLoraKVAttnProcessor(
-            hidden_size, cross_attention_dim, subject_mode, rank, alpha)
+            hidden_size, cross_attention_dim, subject_mode, rank, alpha,
+            material_rank=material_rank, material_alpha=material_alpha)
         local_state = processor.state_dict()
         with torch.no_grad():
             for key, parameter in local_state.items():

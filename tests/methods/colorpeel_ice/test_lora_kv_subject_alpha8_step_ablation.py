@@ -4,11 +4,34 @@ from pathlib import Path
 import pytest
 
 from experiments.perfusion_subject_pilot import data_contract
+from experiments.lora_kv_subject_step_ablation_v1.evaluate import (
+    ARMS,
+    comparison_rows,
+    read_json,
+    validate_protocol,
+)
 from scripts.launch import colorpeel_run
 
 
 ROOT = Path(__file__).parents[3]
 EXPERIMENT = ROOT / "experiments" / "lora_kv_subject_alpha8_step_ablation_v1"
+
+
+def test_alpha8_evaluation_protocol_is_locked():
+    protocol = read_json(EXPERIMENT / "protocols" / "comparison_v1.json")
+    validate_protocol(protocol)
+    assert protocol["lora"] == {"rank": 4, "alpha": 8.0}
+    for mode in ARMS:
+        rows = comparison_rows(protocol, mode)
+        assert len(rows) == 135
+        assert {row["step"] for row in rows} == {1000, 2000, 3000}
+        assert {row["condition"] for row in rows} == {
+            "subject_only", "subject_literal_material", "subject_material_token"}
+
+    invalid = deepcopy(protocol)
+    invalid["lora"]["alpha"] = 4.0
+    with pytest.raises(ValueError, match="unexpected"):
+        validate_protocol(invalid)
 
 
 def test_launcher_authorizes_only_locked_alpha8_configs(monkeypatch):

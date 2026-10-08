@@ -12,6 +12,7 @@ from experiments.lora_kv_subject_step_ablation_v1.evaluate import (
     ARMS,
     checked_output_dir,
     comparison_rows,
+    install_protocol_adapters,
     read_json,
     validate_protocol,
 )
@@ -111,6 +112,45 @@ def test_composition_rejects_bad_masks_and_checkpoint_keys():
     with pytest.raises(ValueError, match="missing or mismatched"):
         install_subject_material_lora_kv(
             FakeUnet("token_local_v"), subject, broken, "token_local_v", rank=2, alpha=2)
+
+
+def test_subject_and_material_use_independent_alpha_scaling():
+    torch.manual_seed(11)
+    subject = state("token_local_kv", 0.3, 0.2)
+    material = state("token_local_kv", 0.5, 0.4)
+    target = FakeUnet("token_local_kv")
+    install_subject_material_lora_kv(
+        target, subject, material, "token_local_kv", rank=2, alpha=4,
+        material_rank=2, material_alpha=2)
+    processor = target.attn_processors["attn2.processor"]
+    hidden = torch.randn(1, 4, 3)
+
+    subject_raw = processor.to_v_lora.up(processor.to_v_lora.down(hidden))
+    material_raw = processor.material_to_v_lora.up(
+        processor.material_to_v_lora.down(hidden))
+    assert torch.allclose(processor.to_v_lora(hidden), subject_raw * 2)
+    assert torch.allclose(processor.material_to_v_lora(hidden), material_raw)
+    assert processor.to_v_lora.network_alpha == 4
+    assert processor.material_to_v_lora.network_alpha == 2
+
+
+def test_alpha8_protocol_keeps_material_alpha4():
+    protocol = read_json(
+        ROOT / "experiments" / "lora_kv_subject_alpha8_step_ablation_v1"
+        / "protocols" / "comparison_v1.json")
+    protocol = deepcopy(protocol)
+    protocol["lora"]["rank"] = 2
+    protocol["material_checkpoint"]["rank"] = 2
+    subject = state("token_local_kv", 0.3, 0.2)
+    material = state("token_local_kv", 0.5, 0.4)
+    target = FakeUnet("token_local_kv")
+    install_protocol_adapters(target, subject, material, protocol, "token_local_kv")
+    processor = target.attn_processors["attn2.processor"]
+
+    assert processor.to_k_lora.network_alpha == 8.0
+    assert processor.to_v_lora.network_alpha == 8.0
+    assert processor.material_to_k_lora.network_alpha == 4.0
+    assert processor.material_to_v_lora.network_alpha == 4.0
 
 
 def test_protocol_rows_and_material_lock():
