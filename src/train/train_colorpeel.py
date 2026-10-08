@@ -12,7 +12,11 @@ import sys
 import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
-from checkpoint_utils import should_save_checkpoint, validate_checkpoint_plan
+from checkpoint_utils import (
+    should_save_checkpoint,
+    tracker_safe_config,
+    validate_checkpoint_plan,
+)
 from initializer_token_utils import single_token_initializer_id
 from instance_mask_utils import (
     load_latent_instance_mask,
@@ -926,7 +930,7 @@ def main(args):
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
-        accelerator.init_trackers("custom-diffusion", config=vars(args))
+        accelerator.init_trackers("custom-diffusion", config=tracker_safe_config(vars(args)))
 
     # If passed along, set the training seed now.
     if args.seed is not None:

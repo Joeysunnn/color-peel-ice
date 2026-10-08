@@ -13,6 +13,7 @@ from experiments.perfusion_subject_pilot import data_contract
 from scripts.launch import colorpeel_run
 from src.train.checkpoint_utils import (
     should_save_checkpoint,
+    tracker_safe_config,
     validate_checkpoint_plan,
 )
 
@@ -23,6 +24,10 @@ CHECKPOINT_STEPS = [600, 1000, 2000, 3000]
 
 
 def test_exact_checkpoint_plan_preserves_legacy_interval():
+    original = {"checkpoint_steps": CHECKPOINT_STEPS, "max_train_steps": 3000}
+    assert tracker_safe_config(original) == {
+        "checkpoint_steps": "600,1000,2000,3000", "max_train_steps": 3000}
+    assert original["checkpoint_steps"] == CHECKPOINT_STEPS
     explicit = validate_checkpoint_plan(CHECKPOINT_STEPS, 1000, 3000)
     assert explicit == frozenset(CHECKPOINT_STEPS)
     assert [step for step in range(1, 3001)

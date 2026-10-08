@@ -16,3 +16,11 @@ def validate_checkpoint_plan(checkpoint_steps, checkpointing_steps, max_train_st
 def should_save_checkpoint(global_step, checkpoint_steps, checkpointing_steps):
     return (global_step in checkpoint_steps if checkpoint_steps is not None
             else global_step % checkpointing_steps == 0)
+
+
+def tracker_safe_config(config):
+    values = dict(config)
+    checkpoint_steps = values.get("checkpoint_steps")
+    if checkpoint_steps is not None:
+        values["checkpoint_steps"] = ",".join(str(step) for step in checkpoint_steps)
+    return values
