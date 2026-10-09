@@ -50,7 +50,7 @@
     "prompt_manifest_relative_to_COLORPEEL_RUN_ROOT": "20260921-170000__natural_image_subject_color_pilot__subject_token_local_kv_5000_reconstruction_transfer__7eb2319__42/inference/generation_manifest.jsonl",
     "prompt_manifest_sha256": "0e22585e08d44c12499a59efb35a9124164a01ca1167637257bfbf42e1e21353",
     "source_run_manifest_sha256": "db854dc0ef5c2f949557c0a2f0c76656cf92a1111dafbdbcc91eedd8c3c807a0",
-    "source_provenance_sha256": "c0cbc44e78068652f9af10d92524f9f136d64e75275eec271a5143306ecd8084e",
+    "source_provenance_sha256": "c0cbc44e78068652f9af10d92524f9f136d64e75275eec271a5143006ecd8084e",
     "row_count": 140,
     "prompt_count": 28,
     "source_checkpoint_id": "token-local-kv-5000",
