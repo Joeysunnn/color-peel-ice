@@ -1,0 +1,15 @@
+{
+  "schema": "lora_kv_subject_matte5_training_source/v1",
+  "source_root_relative_to_COLORPEEL_RUN_ROOT": "subject_material_composition_v1/20260926-134221__subject_material_composition_v1__mailbox_matte_preview_v2__10a0fb9__42",
+  "preview_manifest_sha256": "41926b80d4bc7bde29f0b6ed088da4adc31fcecbaec36fcb2e905765edfac630",
+  "preview_review_sha256": "aab40937c916fccc7dd460f76ddbfc260943669954f64938d9139bfe9b0c0bc8",
+  "source_assets_manifest_sha256": "05bd9f15dbca82a33531dae0cd9620a14554200556c384e53fbc64bc2e782e90",
+  "source_staging_provenance_sha256": "b8dc01c7d5682bb560fec8e14771e77ed445f204e8214af8589c384fe4b79d54",
+  "assets": [
+    {"source_color": "red", "caption_color": "red", "preview_image": "preview/red_matte.png", "image_sha256": "5cc183799c7c911cc489223f30ce1c58f408fe5c34970faa4466f54a549d1284", "mask": "caption_aligned_staged/red/matte/masks/image.png", "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "prompt": "a photo of <S*> mailbox in red color"},
+    {"source_color": "green", "caption_color": "green", "preview_image": "preview/green_matte.png", "image_sha256": "9e8c6621678382e03967a2baf5c7cbfe21abe5bc3d928c36a1b32103e8ee5122", "mask": "caption_aligned_staged/green/matte/masks/image.png", "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "prompt": "a photo of <S*> mailbox in green color"},
+    {"source_color": "cyan", "caption_color": "cyan", "preview_image": "preview/cyan_matte.png", "image_sha256": "f5784df19bf8246d9b13814787cecd48077d05a311e58f2b85a5d6ac62cb55c0", "mask": "caption_aligned_staged/cyan/matte/masks/image.png", "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "prompt": "a photo of <S*> mailbox in cyan color"},
+    {"source_color": "blue", "caption_color": "blue", "preview_image": "preview/blue_matte.png", "image_sha256": "f1869f4baa0ca483b9bf1f8ed90e2240d5726d562c8e238e51b97f20d81c13f8", "mask": "caption_aligned_staged/blue/matte/masks/image.png", "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "prompt": "a photo of <S*> mailbox in blue color"},
+    {"source_color": "magenta", "caption_color": "purple", "preview_image": "preview/magenta_matte.png", "image_sha256": "5a8f706c30115bdec2d9976284a56596d7d37260b0285cbd90dfcd8733f7d64c", "mask": "caption_aligned_staged/magenta/matte/masks/image.png", "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "prompt": "a photo of <S*> mailbox in purple color"}
+  ]
+}

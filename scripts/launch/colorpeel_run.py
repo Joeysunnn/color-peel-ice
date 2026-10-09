@@ -219,6 +219,97 @@ def validate_lora_material_train_inputs(config: dict[str, Any], environment: dic
     }
 
 
+def validate_lora_subject_matte5_train_inputs(
+        config: dict[str, Any], environment: dict[str, str]) -> dict | None:
+    study = "lora_kv_subject_matte5_r64_v1"
+    if config["stage"] != "train" or config["run"]["study"] != study:
+        return None
+    expected_run = {
+        "study": study,
+        "variant": "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_3000",
+        "seed": 42,
+    }
+    baseline = read_config(
+        PROJECT_ROOT / "experiments" / "subject_material_composition_v1" / "configs"
+        / "mailbox_subject_matte_only_caption_aligned_5000.yaml")
+    expected_args = dict(baseline["args"])
+    expected_args.pop("token_local_kv")
+    expected_args.update(
+        kv_learning_rate=5.0e-5,
+        subject_lora_mode="token_local_kv",
+        subject_lora_rank=64,
+        subject_lora_alpha=64,
+        max_train_steps=3000,
+        checkpointing_steps=1000,
+    )
+    if (config.get("status") != "authorized_lora_subject_matte5_r64"
+            or config["run"] != expected_run or config["args"] != expected_args):
+        raise ValueError("five-matte Subject LoRA config differs")
+    source = config.get("matte5_source", {})
+    protocol_path = (PROJECT_ROOT / source.get("protocol", "")).resolve()
+    expected_protocol = (PROJECT_ROOT / "experiments" / study / "protocols"
+                         / "training_source_v1.json").resolve()
+    if protocol_path != expected_protocol:
+        raise ValueError("five-matte Subject source protocol path differs")
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from experiments.lora_kv_subject_matte5_r64_v1 import prepare_staging as staging_tools
+
+    if staging_tools.sha256(protocol_path) != source.get("protocol_sha256"):
+        raise ValueError("five-matte Subject source protocol hash differs")
+    protocol = staging_tools.read_json(protocol_path)
+    staging_tools.validate_protocol(protocol)
+    run_root = Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
+    staging = Path(expand_value(source.get("staging_root", ""), environment)).resolve()
+    expected_staging = run_root / study / "assets_v1" / "staging"
+    concepts = staging / "concepts.json"
+    assets = staging / "training_assets_manifest.jsonl"
+    provenance_path = staging / "staging_provenance.json"
+    if (staging != expected_staging
+            or Path(expand_value(config["args"]["concepts_list"], environment)).resolve()
+            != concepts
+            or Path(expand_value(config["data_manifest"], environment)).resolve() != assets):
+        raise ValueError("five-matte Subject config selects a different staging set")
+    provenance = staging_tools.read_json(provenance_path)
+    if (provenance.get("schema") != "lora_kv_subject_matte5_staging/v1"
+            or provenance.get("source_protocol_sha256") != staging_tools.sha256(protocol_path)
+            or provenance.get("concepts_sha256") != staging_tools.sha256(concepts)
+            or provenance.get("training_assets_manifest_sha256") != staging_tools.sha256(assets)
+            or provenance.get("row_count") != 5):
+        raise ValueError("five-matte Subject staging provenance differs")
+    records = [json.loads(line) for line in assets.read_text(encoding="utf-8").splitlines()]
+    concept_rows = staging_tools.read_json(concepts)
+    if len(records) != 5 or len(concept_rows) != 5:
+        raise ValueError("five-matte Subject staged row count differs")
+    expected_concepts = []
+    for record, item in zip(records, protocol["assets"]):
+        color = item["source_color"]
+        image_dir = staging / color / "images"
+        mask_dir = staging / color / "masks"
+        if (record.get("source_color") != color
+                or record.get("caption_color") != item["caption_color"]
+                or record.get("prompt") != item["prompt"]):
+            raise ValueError("five-matte Subject caption mapping differs")
+        expected_concepts.append({
+            "instance_data_dir": str(image_dir),
+            "instance_mask_dir": str(mask_dir),
+            "instance_prompt": [item["prompt"]],
+        })
+        for field in ("image", "mask"):
+            path = Path(record[field]).resolve()
+            if (not path.is_relative_to(staging)
+                    or staging_tools.sha256(path) != record[f"{field}_sha256"]):
+                raise ValueError(f"five-matte staged {field} differs: {path}")
+    if concept_rows != expected_concepts:
+        raise ValueError("five-matte Subject concepts differ")
+    return {
+        "cohort": "mailbox_matte5_red_corrected",
+        "concepts_sha256": staging_tools.sha256(concepts),
+        "asset_manifest_sha256": staging_tools.sha256(assets),
+        "row_count": 5,
+    }
+
+
 def git_output(*args: str) -> str:
     return subprocess.check_output(
         ["git", *args], cwd=PROJECT_ROOT, text=True, stderr=subprocess.STDOUT
@@ -647,6 +738,13 @@ def main(argv: list[str] | None = None) -> int:
     material_lora_training_data = validate_lora_material_train_inputs(config, environment)
     if material_lora_training_data is not None:
         lora_training_data = material_lora_training_data
+    matte5_lora_training_data = validate_lora_subject_matte5_train_inputs(config, environment)
+    if matte5_lora_training_data is not None:
+        lora_training_data = matte5_lora_training_data
+    if (config["run"]["study"] == "lora_kv_subject_matte5_r64_v1"
+            and run_dir.parent != Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
+            / config["run"]["study"]):
+        raise ValueError("five-matte Subject LoRA run must be directly below its study directory")
     command = build_command(config, run_dir, environment)
 
     manifest_path = run_dir / "manifest.json"
