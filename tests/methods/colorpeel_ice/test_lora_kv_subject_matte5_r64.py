@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from experiments.lora_kv_subject_matte5_r64_v1 import prepare_staging
+from experiments.lora_kv_subject_matte5_r64_v1 import evaluate
 from scripts.launch import colorpeel_run
 
 
@@ -107,3 +108,46 @@ def test_prepare_staging_copies_only_five_reviewed_matte_images(tmp_path):
     assert [row["source_color"] for row in rows] == list(prepare_staging.COLORS)
     assert concepts[0]["instance_prompt"] == ["a photo of <S*> mailbox in red color"]
     assert concepts[-1]["instance_prompt"] == ["a photo of <S*> mailbox in purple color"]
+
+
+def test_inference_protocol_locks_two_materials_and_complete_comparison_matrix():
+    protocol = evaluate.read_json(EXPERIMENT / "protocols" / "inference_v1.json")
+    evaluate.validate_protocol(protocol)
+    assert protocol["subject"]["snapshot_steps"] == [1000, 2000, 3000]
+    assert tuple(protocol["materials"]) == ("metal_spoon", "wood_spoon")
+    all_rows = []
+    for step in evaluate.SUBJECT_STEPS:
+        rows = evaluate.comparison_rows(protocol, step)
+        all_rows.extend(rows)
+        assert len(rows) == 60
+        assert {row["condition"] for row in rows} == set(evaluate.CONDITIONS)
+        for group in ("plain", "red", "blue"):
+            for condition in evaluate.CONDITIONS:
+                assert {row["seed"] for row in rows
+                        if row["group"] == group and row["condition"] == condition} \
+                    == {42, 43, 44, 45, 46}
+    assert len(all_rows) == 180
+    assert len({row["id"] for row in all_rows}) == 180
+    assert {row["subject_step"] for row in all_rows} == {1000, 2000, 3000}
+
+
+def test_transfer_replay_preserves_locked_source_sampling():
+    source = [
+        {
+            "id": f"source-{index}", "color": f"prompt-{index // 5}",
+            "prompt": f"a photo of <S*> in scene {index // 5}",
+            "seed": 42 + index % 5, "num_inference_steps": 100,
+            "guidance_scale": 3.5,
+        }
+        for index in range(140)
+    ]
+    rows = evaluate.transfer_rows(source, 2000)
+    assert len(rows) == 140
+    assert len({row["id"] for row in rows}) == 140
+    assert len({row["image_path"] for row in rows}) == 140
+    for original, replay in zip(source, rows):
+        assert replay["source_id"] == original["id"]
+        assert replay["prompt"] == original["prompt"]
+        assert replay["seed"] == original["seed"]
+        assert replay["num_inference_steps"] == 100
+        assert replay["guidance_scale"] == 3.5
