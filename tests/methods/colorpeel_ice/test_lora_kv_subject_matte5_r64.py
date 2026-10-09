@@ -29,6 +29,23 @@ def test_training_config_locks_rank64_three_checkpoints_and_corrected_captions()
     assert args["subject_lora_rank"] == args["subject_lora_alpha"] == 64
     assert args["max_train_steps"] == 3000
     assert args["checkpointing_steps"] == 1000
+    baseline = colorpeel_run.read_config(
+        ROOT / "experiments" / "subject_material_composition_v1" / "configs"
+        / "mailbox_subject_matte_only_caption_aligned_5000.yaml")
+    expected_args = dict(baseline["args"])
+    expected_args.pop("token_local_kv")
+    expected_args.update(
+        concepts_list=(
+            "${COLORPEEL_RUN_ROOT}/lora_kv_subject_matte5_r64_v1/"
+            "assets_v1/staging/concepts.json"),
+        kv_learning_rate=5.0e-5,
+        subject_lora_mode="token_local_kv",
+        subject_lora_rank=64,
+        subject_lora_alpha=64,
+        max_train_steps=3000,
+        checkpointing_steps=1000,
+    )
+    assert args == expected_args
     protocol = prepare_staging.read_json(
         EXPERIMENT / "protocols" / "training_source_v1.json")
     prepare_staging.validate_protocol(protocol)
