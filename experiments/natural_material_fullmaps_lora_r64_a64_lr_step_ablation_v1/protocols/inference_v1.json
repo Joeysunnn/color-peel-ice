@@ -1,0 +1,44 @@
+{
+  "schema": "natural_material_fullmaps_lora_r64_a64_inference/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "material": {
+    "training_study": "natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1",
+    "mode": "token_local_kv",
+    "rank": 64,
+    "alpha": 64.0,
+    "snapshot_steps": [600, 1000, 2000, 3000],
+    "kv_learning_rates": [0.00001, 0.00005],
+    "literal_material": {
+      "mailbox": "red painted metal",
+      "metal_spoon": "polished stainless steel",
+      "wood_spoon": "light wood"
+    }
+  },
+  "transfer": {
+    "objects": ["vase", "chair", "mug", "sofa", "mailbox"],
+    "arms": ["base", "literal", "token"],
+    "token_prompt": "a photo of a {object} made of <M*>",
+    "sampling": {"seeds": [42, 43, 44], "num_inference_steps": 100, "guidance_scale": 3.5}
+  },
+  "subject": {
+    "run_relative_to_COLORPEEL_RUN_ROOT": "lora_kv_subject_r64_a64_lr_step_ablation_v1/20261008-115005__lora_kv_subject_r64_a64_lr_step_ablation_v1__balanced_aligned_token_local_kv_r64_a64_kvlr5em5_3000__4bf787f__42",
+    "training_study": "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+    "variant": "balanced_aligned_token_local_kv_r64_a64_kvlr5em5_3000",
+    "mode": "token_local_kv",
+    "rank": 64,
+    "alpha": 64.0,
+    "kv_learning_rate": 0.00005,
+    "snapshot_steps": [1000, 2000, 3000]
+  },
+  "composition": {
+    "condition": "subject_material_token",
+    "groups": [
+      {"id": "plain", "subject_prompt": "a photo of <S*> mailbox"},
+      {"id": "red", "subject_prompt": "a photo of <S*> mailbox in red color"},
+      {"id": "blue", "subject_prompt": "a photo of <S*> mailbox in blue color"}
+    ],
+    "prompt_suffix": " made of <M*>",
+    "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5}
+  },
+  "safety_checker": "enabled"
+}

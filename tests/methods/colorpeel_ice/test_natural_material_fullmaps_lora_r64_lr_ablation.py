@@ -1,8 +1,14 @@
+import json
 from pathlib import Path
 
 import pytest
 
 from scripts.launch import colorpeel_run
+from experiments.natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1.evaluate import (
+    composition_rows,
+    transfer_rows,
+    validate_protocol,
+)
 from src.train.checkpoint_utils import (
     should_save_checkpoint,
     tracker_safe_config,
@@ -59,3 +65,25 @@ def test_six_rank64_material_configs_are_locked():
         for material in ("mailbox", "metal_spoon", "wood_spoon")
         for learning_rate in (1.0e-5, 5.0e-5)
     }
+
+
+def test_inference_protocol_locks_360_rows_per_trajectory():
+    protocol = json.loads(
+        (EXPERIMENT / "protocols" / "inference_v1.json").read_text(encoding="utf-8"))
+    validate_protocol(protocol)
+    for material in ("mailbox", "metal_spoon", "wood_spoon"):
+        runtime = dict(protocol, material_id=material)
+        transfers = transfer_rows(runtime)
+        compositions = composition_rows(runtime)
+        assert len(transfers) == 180
+        assert len(compositions) == 180
+        assert len({row["id"] for row in transfers + compositions}) == 360
+        assert {row["material_step"] for row in transfers + compositions} == {
+            600, 1000, 2000, 3000}
+        assert {row["subject_step"] for row in compositions} == {1000, 2000, 3000}
+        assert all(row["prompt"].count("<S*>") == 1
+                   and row["prompt"].count("<M*>") == 1
+                   for row in compositions)
+        assert all("<S*>" not in row["prompt"] for row in transfers)
+        assert all(row["prompt"].count("<M*>") == int(row["arm"] == "token")
+                   for row in transfers)

@@ -12,3 +12,9 @@ hash before a run starts.
 
 No file under either source study is modified. Run outputs belong directly under
 `${COLORPEEL_RUN_ROOT}/natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1/`.
+
+`protocols/inference_v1.json` locks the post-training evaluation. Each trajectory
+generates 180 five-object transfer images (all four Material snapshots) and 180
+new Subject/Material-token composition images (four Material snapshots by the
+fixed Subject snapshots at 1000, 2000, and 3000). Existing Subject-only and
+literal controls are intentionally not regenerated.
