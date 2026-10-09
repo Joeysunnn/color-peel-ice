@@ -9,6 +9,11 @@ from experiments.natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1.eval
     transfer_rows,
     validate_protocol,
 )
+from experiments.natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1.evaluate_subject_transfer import (
+    replay_rows,
+    validate_protocol as validate_subject_transfer_protocol,
+    validate_source_rows,
+)
 from src.train.checkpoint_utils import (
     should_save_checkpoint,
     tracker_safe_config,
@@ -87,3 +92,30 @@ def test_inference_protocol_locks_360_rows_per_trajectory():
         assert all("<S*>" not in row["prompt"] for row in transfers)
         assert all(row["prompt"].count("<M*>") == int(row["arm"] == "token")
                    for row in transfers)
+
+
+def test_subject_transfer_protocol_replays_140_rows_per_snapshot():
+    protocol = json.loads(
+        (EXPERIMENT / "protocols" / "subject_transfer_v1.json").read_text(
+            encoding="utf-8"))
+    validate_subject_transfer_protocol(protocol)
+    rows = []
+    for prompt_index in range(28):
+        color = f"prompt_{prompt_index:02d}"
+        prompt = f"a photo of <S*> mailbox test {prompt_index}"
+        for seed in range(42, 47):
+            source_id = f"token-local-kv-5000-{color}-seed-{seed}"
+            rows.append({
+                "checkpoint_id": "token-local-kv-5000", "checkpoint_steps": 5000,
+                "color": color, "guidance_scale": 3.5, "id": source_id,
+                "image_path": f"images/token-local-kv-5000/{color}-seed-{seed}.png",
+                "model_dir": "/locked/source/checkpoints", "num_inference_steps": 100,
+                "prompt": prompt, "sampling_id": None, "seed": seed,
+            })
+    validate_source_rows(rows, protocol)
+    for step in (1000, 2000, 3000):
+        replay = replay_rows(rows, step)
+        assert len(replay) == 140
+        assert {row["subject_step"] for row in replay} == {step}
+        assert {row["prompt"] for row in replay} == {row["prompt"] for row in rows}
+        assert len({row["id"] for row in replay}) == 140

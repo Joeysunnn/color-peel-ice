@@ -18,3 +18,8 @@ generates 180 five-object transfer images (all four Material snapshots) and 180
 new Subject/Material-token composition images (four Material snapshots by the
 fixed Subject snapshots at 1000, 2000, and 3000). Existing Subject-only and
 literal controls are intentionally not regenerated.
+
+`protocols/subject_transfer_v1.json` separately locks the user's historical
+140-row reconstruction/transfer manifest. `evaluate_subject_transfer.py` replays
+those exact prompts and seeds for the selected 1000, 2000, or 3000-step Subject
+snapshot without loading a Material adapter.

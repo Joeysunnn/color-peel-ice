@@ -1,0 +1,28 @@
+{
+  "schema": "lora_kv_subject_r64_a64_manifest_transfer/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "subject": {
+    "run_relative_to_COLORPEEL_RUN_ROOT": "lora_kv_subject_r64_a64_lr_step_ablation_v1/20261008-115005__lora_kv_subject_r64_a64_lr_step_ablation_v1__balanced_aligned_token_local_kv_r64_a64_kvlr5em5_3000__4bf787f__42",
+    "training_study": "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+    "variant": "balanced_aligned_token_local_kv_r64_a64_kvlr5em5_3000",
+    "mode": "token_local_kv",
+    "rank": 64,
+    "alpha": 64.0,
+    "kv_learning_rate": 0.00005,
+    "snapshot_steps": [1000, 2000, 3000]
+  },
+  "prompt_manifest": {
+    "path_relative_to_COLORPEEL_RUN_ROOT": "20260921-170000__natural_image_subject_color_pilot__subject_token_local_kv_5000_reconstruction_transfer__7eb2319__42/inference/generation_manifest.jsonl",
+    "sha256": "0e22585e08d44c12499a59efb35a9124164a01ca1167637257bfbf42e1e21353",
+    "row_count": 140,
+    "prompt_count": 28,
+    "source_checkpoint_id": "token-local-kv-5000",
+    "source_checkpoint_steps": 5000
+  },
+  "sampling": {
+    "seeds": [42, 43, 44, 45, 46],
+    "num_inference_steps": 100,
+    "guidance_scale": 3.5
+  },
+  "safety_checker": "enabled"
+}
