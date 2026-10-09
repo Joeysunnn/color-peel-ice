@@ -12,9 +12,9 @@
     "kv_learning_rate": 0.00005,
     "snapshot_steps": [1000, 2000, 3000],
     "source_snapshot_sha256": {
-      "1000": {"adapter": "77e9a2a0c9bfbd21d4ea8af277e760662cc4b9cf3e75a67cce95969cc560a4df3", "text_encoder": "4d45fce2fff0553eba51736a7d51aad997631539c79ffe38f2e0af03f54c38d4d"},
-      "2000": {"adapter": "5dba35018a5fd49e4f4859a9dd96b785aaadca74039b9de976ec685bc92a1b521", "text_encoder": "c352b1fdd6e2049ee8b090c6151579455c4c43b220cf6ac6bbbe6f790f509642f"},
-      "3000": {"adapter": "f82a11a17788af829755cfeed76fe1dcbff947ba3405b10561d801723bb13bdab", "text_encoder": "2da17ae2e0c3d4703d6a5f830b38273dd544acfe417420aacc8b603eeb4424447"}
+      "1000": {"adapter": "77e9a2a0c9bfbd21d4ea8af277e760662c4b9cf3e75a67cce95969cc560a4df3", "text_encoder": "4d45fce2fff0553eba51736a7d51aad97631539c79ffe38f2e0af03f54c38d4d"},
+      "2000": {"adapter": "5dba35018a5fd49e4f4859a9dd96b785aadca74039b9de976ec685bc92a1b521", "text_encoder": "c352b1fdd6e2049ee8b090c615157945c4c43b220cf6ac6bbbe6f790f509642f"},
+      "3000": {"adapter": "f82a11a17788af829755cfeed76fe1dcbf947ba3405b10561d801723bb13bdab", "text_encoder": "2da17ae2e0c3d4703d6a5f830b38273d544acfe417420aacc8b603eeb4424447"}
     }
   },
   "materials": {
@@ -23,16 +23,16 @@
       "variant": "metal_spoon_fullmaps_token_local_kv_r64_a64_kvlr5em5_3000",
       "training_manifest_sha256": "b324f7b60aef60ccf532281838e76d5a48f893d84dbc1ccfdfc763a269bcf174",
       "snapshot_step": 1000,
-      "source_adapter_sha256": "1f9606ddb59a6b25aa15a7c6ebb3831fddde98292d074219128b48822f3ad1773",
-      "source_text_encoder_sha256": "e93bd0c7c91de21cadb6e939fead332ee557b45d0661808c8980be1b2af15b45f"
+      "source_adapter_sha256": "1f9606ddb59a6b25aa15a7c6ebb3831fdde98292d074219128b48822f3ad1773",
+      "source_text_encoder_sha256": "e93bd0c7c91de21cadb6e939fead332e557b45d0661808c8980be1b2af15b45f"
     },
     "wood_spoon": {
       "run_relative_to_COLORPEEL_RUN_ROOT": "natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1/20261008-164905__natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1__wood_spoon_fullmaps_token_local_kv_r64_a64_kvlr5em5_3000__cc3d580__42",
       "variant": "wood_spoon_fullmaps_token_local_kv_r64_a64_kvlr5em5_3000",
       "training_manifest_sha256": "e386e76a8cceded3b1d318270ed31bebd7447948bb7d60f6347018e734638758",
       "snapshot_step": 1000,
-      "source_adapter_sha256": "823c475de462b0bd19eeb3f8c3dc9fababb47399c891d783858bde5c43fe40ead",
-      "source_text_encoder_sha256": "715c83a7c5090456488c86b67cb3741bbf436a0bce5ed7f62f8926fb914f37a15"
+      "source_adapter_sha256": "823c475de462b0bd19eeb3f8c3dc9fabab47399c891d783858bde5c43fe40ead",
+      "source_text_encoder_sha256": "715c83a7c5090456488c86b67cb3741bf436a0bce5ed7f62f8926fb914f37a15"
     }
   },
   "comparison": {
