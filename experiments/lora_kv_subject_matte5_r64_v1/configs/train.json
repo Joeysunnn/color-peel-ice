@@ -34,7 +34,7 @@
     "adam_beta1": 0.9,
     "adam_beta2": 0.999,
     "adam_weight_decay": 0,
-    "adam_epsilon": 1e-8,
+    "adam_epsilon": 1.0e-8,
     "hflip": false,
     "modifier_token": "<S*>",
     "initializer_token": "mailbox"
