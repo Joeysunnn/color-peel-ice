@@ -235,6 +235,7 @@ def validate_lora_subject_matte5_train_inputs(
     expected_args = dict(baseline["args"])
     expected_args.pop("token_local_kv")
     expected_args.update(
+        concepts_list="${COLORPEEL_RUN_ROOT}/lora_kv_subject_matte5_r64_v1/assets_v1/staging/concepts.json",
         kv_learning_rate=5.0e-5,
         subject_lora_mode="token_local_kv",
         subject_lora_rank=64,
