@@ -1,0 +1,62 @@
+{
+  "schema": "lora_kv_subject_matte5_r64_early_steps_inference/v1",
+  "base_model": "CompVis/stable-diffusion-v1-4",
+  "subject": {
+    "run_relative_to_COLORPEEL_RUN_ROOT": "lora_kv_subject_matte5_r64_early_steps_v1/20261010-103311__lora_kv_subject_matte5_r64_early_steps_v1__mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_steps300_500_700__098977b__42",
+    "training_study": "lora_kv_subject_matte5_r64_early_steps_v1",
+    "variant": "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_steps300_500_700",
+    "training_manifest_sha256": "7c3eeaebc4880cbedf00697655567607da10b4628944d4465aa44dfde8ff658c",
+    "mode": "token_local_kv",
+    "rank": 64,
+    "alpha": 64.0,
+    "kv_learning_rate": 0.00005,
+    "snapshot_steps": [300, 500, 700],
+    "source_snapshot_sha256": {
+      "300": {"adapter": "e1ca2c13785bdd3cc8611d82ebb6457f8713d8fc6b318913d141879e71fc2373", "text_encoder": "4f47f5bb9bea9c30c83d583ac157ae2d56fd0a5279d85b3799d77f848bb3b7de"},
+      "500": {"adapter": "b5fe305fd4ad25aca0219e74065db9763eabd4e9f1bf0c9bf25344e6b65b1411", "text_encoder": "eaae36a6c23c2a7fee877810a702b566817f0caf78da421b84c8903dde946519"},
+      "700": {"adapter": "8912ad05d1769663624c04da66f4deb90601c0a07eb8ab2305a8c2a045a07043", "text_encoder": "88c4f4fbaacab50f768b082c4515c354bb8c378e2de02109f5e2cf0a95831ea2"}
+    }
+  },
+  "materials": {
+    "metal_spoon": {
+      "run_relative_to_COLORPEEL_RUN_ROOT": "natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1/20261008-164903__natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1__metal_spoon_fullmaps_token_local_kv_r64_a64_kvlr5em5_3000__cc3d580__42",
+      "variant": "metal_spoon_fullmaps_token_local_kv_r64_a64_kvlr5em5_3000",
+      "training_manifest_sha256": "b324f7b60aef60ccf532281838e76d5a48f893d84dbc1ccfdfc763a269bcf174",
+      "snapshot_step": 1000,
+      "source_adapter_sha256": "1f9606ddb59a6b25aa15a7c6ebb3831fdde98292d074219128b48822f3ad1773",
+      "source_text_encoder_sha256": "e93bd0c7c91de21cadb6e939fead332e557b45d0661808c8980be1b2af15b45f"
+    },
+    "wood_spoon": {
+      "run_relative_to_COLORPEEL_RUN_ROOT": "natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1/20261008-164905__natural_material_fullmaps_lora_r64_a64_lr_step_ablation_v1__wood_spoon_fullmaps_token_local_kv_r64_a64_kvlr5em5_3000__cc3d580__42",
+      "variant": "wood_spoon_fullmaps_token_local_kv_r64_a64_kvlr5em5_3000",
+      "training_manifest_sha256": "e386e76a8cceded3b1d318270ed31bebd7447948bb7d60f6347018e734638758",
+      "snapshot_step": 1000,
+      "source_adapter_sha256": "823c475de462b0bd19eeb3f8c3dc9fabab47399c891d783858bde5c43fe40ead",
+      "source_text_encoder_sha256": "715c83a7c5090456488c86b67cb3741bf436a0bce5ed7f62f8926fb914f37a15"
+    }
+  },
+  "comparison": {
+    "groups": [
+      {"id": "plain", "subject_prompt": "a photo of <S*> mailbox"},
+      {"id": "red", "subject_prompt": "a photo of <S*> mailbox in red color"},
+      {"id": "blue", "subject_prompt": "a photo of <S*> mailbox in blue color"}
+    ],
+    "conditions": ["subject_only", "subject_literal_metal", "subject_material_token_metal_spoon", "subject_material_token_wood_spoon"],
+    "literal_suffix": " made of metal",
+    "material_token_suffix": " made of <M*>",
+    "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5}
+  },
+  "transfer": {
+    "prompt_manifest_relative_to_COLORPEEL_RUN_ROOT": "20260921-170000__natural_image_subject_color_pilot__subject_token_local_kv_5000_reconstruction_transfer__7eb2319__42/inference/generation_manifest.jsonl",
+    "prompt_manifest_sha256": "0e22585e08d44c12499a59efb35a9124164a01ca1167637257bfbf42e1e21353",
+    "source_run_manifest_sha256": "db854dc0ef5c2f949557c0a2f0c76656cf92a1111dafbdbcc91eedd8c3c807a0",
+    "source_provenance_sha256": "c0cbc44e78068652f9af10d92524f9f136d64e75275eec271a514306ecd8084e",
+    "row_count": 140,
+    "prompt_count": 28,
+    "source_checkpoint_id": "token-local-kv-5000",
+    "source_checkpoint_steps": 5000,
+    "sampling": {"seeds": [42, 43, 44, 45, 46], "num_inference_steps": 100, "guidance_scale": 3.5},
+    "interpretation": "Historical fixed benchmark; its seen/unseen labels are preserved even though the new matte5 captions use purple rather than magenta."
+  },
+  "safety_checker": "enabled"
+}

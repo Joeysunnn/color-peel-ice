@@ -14,3 +14,7 @@ The later inference phase must repeat the previous fixed matrix for all three
 Subject snapshots: 60 comparison images and 140 historical transfer images per
 step, for 600 images total. The Material-token arms remain the rank-64,
 alpha-64, K/V-LR-`5e-5`, step-1000 `metal_spoon` and `wood_spoon` checkpoints.
+
+The locked inference protocol is `protocols/inference_v1.json`. It is executed
+with the shared evaluator in `../lora_kv_subject_matte5_r64_v1/evaluate.py` so
+the old and early-step studies use the same validation and generation path.

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from experiments.lora_kv_subject_matte5_r64_v1 import evaluate
 from scripts.launch import colorpeel_run
 from src.train.checkpoint_utils import (
     should_save_checkpoint,
@@ -17,6 +18,10 @@ OLD_CONFIG = (ROOT / "experiments" / "lora_kv_subject_matte5_r64_v1"
 NEW_CONFIG = (ROOT / "experiments" / "lora_kv_subject_matte5_r64_early_steps_v1"
               / "configs" / "train.json")
 CHECKPOINT_STEPS = [300, 500, 700]
+OLD_PROTOCOL = (ROOT / "experiments" / "lora_kv_subject_matte5_r64_v1"
+                / "protocols" / "inference_v1.json")
+NEW_PROTOCOL = (ROOT / "experiments" / "lora_kv_subject_matte5_r64_early_steps_v1"
+                / "protocols" / "inference_v1.json")
 
 
 def test_explicit_checkpoint_plan_saves_only_early_steps():
@@ -59,3 +64,40 @@ def test_early_step_config_changes_only_run_identity_and_step_plan():
     assert colorpeel_run.argument_tokens(
         {"checkpoint_steps": CHECKPOINT_STEPS}, {}) \
         == ["--checkpoint_steps", "300", "500", "700"]
+
+
+def test_early_inference_protocol_changes_only_subject_source_and_steps():
+    old = evaluate.read_json(OLD_PROTOCOL)
+    new = evaluate.read_json(NEW_PROTOCOL)
+    evaluate.validate_protocol(old)
+    evaluate.validate_protocol(new)
+    for field in ("base_model", "materials", "comparison", "transfer", "safety_checker"):
+        assert new[field] == old[field]
+    assert new["subject"]["snapshot_steps"] == CHECKPOINT_STEPS
+    assert set(new["subject"]["source_snapshot_sha256"]) == {"300", "500", "700"}
+    for field in ("mode", "rank", "alpha", "kv_learning_rate"):
+        assert new["subject"][field] == old["subject"][field]
+
+
+def test_early_inference_matrix_has_600_unique_rows():
+    protocol = evaluate.read_json(NEW_PROTOCOL)
+    comparison = [row for step in CHECKPOINT_STEPS
+                  for row in evaluate.comparison_rows(protocol, step)]
+    source = [
+        {
+            "id": f"source-{index}", "color": f"prompt-{index // 5}",
+            "prompt": f"a photo of <S*> in scene {index // 5}",
+            "seed": 42 + index % 5, "num_inference_steps": 100,
+            "guidance_scale": 3.5,
+        }
+        for index in range(140)
+    ]
+    transfer = [row for step in CHECKPOINT_STEPS
+                for row in evaluate.transfer_rows(source, step)]
+    assert len(comparison) == 180
+    assert len(transfer) == 420
+    assert len(comparison) + len(transfer) == 600
+    assert len({row["id"] for row in comparison}) == 180
+    assert len({row["id"] for row in transfer}) == 420
+    with pytest.raises(ValueError, match="unsupported Subject snapshot"):
+        evaluate.comparison_rows(protocol, 1000)

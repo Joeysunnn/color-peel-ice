@@ -22,6 +22,26 @@ from scripts.launch.colorpeel_run import read_config
 
 WEIGHT_NAME = "pytorch_lora_kv_weights.bin"
 SUBJECT_STEPS = (1000, 2000, 3000)
+SUBJECT_PROTOCOLS = {
+    "lora_kv_subject_matte5_r64_inference/v1": {
+        "training_study": "lora_kv_subject_matte5_r64_v1",
+        "variant": "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_3000",
+        "status": "authorized_lora_subject_matte5_r64",
+        "snapshot_steps": SUBJECT_STEPS,
+        "max_train_steps": 3000,
+        "checkpointing_steps": 1000,
+        "checkpoint_steps": None,
+    },
+    "lora_kv_subject_matte5_r64_early_steps_inference/v1": {
+        "training_study": "lora_kv_subject_matte5_r64_early_steps_v1",
+        "variant": "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_steps300_500_700",
+        "status": "authorized_lora_subject_matte5_r64_early_steps",
+        "snapshot_steps": (300, 500, 700),
+        "max_train_steps": 700,
+        "checkpointing_steps": None,
+        "checkpoint_steps": [300, 500, 700],
+    },
+}
 MATERIAL_IDS = ("metal_spoon", "wood_spoon")
 CONDITIONS = (
     "subject_only",
@@ -53,20 +73,20 @@ def require(value: bool, message: str) -> None:
 
 
 def validate_protocol(protocol: dict) -> None:
-    require(protocol.get("schema") == "lora_kv_subject_matte5_r64_inference/v1",
-            "inference protocol schema differs")
+    schema = protocol.get("schema")
+    require(schema in SUBJECT_PROTOCOLS, "inference protocol schema differs")
+    expected = SUBJECT_PROTOCOLS[schema]
     require(protocol.get("base_model") == "CompVis/stable-diffusion-v1-4",
             "base model differs")
     subject = protocol.get("subject", {})
-    require(subject.get("training_study") == "lora_kv_subject_matte5_r64_v1"
-            and subject.get("variant")
-            == "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_3000"
+    require(subject.get("training_study") == expected["training_study"]
+            and subject.get("variant") == expected["variant"]
             and subject.get("mode") == "token_local_kv"
             and subject.get("rank") == 64 and subject.get("alpha") == 64.0
             and subject.get("kv_learning_rate") == 5.0e-5
-            and subject.get("snapshot_steps") == list(SUBJECT_STEPS)
+            and subject.get("snapshot_steps") == list(expected["snapshot_steps"])
             and set(subject.get("source_snapshot_sha256", {}))
-            == {str(step) for step in SUBJECT_STEPS},
+            == {str(step) for step in expected["snapshot_steps"]},
             "Subject protocol differs")
     materials = protocol.get("materials", {})
     require(tuple(materials) == MATERIAL_IDS, "Material selection differs")
@@ -100,6 +120,7 @@ def validate_protocol(protocol: dict) -> None:
 
 def verify_subject(protocol: dict, run_root: Path) -> tuple[Path, dict]:
     spec = protocol["subject"]
+    expected = SUBJECT_PROTOCOLS[protocol["schema"]]
     run = (run_root / spec["run_relative_to_COLORPEEL_RUN_ROOT"]).resolve()
     require(run.parent == run_root / spec["training_study"], "Subject run study differs")
     manifest_path = run / "manifest.json"
@@ -113,14 +134,15 @@ def verify_subject(protocol: dict, run_root: Path) -> tuple[Path, dict]:
             "Subject training did not succeed as specified")
     config = read_config(run / "config.yaml")
     args = config.get("args", {})
-    require(config.get("status") == "authorized_lora_subject_matte5_r64"
+    require(config.get("status") == expected["status"]
             and config.get("run") == expected_run
             and args.get("subject_lora_mode") == spec["mode"]
             and args.get("subject_lora_rank") == spec["rank"]
             and args.get("subject_lora_alpha") == spec["alpha"]
             and args.get("kv_learning_rate") == spec["kv_learning_rate"]
-            and args.get("max_train_steps") == 3000
-            and args.get("checkpointing_steps") == 1000,
+            and args.get("max_train_steps") == expected["max_train_steps"]
+            and args.get("checkpointing_steps") == expected["checkpointing_steps"]
+            and args.get("checkpoint_steps") == expected["checkpoint_steps"],
             "Subject training config differs")
     final = run / "checkpoints"
     adaptation = read_json(final / "adaptation_config.json")
@@ -214,7 +236,8 @@ def derive_snapshot(final: Path, token: str, step: int, expected: dict,
 
 
 def comparison_rows(protocol: dict, subject_step: int) -> list[dict]:
-    require(subject_step in SUBJECT_STEPS, "unsupported Subject snapshot")
+    require(subject_step in protocol["subject"]["snapshot_steps"],
+            "unsupported Subject snapshot")
     rows = []
     for group in protocol["comparison"]["groups"]:
         subject = group["subject_prompt"]
@@ -381,7 +404,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", type=Path, required=True)
     parser.add_argument("--task", choices=("comparison", "transfer"), required=True)
-    parser.add_argument("--subject-step", type=int, choices=SUBJECT_STEPS, required=True)
+    parser.add_argument("--subject-step", type=int, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--dry-run", action="store_true")
@@ -389,12 +412,15 @@ def main() -> None:
 
     protocol = read_json(args.protocol)
     validate_protocol(protocol)
+    require(args.subject_step in protocol["subject"]["snapshot_steps"],
+            "unsupported Subject snapshot")
+    final_subject_step = protocol["subject"]["snapshot_steps"][-1]
     run_root = Path(os.environ["COLORPEEL_RUN_ROOT"]).resolve()
     subject_final, subject_info = verify_subject(protocol, run_root)
     subject_expected = protocol["subject"]["source_snapshot_sha256"][str(args.subject_step)]
     subject_audit = derive_snapshot(
         subject_final, "<S*>", args.subject_step, subject_expected, None,
-        verify_final=args.subject_step == SUBJECT_STEPS[-1])
+        verify_final=args.subject_step == final_subject_step)
     material_inputs = {}
     source_info = None
     if args.task == "comparison":
@@ -427,7 +453,7 @@ def main() -> None:
     output.mkdir(parents=True)
     derived_subject = derive_snapshot(
         subject_final, "<S*>", args.subject_step, subject_expected,
-        output / "derived_subject", verify_final=args.subject_step == SUBJECT_STEPS[-1])
+        output / "derived_subject", verify_final=args.subject_step == final_subject_step)
     derived_material = {}
     for material_id, item in material_inputs.items():
         spec = protocol["materials"][material_id]
@@ -485,7 +511,7 @@ def main() -> None:
             torch.cuda.empty_cache()
     require(derive_snapshot(
         subject_final, "<S*>", args.subject_step, subject_expected, None,
-        verify_final=args.subject_step == SUBJECT_STEPS[-1]) == subject_audit,
+        verify_final=args.subject_step == final_subject_step) == subject_audit,
         "Subject snapshot changed during inference")
     if args.task == "transfer":
         require(load_transfer_rows(protocol, run_root)[2] == source_info,
