@@ -221,34 +221,44 @@ def validate_lora_material_train_inputs(config: dict[str, Any], environment: dic
 
 def validate_lora_subject_matte5_train_inputs(
         config: dict[str, Any], environment: dict[str, str]) -> dict | None:
-    study = "lora_kv_subject_matte5_r64_v1"
-    if config["stage"] != "train" or config["run"]["study"] != study:
+    study = config["run"]["study"]
+    source_study = "lora_kv_subject_matte5_r64_v1"
+    early_study = "lora_kv_subject_matte5_r64_early_steps_v1"
+    if config["stage"] != "train" or study not in {source_study, early_study}:
         return None
-    expected_run = {
-        "study": study,
-        "variant": "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_3000",
-        "seed": 42,
-    }
+    early = study == early_study
+    expected_run = {"study": study, "seed": 42}
+    expected_run["variant"] = (
+        "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_steps300_500_700"
+        if early else "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_3000")
     baseline = read_config(
         PROJECT_ROOT / "experiments" / "subject_material_composition_v1" / "configs"
         / "mailbox_subject_matte_only_caption_aligned_5000.yaml")
     expected_args = dict(baseline["args"])
     expected_args.pop("token_local_kv")
+    if early:
+        expected_args.pop("checkpointing_steps")
     expected_args.update(
         concepts_list="${COLORPEEL_RUN_ROOT}/lora_kv_subject_matte5_r64_v1/assets_v1/staging/concepts.json",
         kv_learning_rate=5.0e-5,
         subject_lora_mode="token_local_kv",
         subject_lora_rank=64,
         subject_lora_alpha=64,
-        max_train_steps=3000,
-        checkpointing_steps=1000,
+        max_train_steps=700 if early else 3000,
     )
-    if (config.get("status") != "authorized_lora_subject_matte5_r64"
+    expected_args.update(
+        checkpoint_steps=[300, 500, 700] if early else None,
+        checkpointing_steps=None if early else 1000,
+    )
+    expected_args = {key: value for key, value in expected_args.items() if value is not None}
+    expected_status = ("authorized_lora_subject_matte5_r64_early_steps"
+                       if early else "authorized_lora_subject_matte5_r64")
+    if (config.get("status") != expected_status
             or config["run"] != expected_run or config["args"] != expected_args):
         raise ValueError("five-matte Subject LoRA config differs")
     source = config.get("matte5_source", {})
     protocol_path = (PROJECT_ROOT / source.get("protocol", "")).resolve()
-    expected_protocol = (PROJECT_ROOT / "experiments" / study / "protocols"
+    expected_protocol = (PROJECT_ROOT / "experiments" / source_study / "protocols"
                          / "training_source_v1.json").resolve()
     if protocol_path != expected_protocol:
         raise ValueError("five-matte Subject source protocol path differs")
@@ -262,7 +272,7 @@ def validate_lora_subject_matte5_train_inputs(
     staging_tools.validate_protocol(protocol)
     run_root = Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
     staging = Path(expand_value(source.get("staging_root", ""), environment)).resolve()
-    expected_staging = run_root / study / "assets_v1" / "staging"
+    expected_staging = run_root / source_study / "assets_v1" / "staging"
     concepts = staging / "concepts.json"
     assets = staging / "training_assets_manifest.jsonl"
     provenance_path = staging / "staging_provenance.json"
@@ -742,7 +752,10 @@ def main(argv: list[str] | None = None) -> int:
     matte5_lora_training_data = validate_lora_subject_matte5_train_inputs(config, environment)
     if matte5_lora_training_data is not None:
         lora_training_data = matte5_lora_training_data
-    if (config["run"]["study"] == "lora_kv_subject_matte5_r64_v1"
+    if (config["run"]["study"] in {
+            "lora_kv_subject_matte5_r64_v1",
+            "lora_kv_subject_matte5_r64_early_steps_v1",
+    }
             and run_dir.parent != Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
             / config["run"]["study"]):
         raise ValueError("five-matte Subject LoRA run must be directly below its study directory")

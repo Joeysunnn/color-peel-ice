@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "authorized_lora_subject_matte5_r64_early_steps",
+  "stage": "train",
+  "run": {"study": "lora_kv_subject_matte5_r64_early_steps_v1", "variant": "mailbox_matte5_token_local_kv_r64_a64_kvlr5em5_steps300_500_700", "seed": 42},
+  "environment": {"CUDA_VISIBLE_DEVICES": "1"},
+  "data_manifest": "${COLORPEEL_RUN_ROOT}/lora_kv_subject_matte5_r64_v1/assets_v1/staging/training_assets_manifest.jsonl",
+  "matte5_source": {
+    "protocol": "experiments/lora_kv_subject_matte5_r64_v1/protocols/training_source_v1.json",
+    "protocol_sha256": "e246feea2df7cdb87f0cee67ddf620e8eb76b7e9fb4aef28bbb0f44ba67976f1",
+    "staging_root": "${COLORPEEL_RUN_ROOT}/lora_kv_subject_matte5_r64_v1/assets_v1/staging"
+  },
+  "args": {
+    "pretrained_model_name_or_path": "CompVis/stable-diffusion-v1-4",
+    "concepts_list": "${COLORPEEL_RUN_ROOT}/lora_kv_subject_matte5_r64_v1/assets_v1/staging/concepts.json",
+    "resolution": 512,
+    "train_batch_size": 1,
+    "learning_rate": 0.00001,
+    "kv_learning_rate": 0.00005,
+    "subject_lora_mode": "token_local_kv",
+    "subject_lora_rank": 64,
+    "subject_lora_alpha": 64,
+    "scale_lr": true,
+    "lr_scheduler": "constant",
+    "lr_warmup_steps": 0,
+    "max_train_steps": 700,
+    "checkpoint_steps": [300, 500, 700],
+    "seed": 42,
+    "mixed_precision": "no",
+    "cos_weight": 0,
+    "gradient_accumulation_steps": 1,
+    "max_grad_norm": 1,
+    "dataloader_num_workers": 2,
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "adam_weight_decay": 0,
+    "adam_epsilon": 1.0e-8,
+    "hflip": false,
+    "modifier_token": "<S*>",
+    "initializer_token": "mailbox"
+  }
+}
