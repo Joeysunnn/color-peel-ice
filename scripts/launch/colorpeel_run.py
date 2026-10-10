@@ -171,6 +171,7 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
             "lora_kv_subject_step_ablation_v1",
             "lora_kv_subject_alpha8_step_ablation_v1",
             "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+            "lora_kv_subject_r64_a64_balanced_early_steps_v1",
     }:
         return None
     source = config.get("lora_source", {})
@@ -193,16 +194,24 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
         alpha = 8
         variant = f"{cohort}_{mode}_r4_a8_{steps}"
         expected_status = "authorized_lora_subject_alpha8_step_ablation"
-    elif study == "lora_kv_subject_r64_a64_lr_step_ablation_v1":
-        steps = 3000
+    elif study in {
+            "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+            "lora_kv_subject_r64_a64_balanced_early_steps_v1",
+    }:
+        early_steps = study == "lora_kv_subject_r64_a64_balanced_early_steps_v1"
+        steps = 700 if early_steps else 3000
         rank = 64
         alpha = 64
         lr_labels = {1.0e-5: "1em5", 5.0e-5: "5em5"}
         kv_learning_rate = config["args"].get("kv_learning_rate")
         if kv_learning_rate not in lr_labels:
             raise ValueError("Subject LoRA K/V learning rate differs")
-        variant = f"{cohort}_{mode}_r64_a64_kvlr{lr_labels[kv_learning_rate]}_{steps}"
-        expected_status = "authorized_lora_subject_r64_a64_lr_step_ablation"
+        variant = ("balanced_aligned_token_local_kv_r64_a64_"
+                   "kvlr5em5_steps300_500_700" if early_steps else
+                   f"{cohort}_{mode}_r64_a64_kvlr{lr_labels[kv_learning_rate]}_{steps}")
+        expected_status = ("authorized_lora_subject_r64_a64_balanced_early_steps"
+                           if early_steps else
+                           "authorized_lora_subject_r64_a64_lr_step_ablation")
     else:
         steps = 3000
         rank = 4
@@ -214,7 +223,10 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
                 "lora_kv_subject_step_ablation_v1",
                 "lora_kv_subject_alpha8_step_ablation_v1",
                 "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+                "lora_kv_subject_r64_a64_balanced_early_steps_v1",
             } and cohort != "balanced_aligned")
+            or (study == "lora_kv_subject_r64_a64_balanced_early_steps_v1"
+                and (mode != "token_local_kv" or kv_learning_rate != 5.0e-5))
             or config["run"] != {
                 "study": study,
                 "variant": variant,
@@ -225,7 +237,10 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
     baseline = read_config(PROJECT_ROOT / baselines[cohort])
     expected_args = dict(baseline["args"])
     expected_args.pop("token_local_kv")
-    if study == "lora_kv_subject_r64_a64_lr_step_ablation_v1":
+    if study in {
+            "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+            "lora_kv_subject_r64_a64_balanced_early_steps_v1",
+    }:
         expected_args.pop("checkpointing_steps")
         expected_args.update(
             subject_lora_mode=mode,
@@ -233,7 +248,8 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
             subject_lora_alpha=alpha,
             kv_learning_rate=kv_learning_rate,
             max_train_steps=steps,
-            checkpoint_steps=[600, 1000, 2000, 3000],
+            checkpoint_steps=([300, 500, 700] if steps == 700
+                              else [600, 1000, 2000, 3000]),
         )
     else:
         expected_args.update(
@@ -708,6 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             "lora_kv_subject_step_ablation_v1",
             "lora_kv_subject_alpha8_step_ablation_v1",
             "lora_kv_subject_r64_a64_lr_step_ablation_v1",
+            "lora_kv_subject_r64_a64_balanced_early_steps_v1",
     }
             and run_dir.parent != Path(environment["COLORPEEL_RUN_ROOT"]).resolve()
             / config["run"]["study"]):
