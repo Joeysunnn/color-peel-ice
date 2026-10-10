@@ -10,3 +10,8 @@ It trains one continuous 700-step trajectory and saves exactly steps 300, 500,
 and 700. After training, every snapshot is evaluated with Subject only,
 literal metal, the selected `metal_spoon` and `wood_spoon` Material LoRAs, and
 the fixed historical Subject transfer benchmark.
+
+The locked inputs, checkpoint hashes, prompts, and sampling settings are in
+`protocols/inference_v1.json`. `evaluate.py` runs one comparison or transfer
+task for one Subject snapshot, allowing the six tasks to be safely distributed
+across GPUs without modifying any training asset.
