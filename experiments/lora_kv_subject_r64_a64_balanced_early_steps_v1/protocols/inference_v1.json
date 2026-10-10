@@ -13,8 +13,8 @@
     "snapshot_steps": [300, 500, 700],
     "source_snapshot_sha256": {
       "300": {"adapter": "064d7aa4f61c5337fd88546f17bd3283081220fef7bd13be8ed2eedae046fb22", "text_encoder": "6772d71ff733264a5c4fd244b7dd7f56d42046d325231d15a09b4a6cc87288fc"},
-      "500": {"adapter": "74d778858ca55e17f3a0ac222031fe22e9b3f34a670ca08fb3942c2fd501f1c5", "text_encoder": "cecfda394639e9895eff64f2e424d765fcb50fc789a0850fe17614366af95166f"},
-      "700": {"adapter": "5097f6164d3fd3cca8969e7ae374e2cdd108f0b8aa0650d68e2423eeb1743064", "text_encoder": "5e94ff31330489fcd5b3f763bd7195d50530145ab9066ef06561b98a892e1811e"}
+      "500": {"adapter": "74d778858ca55e17f3a0ac222031fe22e9b3f34a670ca08fb3942c2fd501f1c5", "text_encoder": "cecfda394639e9895eff64f2e424d765fcb50fc789a0850fe17614366af9516f"},
+      "700": {"adapter": "5097f6164d3fd3cca8969e7ae374e2cdd108f0b8aa0650d68e2423eeb1743064", "text_encoder": "5e94ff31330489fcd5b3f763bd7195d50530145ab9066ef06561b98a892e181e"}
     }
   },
   "materials": {
