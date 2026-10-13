@@ -195,6 +195,94 @@ def validate_lora_subject_train_inputs(config: dict[str, Any], environment: dict
                                 source["concepts_sha256"], source["asset_manifest_sha256"])
 
 
+def validate_subject_token_local_kv_balanced_step_train_inputs(
+        config: dict[str, Any], environment: dict[str, str]) -> dict | None:
+    study = "subject_token_local_kv_balanced_step_ablation_v1"
+    if config["stage"] != "train" or config["run"]["study"] != study:
+        return None
+    if (config["run"] != {
+            "study": study,
+            "variant": "balanced_aligned_token_local_kv_steps300_500_700_1000_2000",
+            "seed": 42,
+            }
+            or config.get("status")
+            != "authorized_subject_token_local_kv_balanced_step_ablation"):
+        raise ValueError("balanced Subject step-ablation identity or authorization differs")
+
+    baseline_path = (
+        PROJECT_ROOT / "experiments/subject_material_composition_v1/configs/"
+        "mailbox_subject_balanced_caption_aligned_5000.yaml"
+    )
+    baseline = read_config(baseline_path)
+    expected_args = dict(baseline["args"])
+    expected_args.update(
+        max_train_steps=2000,
+        checkpoint_steps=[300, 500, 700, 1000, 2000],
+    )
+    if (config["args"] != expected_args
+            or config.get("data_manifest") != baseline["data_manifest"]):
+        raise ValueError(
+            "balanced Subject step ablation may change only the dose and checkpoint plan")
+
+    source = config.get("subject_source", {})
+    expected_source = {
+        "cohort": "balanced_aligned",
+        "asset_manifest": baseline["data_manifest"],
+        "concepts_sha256": "109e2b336bde5a465db4cf9a29cc578f83cda48899fe2f91b4956aafcc0010f3",
+        "asset_manifest_sha256": "05bd9f15dbca82a33531dae0cd9620a14554200556c384e53fbc64bc2e782e90",
+    }
+    if source != expected_source:
+        raise ValueError("balanced Subject training source lock differs")
+
+    protocol_lock = config.get("training_protocol", {})
+    expected_protocol = (
+        PROJECT_ROOT / "experiments/subject_token_local_kv_balanced_step_ablation_v1/"
+        "protocols/training_v1.json"
+    ).resolve()
+    protocol_path = (PROJECT_ROOT / str(protocol_lock.get("path", ""))).resolve()
+    if (protocol_path != expected_protocol
+            or hashlib.sha256(protocol_path.read_bytes()).hexdigest()
+            != protocol_lock.get("sha256")):
+        raise ValueError("balanced Subject training protocol lock differs")
+    protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+    training_root = protocol.get("training_data", {}).get("root")
+    if (protocol.get("schema")
+            != "subject_token_local_kv_balanced_step_ablation_training/v1"
+            or protocol.get("base_config") != baseline_path.relative_to(PROJECT_ROOT).as_posix()
+            or protocol.get("base_model") != "CompVis/stable-diffusion-v1-4"
+            or protocol.get("subject") != {
+                "modifier_token": "<S*>",
+                "initializer_token": "mailbox",
+                "adaptation_mode": "token_local_kv",
+                "lora": False,
+            }
+            or protocol.get("training") != {
+                "seed": 42,
+                "embedding_learning_rate": 1e-5,
+                "kv_learning_rate": 1e-5,
+                "max_train_steps": 2000,
+                "checkpoint_steps": [300, 500, 700, 1000, 2000],
+            }
+            or protocol.get("training_data", {}).get("concepts_sha256")
+            != source["concepts_sha256"]
+            or protocol.get("training_data", {}).get("asset_manifest_sha256")
+            != source["asset_manifest_sha256"]
+            or protocol.get("training_data", {}).get("row_count") != 10
+            or config.get("environment", {}).get("COLORPEEL_MAILBOX_MATTE_ROOT")
+            != str(Path(training_root).parent)):
+        raise ValueError("balanced Subject training protocol differs")
+
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+    from experiments.perfusion_subject_pilot.data_contract import verify_training_data
+
+    concepts = Path(expand_value(config["args"]["concepts_list"], environment)).resolve()
+    manifest = Path(expand_value(source["asset_manifest"], environment)).resolve()
+    return verify_training_data(
+        "balanced_aligned", concepts, manifest,
+        source["concepts_sha256"], source["asset_manifest_sha256"])
+
+
 def validate_lora_material_train_inputs(config: dict[str, Any], environment: dict[str, str]) -> dict | None:
     if config["stage"] != "train" or config["run"]["study"] != "lora_kv_material_v1":
         return None
@@ -643,6 +731,8 @@ def main(argv: list[str] | None = None) -> int:
     validate_unpaired_emission_material_train_inputs(config, environment)
     validate_mailbox_matte_train_inputs(config, environment)
     perfusion_training_data = validate_perfusion_subject_train_inputs(config, environment)
+    subject_training_data = validate_subject_token_local_kv_balanced_step_train_inputs(
+        config, environment)
     lora_training_data = validate_lora_subject_train_inputs(config, environment)
     material_lora_training_data = validate_lora_material_train_inputs(config, environment)
     if material_lora_training_data is not None:
@@ -724,6 +814,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     if perfusion_training_data is not None:
         manifest["perfusion_training_data"] = perfusion_training_data
+    if subject_training_data is not None:
+        manifest["subject_training_data"] = subject_training_data
     if lora_training_data is not None:
         manifest["lora_training_data"] = lora_training_data
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
