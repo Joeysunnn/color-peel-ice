@@ -100,6 +100,38 @@ $PY -B experiments/sd15_token_local_kv_v1/evaluate.py \
   --output-dir "$NEW_EXTERNAL_INFERENCE_DIRECTORY" --device cuda:0 --dry-run
 ```
 
-The current definitions and CPU tests do not prove SD1.5 training compatibility.
-No claim of migrated training results is made until the server smokes and the
-matching full runs have their own successful evidence.
+## Matched SD1.4 / SD1.5 comparison
+
+`compare.py` audits the six completed full runs selected in
+`inference_protocol.json`. It checks all 19,000 metric rows, the 26 scheduled
+adapter/embedding pairs, tensor shapes and finiteness, embedding updates, and
+exact equality between each final snapshot and its final export. Paired
+inference exports are written into a new output directory; training runs stay
+read-only.
+
+Historical SD1.4 manifests, ledgers, provenance and images are hash checked.
+The original prompts, seeds and sampling are replayed: PNDM100, CFG3.5, 512px,
+float16, a fresh CUDA generator per seed, with the safety checker enabled.
+The matrix has 940 original K/V images and 1,620 rank64 LoRA images across 66
+jobs, covering the same intermediate steps as the historical evaluations.
+The old rank64 Subject comparison's rank4 Material arm is excluded because that
+Material is outside these six runs. The Subject-only and literal controls use
+the Subject adapter alone; the old unused rank4 adapter has no token gate in
+those prompts. Natural-material rank64 composition keeps its own historical
+Subject/Material pair and steps.
+
+Run preparation first, inspect its six audit receipts, then launch the queues:
+
+```bash
+export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
+OUT=$COLORPEEL_OUTPUT_ROOT/sd15_token_local_kv_v1/NEW_COMPARISON_DIRECTORY
+$PY -B -m experiments.sd15_token_local_kv_v1.compare prepare --output "$OUT"
+$PY -B -m experiments.sd15_token_local_kv_v1.compare run --output "$OUT" --gpus 1 2 3
+```
+
+Both commands require the same clean branch and commit. Each GPU runs one job
+at a time; a failed job stops its queue without retry or overwrite. Completed
+jobs automatically produce left-SD1.4/right-SD1.5 comparison sheets. After all
+jobs succeed, `index.html` and `summary.json` provide the complete comparison.
+Filtered images are marked and counted separately. Finite training losses and
+successful image generation do not establish visual quality improvements.
