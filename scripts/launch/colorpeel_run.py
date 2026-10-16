@@ -235,17 +235,18 @@ def git_info() -> dict[str, str]:
 
 
 def resolve_run_dir(run_dir: Path) -> Path:
-    value = os.environ.get("COLORPEEL_RUN_ROOT")
+    root_name = "COLORPEEL_OUTPUT_ROOT" if os.environ.get("COLORPEEL_OUTPUT_ROOT") else "COLORPEEL_RUN_ROOT"
+    value = os.environ.get(root_name)
     if not value:
-        raise EnvironmentError("COLORPEEL_RUN_ROOT must be set")
+        raise EnvironmentError(f"{root_name} must be set")
     root = Path(os.path.expandvars(value)).expanduser().resolve()
     resolved = Path(os.path.expandvars(str(run_dir))).expanduser().resolve()
     try:
         resolved.relative_to(root)
     except ValueError as error:
-        raise ValueError(f"--run-dir must be below COLORPEEL_RUN_ROOT: {root}") from error
+        raise ValueError(f"--run-dir must be below {root_name}: {root}") from error
     if resolved == root:
-        raise ValueError("--run-dir must name one run below COLORPEEL_RUN_ROOT")
+        raise ValueError(f"--run-dir must name one run below {root_name}")
     return resolved
 
 

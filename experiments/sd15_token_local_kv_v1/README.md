@@ -62,6 +62,25 @@ training-directory membership, model hashes and exact recipe are checked before
 launch. `--resume_from_checkpoint` in the inherited trainer is not a working
 training-resume implementation; do not use it for this migration.
 
+## Full training kickoff
+
+`run_full.py --batch-dir "$NEW_BATCH_DIRECTORY" --gpus 1 2 3` runs all six
+non-smoke configurations, one active training process per GPU, two jobs per
+queue. It checks all original input hashes before starting any GPU worker.
+A failed job stops its own queue without retrying or deleting artifacts.
+The runner waits for child exits to start queued jobs; it does not poll metrics
+or generate inference automatically.
+
+On 2026-10-16, `/home` had about 20 GiB free while the preserved checkpoint
+schedule alone requires about 23 GiB. Use the independent root-filesystem
+output directory `/var/tmp/colorpeel-r12user5/runs` via `COLORPEEL_OUTPUT_ROOT`.
+Keep `COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs` for the
+original input references. The output override changes only artifact placement;
+no training parameter, data path, or old result is altered. The runner requires
+40 GiB free before kickoff and before starting each queued job. These new
+checkpoints reside under `/var/tmp`, not the historical `/home` output tree;
+preserve them there when collecting results.
+
 ## Dedicated inference
 
 `evaluate.py` accepts completed training runs from this new study only. It loads
