@@ -1,0 +1,36 @@
+{
+  "schema": "sd_native_comparison/v1",
+  "models": {
+    "sd14": {
+      "repo": "CompVis/stable-diffusion-v1-4",
+      "revision": "133a221b8aa7292a167afc5127cb63fb5005638b",
+      "path": "/home/r12user5/.cache/huggingface/hub/models--CompVis--stable-diffusion-v1-4/snapshots/133a221b8aa7292a167afc5127cb63fb5005638b"
+    },
+    "sd15": {
+      "repo": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+      "revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+      "path": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_palette_v1/deps/sd15"
+    }
+  },
+  "objects": ["chair", "mug", "vase", "sofa"],
+  "prompt_template": "a photo of a {object}",
+  "sampling": {
+    "seeds": [42, 43, 44, 45, 46],
+    "width": 512,
+    "height": 512,
+    "scheduler": "PNDM",
+    "num_inference_steps": 100,
+    "guidance_scale": 3.5,
+    "dtype": "float16",
+    "latent_policy": "cpu_float32_randn_then_float16_to_cuda",
+    "latent_shape": [1, 4, 64, 64]
+  },
+  "safety": {
+    "enabled": true,
+    "source_model": "sd14",
+    "components": ["safety_checker", "feature_extractor"],
+    "shared_between_models": true
+  },
+  "adapters": false,
+  "local_files_only": true
+}

@@ -637,6 +637,12 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("environment must contain string keys and scalar values")
         environment[key] = str(value)
     environment["COLORPEEL_RUN_DIR"] = str(run_dir)
+    sd15_migration_inputs = None
+    if config["stage"] == "train" and config["run"]["study"] == "sd15_token_local_kv_v1":
+        if str(PROJECT_ROOT) not in sys.path:
+            sys.path.insert(0, str(PROJECT_ROOT))
+        from experiments.sd15_token_local_kv_v1.contract import validate_config
+        sd15_migration_inputs = validate_config(config, environment)
     validate_material_pilot_train_inputs(config, environment)
     validate_color_material_color_inputs(config, environment)
     validate_joint_color_material_train_inputs(config, environment)
@@ -722,6 +728,8 @@ def main(argv: list[str] | None = None) -> int:
         "command": command,
         "managed_outputs": managed_output_args(config["stage"], run_dir),
     }
+    if sd15_migration_inputs is not None:
+        manifest["sd15_migration_inputs"] = sd15_migration_inputs
     if perfusion_training_data is not None:
         manifest["perfusion_training_data"] = perfusion_training_data
     if lora_training_data is not None:
