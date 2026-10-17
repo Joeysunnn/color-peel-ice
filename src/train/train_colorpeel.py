@@ -1086,6 +1086,8 @@ def main(args):
         lora_initializer = args.initializer_token[0] if args.initializer_token and len(args.initializer_token) == 1 else None
         valid_concept = ((lora_token, lora_initializer) == ("<S*>", "mailbox")
                          or ((lora_token, lora_initializer) == ("<M*>", "metal")
+                             and args.subject_lora_mode == "token_local_kv")
+                         or ((lora_token, lora_initializer) == ("<T*>", "texture")
                              and args.subject_lora_mode == "token_local_kv"))
         if (args.token_local_kv or args.perfusion_subject or args.enable_xformers_memory_efficient_attention
                 or args.freeze_model != "crossattn_kv" or not valid_concept or args.k_learning_rate is not None

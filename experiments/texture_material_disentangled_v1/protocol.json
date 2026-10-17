@@ -1,0 +1,181 @@
+{
+  "schema": "texture_material_disentangled/v1",
+  "phase": 1,
+  "study": "texture_material_disentangled_v1",
+  "base_model": "/home/r12user5/Documents/Jiawei/colorpeel-runs/sd15_token_local_kv_v1/assets/sd15_451f4fe_common_checker",
+  "model_revision": "451f4fe16113bff5a5d2269ed5ad43b0592e9a14",
+  "seed": 42,
+  "texture_extraction": {
+    "method": "linear_srgb_rec709_grayscale_robust_quantiles",
+    "quantiles": [
+      0.02,
+      0.98
+    ],
+    "output_range": [
+      0.25,
+      0.75
+    ],
+    "constant_epsilon": 0.0001,
+    "size": 128,
+    "uv_repeats": 1,
+    "normal_bump_displacement": false
+  },
+  "textures": {
+    "vertical_stripes": {
+      "role": "target",
+      "pattern": "vertical_stripes",
+      "literal": "vertical striped"
+    },
+    "checkerboard": {
+      "role": "target",
+      "pattern": "checkerboard",
+      "literal": "checkerboard"
+    },
+    "horizontal_stripes": {
+      "role": "nuisance",
+      "pattern": "horizontal_stripes",
+      "literal": "horizontal striped"
+    },
+    "dots": {
+      "role": "nuisance",
+      "pattern": "dots",
+      "literal": "polka dot"
+    }
+  },
+  "materials": {
+    "polished_metal": {
+      "role": "target",
+      "metallic": 1,
+      "roughness": 0.18,
+      "literal": "polished metal"
+    },
+    "rough_dielectric": {
+      "role": "target",
+      "metallic": 0,
+      "roughness": 0.65,
+      "literal": "rough plastic"
+    },
+    "smooth_dielectric": {
+      "role": "nuisance",
+      "metallic": 0,
+      "roughness": 0.18,
+      "literal": "smooth plastic"
+    },
+    "rough_metal": {
+      "role": "nuisance",
+      "metallic": 1,
+      "roughness": 0.65,
+      "literal": "rough metal"
+    }
+  },
+  "dataset": {
+    "train_shapes": [
+      "sphere",
+      "cube"
+    ],
+    "train_colors": [
+      "red",
+      "blue"
+    ],
+    "train_lights": [
+      "soft_front",
+      "side_directional"
+    ],
+    "colors_linear_rgb": {
+      "red": [
+        0.6,
+        0.06,
+        0.04
+      ],
+      "blue": [
+        0.04,
+        0.12,
+        0.6
+      ],
+      "green": [
+        0.06,
+        0.5,
+        0.08
+      ]
+    },
+    "light_phrases": {
+      "soft_front": "soft studio lighting",
+      "side_directional": "strong side lighting",
+      "top_environment": "bright overhead lighting"
+    },
+    "object_scale": 1.3,
+    "expected_train_images": 64,
+    "expected_per_concept": 16,
+    "heldout_contexts": [
+      {
+        "id": "seen_context_unseen_pair",
+        "shape": "sphere",
+        "color": "red",
+        "light": "soft_front"
+      },
+      {
+        "id": "unseen_shape",
+        "shape": "cone",
+        "color": "red",
+        "light": "soft_front"
+      },
+      {
+        "id": "unseen_color",
+        "shape": "sphere",
+        "color": "green",
+        "light": "soft_front"
+      },
+      {
+        "id": "unseen_light",
+        "shape": "sphere",
+        "color": "red",
+        "light": "top_environment"
+      }
+    ]
+  },
+  "renderer": {
+    "profile": "experiments/natural_material_fullmaps_v1/renderer_profile_v2.json",
+    "cycles_samples": 64,
+    "resolution": 512,
+    "blender": "/home/r12user5/Documents/Jiawei/tools/blender-4.2.11-linux-x64/blender",
+    "base_scene": "/home/r12user5/Documents/Jiawei/papers/CLEVER/image_generation/data/base_scene.blend",
+    "base_scene_sha256": "e9a6a0a51f377064ae78e6568fdb1c5a6c97db4e674b29682e345d677607eb82",
+    "shape_dir": "/home/r12user5/Documents/Jiawei/papers/CLEVER/image_generation/data/shapes"
+  },
+  "training": {
+    "steps": 300,
+    "smoke_steps": 2,
+    "embedding_lr": 0.00001,
+    "fullrank_kv_lr": 0.00001,
+    "lora_kv_lr": 0.00005,
+    "lora_rank": 64,
+    "lora_alpha": 64,
+    "weight_decay": 0,
+    "cos_weight": 0,
+    "train_batch_size": 1,
+    "seed": 42
+  },
+  "inference": {
+    "seeds": [
+      42,
+      43
+    ],
+    "num_inference_steps": 100,
+    "guidance_scale": 3.5,
+    "resolution": 512,
+    "dtype": "float16",
+    "scheduler": "PNDM",
+    "safety_checker": true,
+    "conditions": [
+      "literal",
+      "texture_only",
+      "material_only",
+      "both"
+    ]
+  },
+  "phases": {
+    "phase1": "synthetic_oracle_pilot",
+    "phase2": "not_started; SuperMat R/M reviewed-region medians; Texture from SuperMat albedo via scheme A; no IID",
+    "phase3": "not_started; preserve existing S/C, integrate only after Phase1/2 evaluation"
+  }
+}
