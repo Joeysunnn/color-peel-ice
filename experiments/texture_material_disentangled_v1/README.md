@@ -135,8 +135,14 @@ implemented by the current two-token pilot. No old S/C checkpoint is retrained.
 concept/method recipes, seed42, optimizer and learning rates unchanged. It
 changes only the total dose to1000 and explicit saves to300/500/750/1000.
 The shared trainer does not implement resume, so these are new runs from the
-same initialization. Each new300-step adapter/token pair must exactly equal
-its old300-step final export before inference proceeds.
+same initialization. Each new300-step adapter/token pair is compared with
+its old300-step final export before inference proceeds. The trainer does not
+enable deterministic kernels, so equal seeds do not guarantee bitwise equality.
+Comparison records exact equality and each tensor's maximum absolute and relative
+L2 differences. Numerical limits are1e-7 absolute for fullrank,1e-5 for LoRA,
+and1e-4 relative L2 per adapter tensor; the token limits are1e-7 and1e-5.
+Exceeding either limit stops generation. This verifies numerical proximity,
+not an exactly identical training trajectory.
 
 ```bash
 $PY -B -m experiments.texture_material_disentangled_v1.step_ablation \
@@ -150,3 +156,14 @@ paired snapshot exports, `inference/images/`, contact sheets, and
 and PNDM100/CFG3.5/512/fp16/safety settings. Total768 new images. New step indices
 record both the selected step and the source1000-step training run. The old
 300-step results and original oracle renders remain read-only.
+
+If training completed but the former bitwise comparison stopped generation,
+reuse the audited snapshots without retraining. This writes only to a new
+output directory and records training and inference Git revisions separately:
+
+```bash
+$PY -B -m experiments.texture_material_disentangled_v1.step_inference \
+  --source-run "$ORIGINAL_PHASE1_RUN" \
+  --completed-training-run "$COMPLETED_STEP_RUN" \
+  --output "$NEW_INFERENCE_RUN" --inference-gpu 3
+```

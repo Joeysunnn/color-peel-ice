@@ -1,6 +1,7 @@
 """Export paired T/M step snapshots without changing their training runs."""
 
 import json
+import math
 from pathlib import Path
 
 from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
@@ -100,8 +101,23 @@ def export_step(selection, step, output):
     return derived
 
 
-def compare_baseline(selection, source_selection, step=300):
-    """Require exact prefix equality against the preserved original pilot."""
+def _difference(left, right):
+    delta = left.double() - right.double()
+    distance, reference = float(delta.norm()), float(right.double().norm())
+    return {"max_abs": float(delta.abs().max()),
+            "relative_l2": distance / reference if reference else (0.0 if not distance else math.inf)}
+
+
+def _within_roundoff(adapter, embedding, method):
+    # A numerical comparison, not a promise of bitwise deterministic training.
+    absolute = 1e-7 if method == "fullrank" else 1e-5
+    return (all(value["max_abs"] <= absolute and value["relative_l2"] <= 1e-4
+                for value in adapter.values())
+            and embedding["max_abs"] <= 1e-7 and embedding["relative_l2"] <= 1e-5)
+
+
+def compare_baseline(selection, source_selection, step=300, allow_roundoff=False):
+    """Compare the preserved pilot, optionally allowing recorded numerical drift."""
     import torch
     keys = ("method", "branch", "concept_id", "token", "weight")
     if any(selection[key] != source_selection[key] for key in keys):
@@ -119,6 +135,18 @@ def compare_baseline(selection, source_selection, step=300):
               "run": selection["run"], "baseline_run": source_selection["run"],
               "source_snapshot_hashes": record["source_snapshot_hashes"],
               "baseline_snapshot_hashes": original_record["source_snapshot_hashes"]}
+    if allow_roundoff:
+        differences = {key: _difference(adapter[key], original[key]) for key in adapter}
+        token_difference = _difference(embedding, original_embedding)
+        accepted = _within_roundoff(differences, token_difference, selection["method"])
+        result.update(adapter_differences=differences, token_difference=token_difference,
+                      comparison="numerical_tolerance", numerically_equivalent=accepted,
+                      tolerances={"adapter_max_abs": 1e-7 if selection["method"] == "fullrank" else 1e-5,
+                                  "adapter_relative_l2": 1e-4, "token_max_abs": 1e-7,
+                                  "token_relative_l2": 1e-5})
+        if accepted:
+            result["status"] = "verified" if equal and token_equal else "numerically_equivalent"
+            return result
     if not equal or not token_equal:
         raise ValueError(f"300-step training prefix differs from the original pilot: {result}")
     return result

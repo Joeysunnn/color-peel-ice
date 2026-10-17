@@ -96,6 +96,29 @@ class StepSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "prefix differs"):
             snapshots.compare_baseline(new, baseline)
 
+    def test_roundoff_comparison_records_mismatch_and_rejects_large_drift(self):
+        new = self.fixture()
+        baseline = self.fixture(maximum=300, name="old")
+        directory = Path(new["checkpoint"]) / "checkpoint-300"
+        doubles.write_state({snapshots.EMBEDDING_KEY: doubles.FakeTensor((3, 768), 2)},
+                            directory / "pytorch_model_1.bin")
+        small = {"max_abs": 1e-8, "relative_l2": 1e-6}
+        with patch.object(snapshots, "_difference", return_value=small):
+            result = snapshots.compare_baseline(new, baseline, allow_roundoff=True)
+        self.assertEqual(result["status"], "numerically_equivalent")
+        self.assertFalse(result["token_equal"])
+        self.assertTrue(result["numerically_equivalent"])
+        with patch.object(snapshots, "_difference", return_value={"max_abs": 0.1, "relative_l2": 0.1}):
+            with self.assertRaisesRegex(ValueError, "prefix differs"):
+                snapshots.compare_baseline(new, baseline, allow_roundoff=True)
+
+    def test_roundoff_requires_absolute_and_relative_limits_per_tensor(self):
+        small = {"max_abs": 1e-8, "relative_l2": 1e-6}
+        self.assertTrue(snapshots._within_roundoff({"k": small}, small, "fullrank"))
+        for field, value in (("max_abs", 1e-6), ("relative_l2", 1e-3)):
+            self.assertFalse(snapshots._within_roundoff({"k": {**small, field: value}}, small, "fullrank"))
+        self.assertFalse(snapshots._within_roundoff({"k": small}, {**small, "max_abs": 1e-6}, "lora_r64"))
+
     def test_rejects_invalid_step_existing_output_and_source_output(self):
         selection = self.fixture()
         for step, output in ((600, self.root / "bad"), (500, self.root),
