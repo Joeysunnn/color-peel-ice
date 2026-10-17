@@ -128,3 +128,25 @@ Phase 3 will reuse selected frozen S/C checkpoints with the new independently
 validated T/M concepts, separately testing individual controls, object transfer,
 unseen combinations and reconstruction. Four-token composition is not claimed
 implemented by the current two-token pilot. No old S/C checkpoint is retrained.
+
+## Additional training steps: 500 / 750 / 1000
+
+`step_ablation.py` keeps the original protocol, staged image/mask files, eight
+concept/method recipes, seed42, optimizer and learning rates unchanged. It
+changes only the total dose to1000 and explicit saves to300/500/750/1000.
+The shared trainer does not implement resume, so these are new runs from the
+same initialization. Each new300-step adapter/token pair must exactly equal
+its old300-step final export before inference proceeds.
+
+```bash
+$PY -B -m experiments.texture_material_disentangled_v1.step_ablation \
+  --source-run "$ORIGINAL_PHASE1_RUN" --output "$NEW_STEP_RUN" \
+  --gpus 1 2 3 --inference-gpu 3
+```
+
+Results are separated into `step500/`, `step750/` and `step1000/`, each with
+paired snapshot exports, `inference/images/`, contact sheets, and
+`evaluation/comparison_pages/`. Each step replays the original256 prompts/seeds
+and PNDM100/CFG3.5/512/fp16/safety settings. Total768 new images. New step indices
+record both the selected step and the source1000-step training run. The old
+300-step results and original oracle renders remain read-only.

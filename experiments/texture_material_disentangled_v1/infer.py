@@ -55,7 +55,10 @@ def build_rows(protocol):
     return rows
 
 
-def verify_inputs(index, protocol):
+def verify_inputs(index, protocol, training_steps=None):
+    expected_steps = protocol["training"]["steps"] if training_steps is None else training_steps
+    if expected_steps not in (300, 500, 750, 1000):
+        raise ValueError("unsupported declared training snapshot step")
     if index.get("mode") != "pilot":
         raise ValueError("Phase 1 inference requires completed pilot training, not smoke training")
     if protocol["base_model"] != read_json(SD15_PROTOCOL)["model"]["root"]:
@@ -72,7 +75,7 @@ def verify_inputs(index, protocol):
         branch, method = run["branch"], run["method"]
         if (run.get("status") != "verified" or run.get("token") != TOKENS[branch]
                 or run.get("weight") != WEIGHTS[method]
-                or run.get("steps") != protocol["training"]["steps"]):
+                or run.get("steps") != expected_steps):
             raise ValueError("training index token, method, pilot steps or verification differs")
         checkpoint = Path(run["checkpoint"])
         hashes = run.get("hashes", {})
@@ -168,14 +171,15 @@ def review_bundle(output, rows, protocol):
     return sheets
 
 
-def run(training_index, output, device="cuda:0"):
+def run(training_index, output, device="cuda:0", training_steps=None):
     index_path = Path(training_index).resolve()
     index_digest = sha256(index_path)
     protocol, index = read_json(PROTOCOL), read_json(index_path)
     revision = git_info()
     if revision != index.get("git"):
         raise ValueError("inference requires the exact clean training Git revision and branch")
-    verify_inputs(index, protocol)
+    verify_inputs(index, protocol, training_steps)
+    expected_steps = protocol["training"]["steps"] if training_steps is None else training_steps
     rows = build_rows(protocol)
     output = resolve_run_dir(Path(output)).resolve()
     if output.exists():
@@ -191,7 +195,8 @@ def run(training_index, output, device="cuda:0"):
                   "training": index["runs"], "sampling": sampling, "row_count": len(rows),
                   "environment": package_versions(), "device": device,
                   "internal_gate_labels": {"subject": "<T*>", "material": "<M*>"},
-                  "literal_baseline": "Both adapters installed; both learned-token gates exactly zero."}
+                  "literal_baseline": "Both adapters installed; both learned-token gates exactly zero.",
+                  "training_steps": expected_steps}
     write_json(output / "provenance.json", provenance)
     generated = []
     try:
@@ -224,7 +229,7 @@ def run(training_index, output, device="cuda:0"):
             del pipe
             gc.collect()
             torch.cuda.empty_cache()
-        verify_inputs(index, protocol)
+        verify_inputs(index, protocol, training_steps)
         if sha256(index_path) != index_digest or protocol_hash(read_json(PROTOCOL)) != protocol_hash(protocol):
             raise ValueError("training index or protocol changed during inference")
         if git_info() != revision:
@@ -237,7 +242,8 @@ def run(training_index, output, device="cuda:0"):
             "missing_images": 0, "safety_filtered": sum(r["status"] == "safety_filtered" for r in generated),
             "by_method": {m: sum(r["method"] == m for r in generated) for m in METHODS},
             "contact_sheets": sheets, "human_ratings": "pending", "phase2_started": False,
-            "limitations": ["A 300-step synthetic pilot establishes execution, not successful disentanglement.",
+            "training_steps": expected_steps,
+            "limitations": [f"A {expected_steps}-step synthetic run establishes execution, not successful disentanglement.",
                             "Token-local gating restricts text positions; semantic independence requires evaluation.",
                             "No BRDF, texture accuracy or leakage score is inferred from generation counts.",
                             "Describe the six observed attributes blindly, then join the key to assess adherence and leakage.",
@@ -255,8 +261,9 @@ def main():
     parser.add_argument("--training-index", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--training-steps", type=int, choices=(300, 500, 750, 1000))
     args = parser.parse_args()
-    run(args.training_index, args.output, args.device)
+    run(args.training_index, args.output, args.device, args.training_steps)
 
 
 if __name__ == "__main__":

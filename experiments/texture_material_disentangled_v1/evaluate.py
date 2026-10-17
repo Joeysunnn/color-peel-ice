@@ -124,6 +124,7 @@ def evaluate(inference, renders, output):
     sources = [inference / name for name in ("provenance.json", "summary.json", "generation_manifest.jsonl",
                                             "generation_status.jsonl")] + [renders / "manifest.json"]
     report = {"status": "succeeded", "scientific_status": "pending_blinded_review",
+              "training_steps": read_json(inference / "provenance.json").get("training_steps", 300),
               "protocol_sha256": data.protocol_sha256(), "generated_images": len(generated),
               "safety_filtered": sum(row["status"] == "safety_filtered" for row in generated.values()),
               "oracle_images": len(oracle), "oracle_evaluation_images": 16, "all_image_hashes_verified": True,
@@ -142,7 +143,7 @@ def evaluate(inference, renders, output):
     (output / "REPORT.md").write_text(
         "# Phase 1 evaluation\n\nAll 256 generated images and 80 oracle render image/mask pairs passed their hash and condition checks. "
         f"Safety-filtered generations: {report['safety_filtered']}; these are missing observations.\n\n"
-        "The eight 300-step runs test execution and initial learning, not convergence or successful disentanglement. "
+        f"The eight {report['training_steps']}-step snapshots test execution and learning, not successful disentanglement. "
         "Counterfactual balance and disjoint target-pair data establish the structural experimental design; "
         "learned semantic independence remains pending blinded review.\n\n"
         "The four contexts separate an unseen target pair under a seen context from individual held-out shape, color, "
