@@ -55,7 +55,7 @@ def load_pipeline(selections, device):
     from custom_attention.unet_2d_condition_custom import UNet2DConditionModel
 
     methods = {s["method"] for s in selections}
-    if len(methods) != 1:
+    if selections and len(methods) != 1:
         raise ValueError("full-rank and LoRA adapters require separate comparisons")
     model = read_json(PROTOCOL)["model"]["root"]
     receipt = read_json(Path(model) / "model_source.json")
@@ -64,6 +64,13 @@ def load_pipeline(selections, device):
         raise ValueError("SD1.5 model receipt changed")
     unet = UNet2DConditionModel.from_pretrained(
         model, subfolder="unet", local_files_only=True, torch_dtype=torch.float16)
+    if not selections:
+        pipe = DiffusionPipeline.from_pretrained(
+            model, unet=unet, low_cpu_mem_usage=False, local_files_only=True,
+            torch_dtype=torch.float16).to(device)
+        if pipe.safety_checker is None or not isinstance(pipe.scheduler, PNDMScheduler):
+            raise ValueError("expected shared safety checker and PNDM scheduler")
+        return pipe
     first = selections[0]
     if first["method"] == "fullrank":
         unet.load_attn_procs(first["checkpoint"], weight_name=first["weight"],

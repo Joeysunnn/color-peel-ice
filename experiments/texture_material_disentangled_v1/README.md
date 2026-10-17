@@ -167,3 +167,36 @@ $PY -B -m experiments.texture_material_disentangled_v1.step_inference \
   --completed-training-run "$COMPLETED_STEP_RUN" \
   --output "$NEW_INFERENCE_RUN" --inference-gpu 3
 ```
+
+## Material probe without texture prompts
+
+`material_probe.py` reuses the completed500/750/1000 paired snapshot exports
+from `step_inference.py`. It writes a new directory and never retrains or edits
+the source experiment. Each step compares native SD1.5 (no adapter or learned
+embedding), a literal material phrase on that same native model, and the learned
+Material token with only its own adapter/embedding. No Texture adapter is loaded.
+All three prompts omit texture words and tokens; there is no negative prompt or
+additional uniform-surface instruction. This is a neutral-prompt diagnostic.
+
+The two methods, two materials, four existing contexts and seeds42/43 give
+96 images per step,288 across all three steps. Contexts and PNDM100/CFG3.5/512px/
+fp16/safety settings stay fixed. Base/literal prompts do not depend on checkpoint
+step or adapter method; they are repeated as controls in each step directory.
+
+```bash
+SOURCE_STEPS=/absolute/path/to/completed_step_inference
+NEW_PROBE=$COLORPEEL_OUTPUT_ROOT/texture_material_disentangled_v1/NEW_MATERIAL_PROBE
+for STEP in 500 750 1000; do
+  $PY -B -m experiments.texture_material_disentangled_v1.material_probe \
+    --source-run "$SOURCE_STEPS" --output "$NEW_PROBE/step$STEP" \
+    --step "$STEP" --device cuda:0
+done
+```
+
+Each folder has `images/`, three-column `contact_sheets/`, `index.html`,
+prompt/image ledgers, source hashes, separate training/inference Git provenance,
+and blinded review files. Safety-filtered images are marked and excluded from
+blind rating rows. `summary.json` audits completeness; texture leakage remains
+unscored until matched visual assessment. Neutral prompts do not guarantee
+perfectly uniform surfaces, and specular highlight bands alone are not evidence
+of albedo-pattern leakage.
