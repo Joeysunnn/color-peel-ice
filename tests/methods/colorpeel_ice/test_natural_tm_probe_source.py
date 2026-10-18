@@ -14,7 +14,10 @@ from experiments.natural_texture_material_v1 import probe_source as module
 
 def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value), encoding="utf8")
+    text = json.dumps(value)
+    if path.name == "config.yaml":
+        text = text.replace("1e-08", "0.00000001").replace("1e-05", "0.00001").replace("5e-05", "0.00005")
+    path.write_text(text, encoding="utf8")
 
 
 @pytest.fixture
@@ -221,3 +224,12 @@ def test_concept_method_membership_rejects_wrong_twelve_run_sets(failure):
 def test_reject_unrequested_step_before_source_reads(step):
     with pytest.raises(ValueError, match="500, 750 or 1000"):
         module.verify_source("does_not_exist", step)
+
+
+def test_training_config_fixture_roundtrips_shared_yaml_reader(tmp_path):
+    protocol = module.read_json(module.schema.PARENT)
+    for recipe in module.recipes():
+        config = module.build_config(recipe, tmp_path / "staging", protocol)
+        path = tmp_path / recipe["method"] / recipe["concept_id"] / "config.yaml"
+        write(path, config)
+        assert module.read_config(path) == config
