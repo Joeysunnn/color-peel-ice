@@ -200,3 +200,35 @@ blind rating rows. `summary.json` audits completeness; texture leakage remains
 unscored until matched visual assessment. Neutral prompts do not guarantee
 perfectly uniform surfaces, and specular highlight bands alone are not evidence
 of albedo-pattern leakage.
+
+## Texture probe without material prompts
+
+`texture_probe.py` reuses the same completed500/750/1000 Texture snapshots;
+the Texture training data and both adapters remain unchanged. Each step compares
+native SD1.5, literal texture, and learned `<T*>` with only its Texture adapter
+and embedding. All prompts omit Material tokens and material descriptions.
+The four contexts, seeds42/43 and PNDM100/CFG3.5/512px/fp16/safety settings match
+the original inference. Two methods and two textures give96 images per step,
+288 total, in new output directories.
+
+```bash
+SOURCE_STEPS=/absolute/path/to/completed_step_inference
+NEW_PROBE=$COLORPEEL_OUTPUT_ROOT/texture_material_disentangled_v1/NEW_TEXTURE_PROBE
+for STEP in 500 750 1000; do
+  $PY -B -m experiments.texture_material_disentangled_v1.texture_probe \
+    --source-run "$SOURCE_STEPS" --output "$NEW_PROBE/step$STEP" \
+    --step "$STEP" --device cuda:0
+done
+```
+
+Each step provides96 images, eight three-column contact sheets, `index.html`,
+prompt/image ledgers, source hashes and blinded review files. Each sheet shows
+all16 actual RGB training renders for its learned Texture, with the dataset
+manifest, training run and checkpoint step. The native and literal columns are
+labelled as having no concept-specific training; these references belong only
+to the learned column. `training_references.json` records every training image
+path, hash and caption, and the HTML index links to the original RGB images.
+Source verification checks the frozen training config and staged data rather
+than substituting extracted maps or generated samples. No source files change.
+`summary.json` audits completeness; omitting material prompts alone does not
+establish reflectance independence, which requires matched visual assessment.
