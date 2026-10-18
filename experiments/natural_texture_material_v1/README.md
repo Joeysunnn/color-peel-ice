@@ -35,10 +35,13 @@ $PY -B -m experiments.natural_texture_material_v1.extract \
 
 Reuse `prepare_maps.source_paths` to resolve each original source and reviewed
 mask. Texture extraction calls Phase 1 `data.extract_texture`: linear-sRGB
-Rec709 luminance, valid-region2/98 percentiles, output range[0.25,0.75]. Crop
-the reviewed-region bounding box and fill only invalid pixels with the existing
-TELEA radius3 rule; preserve every valid grayscale pixel. Record the crop and
-filled fraction. This estimates an image-space texture patch, not recovered
+Rec709 luminance, valid-region2/98 percentiles, output range[0.25,0.75]. The UV
+training patch is the largest axis-aligned rectangle wholly inside the reviewed
+mask: every pixel comes from the original valid Albedo, without synthesized
+pixels. Record its crop
+and retained fraction. Preserve the former bounding-box/TELEA radius3 completion
+as a separately labelled audit image; it must not be used as training texture.
+This estimates an image-space texture patch, not recovered
 physical UV coordinates or ground-truth intrinsic Albedo.
 
 Material extraction reuses `material_pipeline.map_values`: separate original

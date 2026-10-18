@@ -92,7 +92,7 @@ def inspect_sources(source):
 
 
 def texture_patch(gray, mask):
-    """Crop the reviewed region and fill only missing pixels; retain aspect ratio."""
+    """Produce the legacy inpainted patch for audit only, never for training."""
     valid = np.asarray(mask.convert("L")) >= 128
     ys, xs = np.nonzero(valid)
     box = (int(xs.min()), int(ys.min()), int(xs.max() + 1), int(ys.max() + 1))
@@ -110,14 +110,45 @@ def texture_patch(gray, mask):
         "pixel_aspect_preserved": True, "physical_texture_scale": "unknown from single image"}
 
 
+def interior_texture_patch(gray, mask):
+    """Select the largest all-valid rectangle; ties prefer top, left, bottom, right."""
+    valid = np.asarray(mask.convert("L")) >= 128
+    if valid.shape != np.asarray(gray).shape or not valid.any():
+        raise ValueError("Texture and nonempty reviewed mask must have matching dimensions")
+    heights, best, box = np.zeros(valid.shape[1], dtype=int), None, None
+    for y, row in enumerate(valid):
+        heights = np.where(row, heights + 1, 0)
+        stack = []
+        for x in range(len(heights) + 1):
+            height, start = int(heights[x]) if x < len(heights) else 0, x
+            while stack and stack[-1][1] > height:
+                left, previous = stack.pop()
+                top, bottom, right = y - previous + 1, y + 1, x
+                key = (-previous * (right - left), top, left, bottom, right)
+                if best is None or key < best:
+                    best, box = key, (left, top, right, bottom)
+                start = left
+            if height and (not stack or stack[-1][1] < height):
+                stack.append((start, height))
+    left, top, right, bottom = box
+    if not valid[top:bottom, left:right].all():
+        raise ValueError("Interior texture crop contains pixels outside reviewed mask")
+    patch = gray.crop(box)
+    count = (right - left) * (bottom - top)
+    return patch, {"method": "maximum_area_all_valid_axis_aligned_rectangle", "crop_xyxy": list(box),
+        "pixel_count": count, "retained_fraction_of_reviewed_region": float(count / valid.sum()),
+        "no_inpainting": True, "pixel_aspect_preserved": True,
+        "tie_break": "top, left, bottom, right ascending", "physical_texture_scale": "unknown from single image"}
+
+
 def displayed_input(path):
     image = Image.open(path).convert("RGBA")
     return Image.alpha_composite(Image.new("RGBA", image.size, (128, 128, 128, 255)), image).convert("RGB")
 
 
 def overview(output, records):
-    labels = ("Natural image / gray alpha composite", "Reviewed measurement region", "SuperMat Albedo (RGB)",
-              "Albedo linear luminance", "Texture: grayscale + robust normalize", "SuperMat roughness map", "SuperMat metallic map")
+    labels = ("Natural image / gray alpha composite", "Red: R/M region; blue: Texture crop", "SuperMat Albedo (RGB)",
+              "Albedo linear luminance", "Texture: normalized interior patch", "SuperMat roughness map", "SuperMat metallic map")
     width, height, header = 280, 336, 68
     sheet = Image.new("RGB", (width * len(labels), header + height * 3), "white")
     draw = ImageDraw.Draw(sheet)
@@ -129,7 +160,10 @@ def overview(output, records):
         valid = np.asarray(Image.open(folder / "mask.png").convert("L")) >= 128
         overlay = np.asarray(natural).copy()
         overlay[valid] = (overlay[valid] * .65 + np.array([255, 0, 0]) * .35).astype("uint8")
-        images = [natural, Image.fromarray(overlay), Image.open(folder / "albedo.png"),
+        overlay = Image.fromarray(overlay)
+        left, top, right, bottom = record["texture_sampling"]["crop_xyxy"]
+        ImageDraw.Draw(overlay).rectangle((left, top, right - 1, bottom - 1), outline="blue", width=3)
+        images = [natural, overlay, Image.open(folder / "albedo.png"),
                   Image.open(folder / "luminance.png"), Image.open(folder / "texture.png"),
                   Image.open(folder / "roughness.png"), Image.open(folder / "metallic.png")]
         y = header + row * height
@@ -138,7 +172,7 @@ def overview(output, records):
             sheet.paste(thumbnail, (col * width + (width - thumbnail.width) // 2, y + 34))
             draw.text((col * width + 8, y + 6), label, fill="black")
         draw.text((8, y + 304), f"{name}: R={record['roughness']:.6f}; M={record['metallic']:.6f}; region={record['selected_region']}", fill="black")
-        draw.text((8, y + 320), f"Albedo luminance q98-q02={record['texture_statistics']['luminance_span']:.6f}; fill={record['texture_completion']['fill_fraction']:.1%}; semantic={record['semantic_status']}", fill="black")
+        draw.text((8, y + 320), f"Albedo luminance q98-q02={record['texture_statistics']['luminance_span']:.6f}; retained={record['texture_sampling']['retained_fraction_of_reviewed_region']:.1%}; old fill={record['texture_completion']['fill_fraction']:.1%} (audit only); semantic={record['semantic_status']}", fill="black")
     sheet.save(output / "overview.png")
     links = []
     for name in MATERIALS:
@@ -146,6 +180,7 @@ def overview(output, records):
         links.extend(f'<a href="{name}/{path.name}">{html.escape(path.name)}</a> ' for path in sorted((output / name).iterdir()))
     (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><h1>Natural Texture / Material extraction</h1>'
         '<p>Extraction only. No renderer or concept training has run. See manifest.json for limitations and provenance.</p>'
+        '<p>texture.png is an all-valid interior crop without inpainting. texture_inpaint_audit.png is retained for audit only and must not be used for training.</p>'
         '<a href="manifest.json">Manifest</a> | <a href="source_locks.json">Source hashes</a>'
         '<p><a href="overview.png"><img src="overview.png" style="max-width:100%"></a></p>' + "\n".join(links), encoding="utf8")
 
@@ -161,17 +196,21 @@ def run(source, output):
     protocol_hash = data.protocol_sha256()
     output.mkdir(parents=True)
     data.write_json(output / "source_locks.json", locks)
-    extraction_protocol = {"phase": 2, "stage": "extraction_only", "texture_extraction": protocol["texture_extraction"],
+    extraction_protocol = {"phase": 2, "stage": "extraction_only", "texture_extraction": {
+        **protocol["texture_extraction"], "patch_sampling": {
+            "method": "maximum_area_all_valid_axis_aligned_rectangle", "no_inpainting": True,
+            "tie_break": "top, left, bottom, right ascending", "pixel_aspect_preserved": True,
+            "normalization_region": "unchanged complete reviewed mask before cropping"}},
         "material_extraction": "SuperMat separate 8bit R/M maps divided by255; reviewed-region median",
         "phase1_protocol_sha256": protocol_hash}
     data.write_json(output / "protocol.json", extraction_protocol)
-    manifest = {"schema": "natural_texture_material/extraction_v1", "phase": 2, "status": "running", "git": revision,
+    manifest = {"schema": "natural_texture_material/extraction_v2", "phase": 2, "status": "running", "git": revision,
         "source_fullmaps_run": str(source), "phase1_protocol_sha256": protocol_hash, "materials": {},
         "protocol_sha256": data.sha256(output / "protocol.json"), "script_sha256": data.sha256(Path(__file__)),
         "limitations": ["Single-image SuperMat albedo may retain shading or highlights; grayscale does not guarantee reflectance removal.",
             "Robust normalization can amplify weak texture, residual shading, or noise; raw luminance spans are recorded.",
-            "Texture patch is a single-view rectangular completion, without recovered physical scale or multiview refinement.",
-            "Irregular-mask rectangular completion may retain silhouette or inpainting structure; review fill fractions and patches visually.",
+            "Texture uses a single-view all-valid interior crop; some reviewed-region pattern is excluded, and physical scale is unknown.",
+            "Legacy irregular-mask inpainted patches may retain silhouette or inpainting structure; saved for audit only, never for training.",
             "SuperMat R/M medians are estimator outputs, not measured BRDF ground truth; known SuperMat-to-Cycles bias is uncorrected.",
             "Wood matte-semantic conflict is preserved; no VLM-driven numeric override."]}
     data.write_json(output / "manifest.json", manifest)
@@ -189,9 +228,13 @@ def run(source, output):
             linear = np.where(rgb <= .04045, rgb / 12.92, ((rgb + .055) / 1.055) ** 2.4)
             luminance = linear @ np.array([.2126, .7152, .0722])
             Image.fromarray(np.rint(luminance * 255).astype("uint8")).save(folder / "luminance.png")
-            patch, completion = texture_patch(gray, mask)
+            audit_patch, completion = texture_patch(gray, mask)
+            audit_patch.save(folder / "texture_inpaint_audit.png")
+            completion["use"] = "audit_only_not_for_training"
+            patch, sampling = interior_texture_patch(gray, mask)
             patch.save(folder / "texture.png")
             stats["luminance_span"] = stats["upper_luminance"] - stats["lower_luminance"]
+            stats["patch_sampling"] = sampling
             canonical = source_record["canonical"]
             material = {"representation": "scalar roughness/metallic only; no albedo, spatial R/M, bump or normal",
                 "roughness": source_record["distributions"]["roughness"]["median"],
@@ -199,7 +242,7 @@ def run(source, output):
                 "distributions": source_record["distributions"], "selected_region": canonical["selected_region"],
                 "semantic_status": canonical["semantic_status"], "source_canonical": str(paths["canonical"])}
             data.write_json(folder / "material.json", material)
-            record = {**material, "texture_statistics": stats, "texture_completion": completion,
+            record = {**material, "texture_statistics": stats, "texture_sampling": sampling, "texture_completion": completion,
                 "files": {path.name: {"path": str(path), "sha256": data.sha256(path)} for path in sorted(folder.iterdir())}}
             data.write_json(folder / "extraction.json", record)
             manifest["materials"][name] = record

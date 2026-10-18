@@ -113,6 +113,44 @@ def test_texture_completion_fills_holes_without_changing_valid_gray():
     assert receipt["crop_xyxy"] == [10, 5, 90, 75]
 
 
+def test_interior_patch_is_all_valid_and_preserves_original_gray_without_resampling():
+    yy, xx = np.indices((18, 26))
+    pixels = (yy * 10 + xx).astype("uint8")
+    mask = np.zeros_like(pixels)
+    mask[2:16, 3:23] = 255
+    mask[2:7, 3:8] = 0
+    patch, receipt = extract.interior_texture_patch(Image.fromarray(pixels), Image.fromarray(mask))
+    left, top, right, bottom = receipt["crop_xyxy"]
+    assert (mask[top:bottom, left:right] == 255).all()
+    np.testing.assert_array_equal(np.asarray(patch), pixels[top:bottom, left:right])
+    assert patch.size == (right - left, bottom - top)
+    assert receipt["pixel_count"] == (right - left) * (bottom - top)
+    assert receipt["retained_fraction_of_reviewed_region"] == receipt["pixel_count"] / (mask > 0).sum()
+    assert receipt["no_inpainting"] is True
+
+
+def test_interior_rectangle_matches_exhaustive_maximum_with_deterministic_ties():
+    random = np.random.default_rng(42)
+    masks = [np.ones((4, 5), dtype=bool),
+             np.array([[1, 1, 0, 1, 1], [1, 1, 0, 1, 1], [0, 0, 0, 0, 0]], dtype=bool)]
+    masks += [random.random((4, 5)) > .35 for _ in range(50)]
+    for valid in masks:
+        candidates = []
+        for top in range(valid.shape[0]):
+            for left in range(valid.shape[1]):
+                for bottom in range(top + 1, valid.shape[0] + 1):
+                    for right in range(left + 1, valid.shape[1] + 1):
+                        if valid[top:bottom, left:right].all():
+                            candidates.append((-(bottom - top) * (right - left), top, left, bottom, right))
+        _, top, left, bottom, right = min(candidates)
+        image, mask = Image.new("L", valid.shape[::-1], 99), Image.fromarray(valid.astype("uint8") * 255)
+        _, receipt = extract.interior_texture_patch(image, mask)
+        assert receipt["crop_xyxy"] == [left, top, right, bottom]
+        assert receipt == extract.interior_texture_patch(image, mask)[1]
+    with pytest.raises(ValueError, match="nonempty"):
+        extract.interior_texture_patch(Image.new("L", (3, 4)), Image.new("L", (3, 4)))
+
+
 @pytest.mark.skipif(cv2 is None, reason="full extraction requires real OpenCV on server")
 def test_run_writes_separate_scalar_materials_and_immutable_receipts(source, tmp_path, monkeypatch):
     monkeypatch.setenv("COLORPEEL_OUTPUT_ROOT", str(tmp_path))
@@ -120,8 +158,17 @@ def test_run_writes_separate_scalar_materials_and_immutable_receipts(source, tmp
     output = tmp_path / "extracted"
     result = extract.run(source, output)
     assert result["status"] == "complete"
+    assert result["schema"] == "natural_texture_material/extraction_v2"
     assert (output / "overview.png").is_file() and (output / "index.html").is_file()
     assert Image.open(output / "mailbox/gray_full.png").size == (512, 512)
+    assert (output / "mailbox/texture_inpaint_audit.png").is_file()
+    record = extract.read(output / "mailbox/extraction.json")
+    assert record["texture_completion"]["use"] == "audit_only_not_for_training"
+    assert record["texture_statistics"]["patch_sampling"] == record["texture_sampling"]
+    left, top, right, bottom = record["texture_sampling"]["crop_xyxy"]
+    original = np.asarray(Image.open(output / "mailbox/gray_full.png"))
+    np.testing.assert_array_equal(np.asarray(Image.open(output / "mailbox/texture.png")), original[top:bottom, left:right])
+    assert record["texture_sampling"]["no_inpainting"] is True
     material = extract.read(output / "mailbox/material.json")
     assert material["roughness"] == 75 / 255
     assert "texture" not in material and "albedo" not in material
