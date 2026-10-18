@@ -16,7 +16,8 @@ Existing data, checkpoints, results and Subject/Color branches remain unchanged.
    source and branch, saving paired embeddings/adapters at500/750/1000 updates,
    then generate matched comparisons in separate step directories.
 
-Only step1 is implemented by `extract.py`; it never renders or starts training.
+Step1 is implemented by `extract.py`. Step2 uses `build_dataset.py`, which
+only plans, renders, verifies and stages data; it never starts training.
 All code is edited/tested locally, committed/pushed, then fetched and pulled
 with `--ff-only` on the server before execution from a clean checkout.
 
@@ -76,3 +77,42 @@ checkpoint step. Base/literal controls have no concept-specific fine-tuning.
 Extracted maps and generated inference images must not be labelled as training
 RGB images. Neutral branch probes and full T/M combinations require matched
 visual review; successful execution alone does not establish disentanglement.
+
+## Build and display the counterfactual datasets
+
+Use the accepted extraction directory explicitly; no latest-run discovery:
+
+```bash
+EXTRACTION=/var/tmp/colorpeel-r12user5/runs/natural_texture_material_v1/20261018-161838__extraction__f622cc5__42
+# NEW_DATASET must be a fresh directory below COLORPEEL_OUTPUT_ROOT.
+$PY -B -m experiments.natural_texture_material_v1.build_dataset \
+  --extraction "$EXTRACTION" --output "$NEW_DATASET" --gpu 3
+```
+
+The driver calls three reproducible stages, with exact commands and logs saved
+in `commands.json` and `logs/`:
+
+1. `dataset_protocol` checks extraction/output/upstream hashes and writes the
+   independent `plan/protocol.json` and exact72-row `plan/plan.json`.
+2. `render_dataset.py` runs under Blender4.2.11, reusing the unchanged Phase1
+   Texture renderer and uniform-Material renderer. Settings remain512px,
+   Cycles64 samples, original camera/lights/shape scale and seed42+condition.
+   Actual shader nodes are audited: Texture has one UV image node; Material
+   has none. R/M and normal inputs have no spatial texture links.
+3. `dataset_stage` checks the complete factorial, shader metadata, RGB/mask
+   hashes and paired foreground masks, then prepares binary training masks,
+   captions and per-image concept groups using the existing mask loader.
+
+`staging/` contains six independent datasets, named `{source}_texture` (16 RGB
+images each) and `{source}_material` (8 each). Each has `concepts.json`,
+`training_assets_manifest.jsonl`, `dataset_receipt.json`, `images/` and
+`masks/`. The same dataset will be used by original and rank64.
+
+Open `index.html` or `staging/index.html`. Six contact sheets under
+`staging/contact_sheets/` show every actual training RGB render, with source
+reference, fixed Texture or R/M, varied conditions and manifest path. Individual
+images, prompts and hashes are listed in `staging/training_references.json`.
+All sheets explicitly say training has not started. `status.json` reaches
+`dataset_verified` only after staging checks pass; `repro_outputs/` records the
+execution and scientific limits. No checkpoint or generated model result is
+created by this command.
