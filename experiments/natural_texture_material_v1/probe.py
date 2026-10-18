@@ -16,6 +16,7 @@ from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 PROMPTS = Path(__file__).with_name("probe_protocol.json")
+TRANSFER_PROMPTS = Path(__file__).with_name("transfer_protocol.json")
 STEPS = (500, 750, 1000)
 METHODS = ("fullrank", "lora_r64")
 
@@ -24,19 +25,31 @@ def write(path, value):
     Path(path).write_text(json.dumps(value, indent=2) + "\n", encoding="utf8")
 
 
-def build_rows(protocol, step):
+def prompt_contexts(protocol, transfer=False):
+    if transfer:
+        return [{"id": name, "shape": name, "color": None, "light": None}
+                for name in json.loads(TRANSFER_PROMPTS.read_text())["objects"]]
+    return protocol["dataset"]["heldout_contexts"]
+
+
+def build_rows(protocol, step, transfer=False):
     if step not in STEPS:
         raise ValueError("Select an existing500/750/1000-step snapshot")
-    literals, rows = json.loads(PROMPTS.read_text()), []
+    literals, rows = json.loads((TRANSFER_PROMPTS if transfer else PROMPTS).read_text()), []
     for method, branch, source, context, seed in itertools.product(
             METHODS, ("texture", "material"), schema.SOURCES,
-            protocol["dataset"]["heldout_contexts"], protocol["inference"]["seeds"]):
+            prompt_contexts(protocol, transfer), protocol["inference"]["seeds"]):
         for condition in ("base", "literal", "learned_" + branch):
-            prompt = f"a photo of a {context['color']} {context['shape']}"
+            prompt = (literals["base_template"].format(object=context["shape"]) if transfer
+                      else f"a photo of a {context['color']} {context['shape']}")
             if condition != "base":
                 token = ("<T*>" if branch == "texture" else "<M*>") if condition.startswith("learned_") else literals["literal_" + branch][source]
-                prompt += f" with {token} texture" if branch == "texture" else f" made of {token}"
-            prompt += f", {protocol['dataset']['light_phrases'][context['light']]}"
+                if transfer:
+                    prompt = literals[branch + "_template"].format(object=context["shape"], attribute=token)
+                else:
+                    prompt += f" with {token} texture" if branch == "texture" else f" made of {token}"
+            if not transfer:
+                prompt += f", {protocol['dataset']['light_phrases'][context['light']]}"
             identity = f"{method}__{source}_{branch}__{context['id']}__{condition}__seed{seed}"
             rows.append({"id": identity, "method": method, "branch": branch, "source_id": source,
                          "concept_id": source + "_" + branch, "context": context["id"],
@@ -71,14 +84,15 @@ def generate(pipe, rows, output, sampling, device, learned):
             ledger.flush()
 
 
-def run(source, output, step, device="cuda:0", training_audit=None):
+def run(source, output, step, device="cuda:0", training_audit=None, transfer=False):
     source, output = Path(source).resolve(), resolve_run_dir(Path(output))
     if output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(source):
         raise ValueError("Use a new external probe directory outside training artifacts")
-    git, prompt_hash = git_info(), schema.sha256(PROMPTS)
+    prompts = TRANSFER_PROMPTS if transfer else PROMPTS
+    git, prompt_hash = git_info(), schema.sha256(prompts)
     audit = json.loads(Path(training_audit).read_text()) if training_audit else None
     protocol, selections, locks, references = verify_source(source, step, audit)
-    rows = build_rows(protocol, step)
+    rows = build_rows(protocol, step, transfer)
     sampling = {**protocol["inference"], "conditions": {
         "texture": ["base", "literal", "learned_texture"],
         "material": ["base", "literal", "learned_material"]}}
@@ -88,7 +102,8 @@ def run(source, output, step, device="cuda:0", training_audit=None):
     provenance = {"status": "running", "git": git, "training_git": json.loads((source / "status.json").read_text())["git"],
         "source_run": str(source), "source_locks": locks, "training_steps": step,
         "training": selections, "sampling": sampling, "protocol_sha256": schema.protocol_sha256(protocol),
-        "prompt_protocol_sha256": prompt_hash, "prompt_protocol": json.loads(PROMPTS.read_text()),
+        "probe_suite": "ordinary_object_transfer" if transfer else "neutral_geometry",
+        "prompt_protocol_sha256": prompt_hash, "prompt_protocol": json.loads(prompts.read_text()),
         "environment": package_versions(), "device": device, "row_count": 288, "retraining": False,
         "base_and_literal": "Native SD1.5; no concept adapter or learned embedding.",
         "learned": "Only the selected branch's single adapter and embedding; opposite adapter absent.",
@@ -122,10 +137,11 @@ def run(source, output, step, device="cuda:0", training_audit=None):
                     or schema.sha256(output / row["image_path"]) != row["image_sha256"]):
                 raise ValueError("Image hash or branch/adapter condition differs")
         verify_source(source, step, audit)
-        if (git_info() != git or schema.sha256(PROMPTS) != prompt_hash
+        if (git_info() != git or schema.sha256(prompts) != prompt_hash
                 or any(schema.sha256(path) != digest for path, digest in locks.items())):
             raise ValueError("Source checkpoint, actual training images, prompts or checkout changed")
-        sheets = review_bundle(output, generated, protocol, references)
+        sheets = review_bundle(output, generated, protocol, references,
+                               contexts=prompt_contexts(protocol, transfer))
         write(output / "summary.json", {"status": "succeeded", "training_steps": step,
             "generated_images": 288, "expected_images": 288, "missing_images": 0,
             "by_method": dict(Counter(row["method"] for row in generated)),
@@ -133,7 +149,8 @@ def run(source, output, step, device="cuda:0", training_audit=None):
             "by_condition": dict(Counter(row["condition"] for row in generated)),
             "safety_filtered": sum(row["status"] == "safety_filtered" for row in generated),
             "contact_sheets": sheets, "human_ratings": "pending", "disentanglement_score": None,
-            "limitations": ["Neutral prompts do not require appearance without material or texture.",
+            "limitations": [("Ordinary object prompts test transfer; visual attribute independence still needs review."
+                             if transfer else "Neutral prompts do not require appearance without material or texture."),
                 "Literal words are semantic controls, not exact descriptions of extracted R/M or spatial patterns.",
                 "Matched visual assessment is needed; execution success does not establish independence."]})
         provenance["status"] = "succeeded"
@@ -151,5 +168,6 @@ if __name__ == "__main__":
     parser.add_argument("--step", type=int, choices=STEPS, required=True)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--training-audit", type=Path)
+    parser.add_argument("--transfer", action="store_true", help="Test chair/mug/vase/sofa ordinary prompts")
     args = parser.parse_args()
-    run(args.source_run, args.output, args.step, args.device, args.training_audit)
+    run(args.source_run, args.output, args.step, args.device, args.training_audit, args.transfer)

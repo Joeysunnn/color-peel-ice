@@ -1,4 +1,4 @@
-"""Audit twelve completed runs, then generate all three neutral checkpoint probes."""
+"""Audit twelve completed natural T/M runs, then generate matched checkpoint probes."""
 
 import argparse
 import json
@@ -9,25 +9,29 @@ import subprocess
 import sys
 
 from experiments.natural_texture_material_v1.probe_source import audit_training
-from experiments.natural_texture_material_v1.probe import PROMPTS, STEPS, write
+from experiments.natural_texture_material_v1.probe import PROMPTS, TRANSFER_PROMPTS, STEPS, write
 from experiments.natural_texture_material_v1.dataset_protocol import sha256
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(source, output, gpus):
+def run(source, output, gpus, transfer=False):
     source, output = Path(source).resolve(), resolve_run_dir(Path(output))
     if (output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(source)
             or len(gpus) != 3 or len(set(gpus)) != 3 or min(gpus) < 0):
         raise ValueError("Use a new external output and three distinct nonnegative GPUs")
-    git, prompt_hash = git_info(), sha256(PROMPTS)
+    prompts = TRANSFER_PROMPTS if transfer else PROMPTS
+    label = "ordinary-object transfer" if transfer else "neutral"
+    git, prompt_hash = git_info(), sha256(prompts)
     output.mkdir(parents=True)
     (output / "logs").mkdir()
     report = output / "repro_outputs"
     report.mkdir()
     state = {"status": "auditing_training", "git": git, "source_run": str(source),
-             "expected_images": 864, "steps": [], "retraining": False, "human_ratings": "pending"}
+             "expected_images": 864, "steps": [], "retraining": False, "human_ratings": "pending",
+             "probe_suite": "ordinary_object_transfer" if transfer else "neutral_geometry",
+             "prompt_protocol_sha256": prompt_hash}
     write(output / "status.json", state)
     processes = []
     try:
@@ -45,9 +49,11 @@ def run(source, output, gpus):
             "Twelve runs/12000 finite-loss updates;36 paired exports tensor-verified. "
             "Losses are stochastic training observations, not disentanglement scores.\n\n" + "\n".join(table) + "\n",
             encoding="utf8")
+        description = ("Ordinary chair/mug/vase/sofa prompts replace geometric color/light contexts. "
+                       if transfer else "Prior neutral templates and contexts retained. ")
         (report / "SCIENTIFIC_CHANGELOG.md").write_text(
-            "Inference only. User-approved natural literal controls recorded in probe_protocol.json; "
-            "prior neutral templates, contexts,seeds42/43,PNDM100,CFG3.5,512px,fp16,safety retained. "
+            "Inference only. Natural literal controls recorded in " + prompts.name + "; " + description +
+            "Seeds42/43,PNDM100,CFG3.5,512px,fp16,safety retained. "
             "Texture prompts/adapters omit Material; Material prompts/adapters omit Texture. "
             "Base/literal use native SD1.5. Learned arm loads one selected adapter/embedding only.\n", encoding="utf8")
         (report / "COMPARABILITY_REPORT.md").write_text(
@@ -55,14 +61,22 @@ def run(source, output, gpus):
             "Actual T16/M8 staged RGB training images appear on each corresponding learned-column sheet. "
             "Native/literal have no concept-specific training. No automatic physical BRDF or independence score.\n",
             encoding="utf8")
-        (output / "probe_protocol.json").write_bytes(PROMPTS.read_bytes())
+        if transfer:
+            (report / "PATCHES.md").write_text(
+                "Opt-in --transfer adds ordinary object prompts to the existing probe/runner; "
+                "review accepts the four object contexts. Source audit, pipeline, sampler and "
+                "training references are reused. Neutral prompt protocol and training code unchanged.\n",
+                encoding="utf8")
+        (output / prompts.name).write_bytes(prompts.read_bytes())
         for step, gpu in zip(STEPS, gpus):
-            if git_info() != git or sha256(PROMPTS) != prompt_hash:
+            if git_info() != git or sha256(prompts) != prompt_hash:
                 raise ValueError("Checkout or prompt protocol changed before inference")
             command = [sys.executable, "-B", "-m", "experiments.natural_texture_material_v1.probe",
                        "--source-run", str(source), "--output", str(output / f"step{step}"),
                        "--step", str(step), "--device", "cuda:0",
                        "--training-audit", str(output / "training_audit.json")]
+            if transfer:
+                command.append("--transfer")
             with (output / "logs" / f"step{step}.log").open("x") as log:
                 process = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.DEVNULL,
                     stdout=log, stderr=subprocess.STDOUT,
@@ -74,13 +88,13 @@ def run(source, output, gpus):
         write(output / "status.json", state)
         write(report / "status.json", state)
         (report / "SUMMARY.md").write_text(
-            "Twelve training runs and36 paired exports verified. Neutral inference generating864 images; "
+            f"Twelve training runs and36 paired exports verified. {label} inference generating864 images; "
             "completion pending.\n", encoding="utf8")
         (report / "LOG.md").write_text("Per-step generation logs: ../logs/step{500,750,1000}.log\n", encoding="utf8")
         (report / "COMMANDS.md").write_text("\n\n".join(
             f"CUDA_VISIBLE_DEVICES={job['gpu']} " + shlex.join(job["command"]) for job in state["steps"]) + "\n",
             encoding="utf8")
-        (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Natural T/M probes</title>'
+        (output / "index.html").write_text(f'<!doctype html><meta charset="utf-8"><title>Natural T/M {label}</title>'
             '<p>Native / literal / learned branch. Training RGB references on each contact sheet.</p>' +
             "".join(f'<p><a href="step{step}/index.html">step{step}</a></p>' for step in STEPS), encoding="utf8")
         for process, record in processes:
@@ -98,7 +112,7 @@ def run(source, output, gpus):
             write(output / "status.json", state)
         if any(record["status"] != "succeeded" for _, record in processes):
             raise RuntimeError("One or more step probes failed; see new output logs")
-        if (git_info() != git or sha256(PROMPTS) != prompt_hash
+        if (git_info() != git or sha256(prompts) != prompt_hash
                 or any(sha256(path) != digest for path, digest in audit["source_locks"].items())):
             raise ValueError("Training source, actual training RGB, prompts or checkout changed")
         state.update(status="execution_verified", generated_images=864)
@@ -109,7 +123,7 @@ def run(source, output, gpus):
         write(output / "status.json", state)
         write(report / "status.json", state)
         (report / "SUMMARY.md").write_text(
-            f"Natural neutral T/M inference: {state['status']}. Expected864 new images; "
+            f"Natural {label} T/M inference: {state['status']}. Expected864 new images; "
             "see per-step summaries and training_audit.json. No retraining.\n", encoding="utf8")
         (report / "LOG.md").write_text("Per-step generation logs: ../logs/step{500,750,1000}.log\n", encoding="utf8")
     return state
@@ -120,5 +134,6 @@ if __name__ == "__main__":
     parser.add_argument("--source-run", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gpus", type=int, nargs=3, required=True)
+    parser.add_argument("--transfer", action="store_true", help="Test chair/mug/vase/sofa ordinary prompts")
     args = parser.parse_args()
-    print(json.dumps({"status": run(args.source_run, args.output, args.gpus)["status"]}))
+    print(json.dumps({"status": run(args.source_run, args.output, args.gpus, args.transfer)["status"]}))

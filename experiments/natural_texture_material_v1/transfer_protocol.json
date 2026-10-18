@@ -1,0 +1,18 @@
+{
+  "schema": "natural_texture_material_ordinary_object_transfer/v1",
+  "definition": "Transfer the latest natural-image tokens and K/V to ordinary object prompts; sampling and literal controls match the neutral probe.",
+  "objects": ["chair", "mug", "vase", "sofa"],
+  "base_template": "a photo of a {object}",
+  "texture_template": "a photo of a {object} with {attribute} texture",
+  "material_template": "a photo of a {object} made of {attribute}",
+  "literal_texture": {
+    "mailbox": "fine speckled",
+    "metal_spoon": "smooth",
+    "wood_spoon": "vertical grain"
+  },
+  "literal_material": {
+    "mailbox": "painted metal",
+    "metal_spoon": "polished metal",
+    "wood_spoon": "wood"
+  }
+}

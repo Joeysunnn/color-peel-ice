@@ -28,8 +28,9 @@ def _font():
     return ImageFont.load_default()
 
 
-def review_bundle(output, rows, protocol, references):
+def review_bundle(output, rows, protocol, references, contexts=None):
     output = Path(output)
+    contexts = protocol["dataset"]["heldout_contexts"] if contexts is None else contexts
     expected = {(method, source + "_" + branch)
                 for method, branch, source in itertools.product(METHODS, BRANCHES, SOURCES)}
     if set(references) != expected:
@@ -72,7 +73,7 @@ def review_bundle(output, rows, protocol, references):
         thumb_rows = (len(reference["images"]) + 7) // 8
         header_height = 12 + len(metadata) * 19
         grid_top = header_height + thumb_rows * 133 + 38
-        sheet = Image.new("RGB", (WIDTH, grid_top + 4 * 466), "white")
+        sheet = Image.new("RGB", (WIDTH, grid_top + len(contexts) * 466), "white")
         draw = ImageDraw.Draw(sheet)
         for number, line in enumerate(metadata):
             draw.text((10, 8 + number * 19), line, font=font, fill="black")
@@ -92,7 +93,7 @@ def review_bundle(output, rows, protocol, references):
         labels = ("Native SD1.5", "Literal " + branch, "Learned <" + token + "*>")
         for column, label in enumerate(labels):
             draw.text((10 + column * 384, grid_top - 26), label, font=font, fill="black")
-        for line, context in enumerate(protocol["dataset"]["heldout_contexts"]):
+        for line, context in enumerate(contexts):
             for column, condition in enumerate(conditions):
                 row = by_key[method, concept, context["id"], seed, condition]
                 x, top = 10 + column * 384, grid_top + line * 466

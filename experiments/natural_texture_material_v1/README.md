@@ -188,3 +188,30 @@ Root `training_audit.json` and `repro_outputs/TRAINING_AUDIT.md` record the twel
 training checks. Root status reaches `execution_verified` only after all three
 workers finish complete image and sheet checks. No retraining or automatic
 disentanglement score is performed.
+
+## Ordinary object transfer of the same natural checkpoints
+
+```bash
+$PY -B -m experiments.natural_texture_material_v1.run_probe \
+  --source-run "$TRAINING" --output "$NEW_TRANSFER" --gpus 1 2 3 --transfer
+```
+
+`NEW_TRANSFER` must be a new external directory. This opt-in mode reuses the
+same source audit, paired500/750/1000 exports, single-branch pipeline, sampler,
+and actual training-image references. The neutral mode remains the default.
+
+`transfer_protocol.json` freezes four objects:chair,mug,vase,sofa. Base prompts
+are `a photo of a {object}`. Texture prompts are
+`a photo of a {object} with {attribute} texture`; Material prompts are
+`a photo of a {object} made of {attribute}`. The learned attribute is only
+`<T*>` or `<M*>`; literal attributes retain the approved natural-source mappings.
+These ordinary prompts have no explicit color or lighting clause. This is a
+prompt-distribution change from the geometric neutral probe,not retraining.
+
+Seeds42/43,PNDM100,CFG3.5,512px,fp16 and safety checking are unchanged. Each
+step has288 images and24 contact sheets; all three steps total864 images and72
+sheets. Each sheet compares the same four objects and shows all actual T16/M8
+RGB training images for its learned column. Root and per-step provenance record
+`probe_suite=ordinary_object_transfer` and the separate transfer prompt hash;
+the canonical training protocol hash still identifies the original dataset.
+`repro_outputs/` records commands,patches,comparability and verified completion.
