@@ -53,3 +53,38 @@ config, manifest, metrics and accelerator states under`checkpoints/checkpoint-N`
 Snapshots and paired inference exports are produced automatically after training;
 this command does not generate diffusion inference images. Startup verification
 is separate from completed training and semantic disentanglement assessment.
+
+## Reuse the original Material probe and compare old results
+
+After training completes, the evaluation entrypoint checks all four runs,
+every finite metric/token exposure, ordinary embedding freeze, and all twelve
+raw-snapshot versus paired-export tensor matches. It preserves the original
+training Git revision separately from the new evaluation revision.
+
+```bash
+$PY -B -m experiments.material_uniform_albedo_v1.evaluate \
+  --source-run "$COMPLETED_UNIFORM_MATERIAL_RUN" \
+  --old-results "$COMPLETED_OLD_NEUTRAL_MATERIAL_PROBE" \
+  --output "$COLORPEEL_OUTPUT_ROOT/material_uniform_albedo_v1/NEW_COMPARISON" \
+  --gpus 1 2 3
+```
+
+The three steps run on separate GPUs. Each `stepN/probe/` contains the same
+96 prompts as the original neutral probe: native SD1.5, ordinary material
+phrase, learned M; methods original/rank64, two materials, four contexts,
+seeds42/43. PNDM100, CFG3.5,512px,fp16 and safety checking stay unchanged.
+Native/literal arms load no adapter or learned embedding; learned M loads only
+its selected adapter/embedding. No Texture adapter or texture prompt is added.
+
+Each `stepN/comparison/` aligns old/new images in six-column contact sheets
+and provides32 learned-M pairs with randomized A/B labels for blind review.
+Base/literal image-hash equality is recorded as a diagnostic, not a guarantee
+of bitwise GPU determinism. Safety-filtered pairs are marked and excluded
+from blind ratings. Old checkpoints, probe images and evaluation files are
+read-only inputs; no experiment directory is retried or overwritten.
+
+`training_audit.json` summarizes the four runs. Root and per-step status files
+distinguish audit, generation, comparison, failure and verified execution.
+Comparison pages do not assert a texture-leakage score or recovered physical
+BRDF; those require assessment of the matched outputs. The8-versus16-image
+training exposure difference described above remains a scientific limitation.

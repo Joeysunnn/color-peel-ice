@@ -141,19 +141,26 @@ def review_bundle(output, rows, protocol):
     return sheets
 
 
-def run(source, output, step, device="cuda:0"):
+def run(source, output, step, device="cuda:0", uniform_material=False):
     source, output = Path(source).resolve(), resolve_run_dir(Path(output))
     if output.exists() or output.is_relative_to(source) or output.is_relative_to(ROOT):
         raise ValueError("probe output must be a new external directory outside the source experiment")
     revision, protocol = git_info(), data.read_protocol()
-    index, selections, locks = verify_source(source, step)
+    if uniform_material:
+        from experiments.material_uniform_albedo_v1.audit import verify_source as source_verifier
+    else:
+        source_verifier = verify_source
+    index, selections, locks = source_verifier(source, step)
     rows = build_rows(protocol, step)
     sampling = {**protocol["inference"], "conditions": list(CONDITIONS)}
     output.mkdir(parents=True)
     (output / "images").mkdir()
     (output / "generation_manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
     provenance = {"status": "running", "git": revision, "training_git": index["training_git"],
-                  "source_inference_git": index["git"], "source_run": str(source), "source_locks": locks,
+                  "source_inference_git": None if uniform_material else index["git"],
+                  "source_export_git": index["git"], "source_run": str(source), "source_locks": locks,
+                  "source_kind": "uniform_material" if uniform_material else "original_material",
+                  "training_protocol_sha256": index.get("protocol_sha256"),
                   "training_steps": step, "training": selections, "sampling": sampling,
                   "protocol_sha256": data.protocol_sha256(), "environment": package_versions(),
                   "row_count": len(rows), "conditions": list(CONDITIONS), "texture_adapter_loaded": False,
@@ -184,7 +191,10 @@ def run(source, output, step, device="cuda:0"):
             if (any(row.get(key) != value for key, value in expected[row["id"]].items())
                     or sha256(output / row["image_path"]) != row["image_sha256"]):
                 raise ValueError("generation condition or image changed")
-        infer.verify_inputs(index, protocol, step)
+        if uniform_material:
+            source_verifier(source, step)
+        else:
+            infer.verify_inputs(index, protocol, step)
         if (any(sha256(Path(path)) != digest for path, digest in locks.items())
                 or data.read_protocol() != protocol or git_info() != revision):
             raise ValueError("source artifacts, protocol or checkout changed")
@@ -212,5 +222,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--step", type=int, choices=STEPS, required=True)
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--uniform-material", action="store_true",
+                        help="Use audited uniform-albedo Material exports; keep the original probe prompts/sampling.")
     args = parser.parse_args()
-    run(args.source_run, args.output, args.step, args.device)
+    run(args.source_run, args.output, args.step, args.device, args.uniform_material)
