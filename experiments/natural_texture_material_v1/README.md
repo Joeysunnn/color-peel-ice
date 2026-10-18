@@ -146,3 +146,45 @@ writes36 paired adapter/token exports into `step500/`, `step750/` and
 the actual RGB images for future contact sheets. Logs, commands, seeds,
 config comparisons and status are retained under `train_outputs/` and
 `training/gpu_*.json`. There is no automatic inference, scoring or new loss.
+
+## Neutral three-arm comparisons of completed training
+
+```bash
+TRAINING=/var/tmp/colorpeel-r12user5/runs/natural_texture_material_v1/20261018-190309__natural_tm_training__9077221__42
+# NEW_PROBE must be a fresh directory below COLORPEEL_OUTPUT_ROOT.
+$PY -B -m experiments.natural_texture_material_v1.run_probe \
+  --source-run "$TRAINING" --output "$NEW_PROBE" --gpus 1 2 3
+```
+
+Before allocating GPU pipelines, `probe_source.audit_training` independently
+checks all12 completed runs,1000 finite-loss/token-exposure records per run,
+ordinary embedding drift0 and all36 paired adapter/embedding exports against
+their actual step snapshots. It compares the recorded training revision, so
+new inference code can read the historical training without editing its Git
+metadata. The JSON tensor audit is reused across the three workers; each
+worker rechecks immutable source hashes and provenance.
+
+Each step compares native SD1.5, a literal attribute on that native pipeline,
+and the learned token with only its own adapter/embedding. Texture uses
+`a photo of a {color} {shape} with {texture} texture, {lighting}`; Material uses
+`a photo of a {color} {shape} made of {material}, {lighting}`. The native arm
+omits the attribute clause. Texture never loads or mentions Material; Material
+never loads or explicitly describes Texture. There is no negative prompt.
+
+The user-approved first natural literal controls are frozen in
+`probe_protocol.json`: Texture = `fine speckled`, `smooth`, `vertical grain`;
+Material = `painted metal`, `polished metal`, `wood`, respectively for mailbox,
+metal_spoon and wood_spoon. These are semantic controls, not a claim that words
+exactly represent the extracted spatial pattern or R/M. All contexts, seeds42/43,
+PNDM100,CFG3.5,512px,fp16 and safety checking match the preceding neutral probes.
+
+Each of `step500/`, `step750/` and `step1000/` contains288 images,24 contact
+sheets, per-image prompts/hashes/adapter flags, blinded review files and a
+`summary.json`. Total864 new images and72 sheets. Every sheet shows the natural
+source, run/step and all actual RGB training images (T16/M8) for its learned
+column; native/literal columns have no concept-specific training. Individual
+training paths, captions and hashes are retained in `training_references.json`.
+Root `training_audit.json` and `repro_outputs/TRAINING_AUDIT.md` record the twelve
+training checks. Root status reaches `execution_verified` only after all three
+workers finish complete image and sheet checks. No retraining or automatic
+disentanglement score is performed.

@@ -1,0 +1,14 @@
+{
+  "schema": "natural_texture_material_neutral_probe/v1",
+  "literal_definition": "User-approved first natural Phase 2 literal controls; existing neutral templates and sampling retained.",
+  "literal_texture": {
+    "mailbox": "fine speckled",
+    "metal_spoon": "smooth",
+    "wood_spoon": "vertical grain"
+  },
+  "literal_material": {
+    "mailbox": "painted metal",
+    "metal_spoon": "polished metal",
+    "wood_spoon": "wood"
+  }
+}
