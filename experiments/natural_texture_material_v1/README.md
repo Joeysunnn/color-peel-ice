@@ -116,3 +116,33 @@ All sheets explicitly say training has not started. `status.json` reaches
 `dataset_verified` only after staging checks pass; `repro_outputs/` records the
 execution and scientific limits. No checkpoint or generated model result is
 created by this command.
+
+## Train the accepted natural datasets
+
+```bash
+DATASET=/var/tmp/colorpeel-r12user5/runs/natural_texture_material_v1/20261018-175054__counterfactual_dataset__c503bcd__42
+# NEW_TRAINING must be a fresh directory below COLORPEEL_OUTPUT_ROOT.
+$PY -B -m experiments.natural_texture_material_v1.train \
+  --dataset "$DATASET" --output "$NEW_TRAINING" --gpus 1 2 3
+```
+
+This reads the existing72 RGB images and masks without modifying their dataset
+directory. The source verifier binds staged files to their render manifest,
+accepted extraction, original SuperMat assets, captions and image/mask hashes.
+Twelve independent runs cover three sources, two branches and both methods.
+They initialize from the frozen SD1.5 base; there is no resume or new rendering.
+
+`training_config.py` takes the matching Phase1 method/branch recipe and changes
+only the concept data path and explicit checkpoint list. It writes a complete
+argument comparison in `train_outputs/CONFIG_COMPARISON.json`. The shared
+launcher checks each generated config with a dry run in `preflight/` before
+actual runs are created under `training/`. Different GPUs execute independent
+queues; a failed job stops its queue and is recorded without automatic retry.
+
+Each run saves500/750/1000 under its `checkpoints/checkpoint-N/`. After all twelve
+runs pass the existing weight/embedding/metrics audits, the shared step exporter
+writes36 paired adapter/token exports into `step500/`, `step750/` and
+`step1000/`, with one training index per step. `training_references.json` records
+the actual RGB images for future contact sheets. Logs, commands, seeds,
+config comparisons and status are retained under `train_outputs/` and
+`training/gpu_*.json`. There is no automatic inference, scoring or new loss.
