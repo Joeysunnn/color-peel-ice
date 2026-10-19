@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from PIL import Image
 
@@ -65,6 +66,7 @@ class WoodInitializerReviewTests(unittest.TestCase):
             receipt = read_json(root / "training_references.json")
             self.assertEqual(len(receipt["groups"]), 2)
             for group in receipt["groups"]:
+                self.assertEqual(group["initializer"], "material")
                 self.assertEqual(group["images"], references[group["method"]]["images"])
                 self.assertEqual(group["conditions"], {"base": None, "literal": None,
                     "learned_metal_init": "images", "learned_material_init": "images"})
@@ -76,6 +78,47 @@ class WoodInitializerReviewTests(unittest.TestCase):
                 self.assertIn(f"actual_training_{number}.png", index)
             self.assertIn("Source photo is separate", index)
             self.assertEqual(index.count("contact_sheets/"), 8)
+
+    def test_wood_initializer_titles_columns_and_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows, references, _ = self.fixture(root)
+            for reference in references.values():
+                reference["initializer"] = "wood"
+            original_text = review.ImageDraw.ImageDraw.text
+            with mock.patch.object(review.ImageDraw.ImageDraw, "text", autospec=True,
+                                   side_effect=original_text) as drawn_text:
+                sheets = review.review_bundle(root, rows, references)
+            self.assertEqual(len(sheets), 4)
+            labels = [call.args[2] for call in drawn_text.call_args_list]
+            self.assertEqual(labels.count("Learned: wood init"), 4)
+            self.assertFalse(any("material-init" in label or "Learned: material init" in label
+                                 for label in labels))
+            self.assertTrue(any("Material initializer transfer: metal vs wood" in label for label in labels))
+            self.assertTrue(any("initialized with wood." in label for label in labels))
+            self.assertTrue(any("New wood-init checkpoint:" in label for label in labels))
+            index = (root / "index.html").read_text(encoding="utf8")
+            self.assertIn("Material initializer transfer: metal vs wood</title>", index)
+            self.assertIn("metal initialization, wood initialization", index)
+            self.assertNotIn("material initialization", index)
+            groups = read_json(root / "training_references.json")["groups"]
+            self.assertEqual({group["initializer"] for group in groups}, {"wood"})
+            self.assertTrue(all(group["images"] == references[group["method"]]["images"]
+                                for group in groups))
+
+    def test_mixed_initializers_and_wood_for_other_sources_are_rejected(self):
+        for source_id, initializers in (("wood_spoon", ("wood", "material")),
+                                        ("mailbox", ("wood", "wood")),
+                                        ("metal_spoon", ("wood", "wood")),
+                                        ("wood_spoon", ("metal", "metal"))):
+            with self.subTest(source=source_id, initializers=initializers), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                rows, references, _ = self.fixture(root, source_id)
+                for method, initializer in zip(review.METHODS, initializers):
+                    references[method]["initializer"] = initializer
+                with self.assertRaisesRegex(ValueError, "initializer must match"):
+                    review.review_bundle(root, rows, references)
+                self.assertFalse((root / "contact_sheets").exists())
 
     def test_changed_training_rgb_is_rejected_before_publishing(self):
         with tempfile.TemporaryDirectory() as temporary:

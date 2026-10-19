@@ -20,7 +20,14 @@ def _concept(source_id):
     return source_id + "_material"
 
 
-def build_config(baseline, method, source_id="wood_spoon"):
+def validate_initializer(source_id, initializer):
+    _concept(source_id)
+    if initializer != "material" and not (source_id == "wood_spoon" and initializer == "wood"):
+        raise ValueError("Expected material initializer, or wood for wood_spoon only")
+
+
+def build_config(baseline, method, source_id="wood_spoon", initializer="material"):
+    validate_initializer(source_id, initializer)
     concept_id = _concept(source_id)
     args = baseline["args"]
     if (method not in ("fullrank", "lora_r64") or args.get("modifier_token") != "<M*>"
@@ -36,9 +43,9 @@ def build_config(baseline, method, source_id="wood_spoon"):
                 or args.get("token_local_kv", False)))):
         raise ValueError(f"Expected the original {source_id} Material method and 1000-step recipe")
     config = copy.deepcopy(baseline)
-    config["args"]["initializer_token"] = "material"
+    config["args"]["initializer_token"] = initializer
     config["run"].update(study="natural_material_initializer_v1",
-        variant=f"{concept_id}_{method}_init_material_steps1000")
+        variant=f"{concept_id}_{method}_init_{initializer}_steps1000")
     return config
 
 

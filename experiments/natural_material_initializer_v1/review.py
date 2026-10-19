@@ -27,6 +27,12 @@ def review_bundle(output, rows, references):
     source_id = references[METHODS[0]]["source_id"]
     if source_id not in SOURCES:
         raise ValueError("unexpected Material source identity")
+    initializer = references[METHODS[0]].get("initializer", "material")
+    if (initializer not in ("material", "wood")
+            or initializer == "wood" and source_id != "wood_spoon"
+            or any(reference.get("initializer", "material") != initializer
+                   for reference in references.values())):
+        raise ValueError("Material initializer must match both methods and source")
     concept = source_id + "_material"
     literal = json.loads(TRANSFER_PROMPTS.read_text(encoding="utf8"))["literal_material"][source_id]
     for method, reference in references.items():
@@ -57,15 +63,15 @@ def review_bundle(output, rows, references):
     font, sheets, groups, links = _font(), [], [], []
     for method, seed in itertools.product(METHODS, (42, 43)):
         reference = references[method]
-        metadata = [f"{method} / {source_id} Material initializer transfer / step {reference['step']} / seed {seed}",
-            f"Columns: native SD1.5 / literal {literal} / learned <M*> initialized with metal / learned <M*> initialized with material.",
+        metadata = [f"{method} / {source_id} Material initializer transfer: metal vs {initializer} / step {reference['step']} / seed {seed}",
+            f"Columns: native SD1.5 / literal {literal} / learned <M*> initialized with metal / learned <M*> initialized with {initializer}.",
             "Both learned columns use the SAME eight ACTUAL RGB TRAINING IMAGES below. Source photo is not a training render.",
             "Native and literal columns: no concept-specific training. No Texture prompt or Texture adapter.",
             f"Fixed R={reference['source']['roughness']:.6f}, M={reference['source']['metallic']:.6f}; uniform albedo, no texture.",
             f"Old metal-init run: {reference['baseline_run']}",
             f"Old metal-init checkpoint: {reference['baseline_checkpoint']}",
-            f"New material-init run: {reference['run']}",
-            f"New material-init checkpoint: {reference['checkpoint']}",
+            f"New {initializer}-init run: {reference['run']}",
+            f"New {initializer}-init checkpoint: {reference['checkpoint']}",
             f"Actual training dataset manifest: {reference['dataset_manifest']}",
             "PNDM / 100 sampling steps / CFG 3.5 / 512 px / fp16 / safety checker enabled"]
         metadata = [line for value in metadata for line in textwrap.wrap(value, 185)]
@@ -88,7 +94,7 @@ def review_bundle(output, rows, references):
                 image.thumbnail((128, 128))
                 sheet.paste(image, (x, header))
             draw.text((x, header + 130), f"Train {index + 1:02d}", font=font, fill="black")
-        for column, label in enumerate(("Native SD1.5", f"Literal {literal}", "Learned: metal init", "Learned: material init")):
+        for column, label in enumerate(("Native SD1.5", f"Literal {literal}", "Learned: metal init", f"Learned: {initializer} init")):
             draw.text((10 + column * 384, grid_top - 24), label, font=font, fill="black")
         for line, context in enumerate(CONTEXTS):
             for column, condition in enumerate(CONDITIONS):
@@ -105,7 +111,7 @@ def review_bundle(output, rows, references):
         sheet.save(output / path, quality=90)
         sheets.append(path)
     for method, reference in references.items():
-        groups.append({**reference, "conditions": {condition: ("images" if condition.startswith("learned_") else None)
+        groups.append({**reference, "initializer": initializer, "conditions": {condition: ("images" if condition.startswith("learned_") else None)
                                                   for condition in CONDITIONS}})
         links.append(f"<h2>{html.escape(method)}: shared training RGB for both learned columns</h2>")
         for number, item in enumerate(reference["images"], 1):
@@ -116,8 +122,8 @@ def review_bundle(output, rows, references):
                          f'{html.escape(item["image"])}<br>{item["image_sha256"]}</figcaption></figure>')
     write_json(output / "training_references.json", {"groups": groups})
     (output / "index.html").write_text('<!doctype html><meta charset="utf-8">'
-        f'<title>{html.escape(source_id)} Material initializer transfer</title>'
-        f'<p>Columns: native SD1.5, literal {html.escape(literal)}, metal initialization, material initialization. '
+        f'<title>{html.escape(source_id)} Material initializer transfer: metal vs {initializer}</title>'
+        f'<p>Columns: native SD1.5, literal {html.escape(literal)}, metal initialization, {initializer} initialization. '
         'Both learned columns share the eight actual training RGB images shown. Source photo is separate. '
         'Native and literal have no concept-specific training. No Texture prompt or adapter. '
         'No automatic disentanglement score or accuracy claim.</p>'

@@ -15,12 +15,13 @@ def write(path, value):
     path.write_text(json.dumps(value), encoding="utf8")
 
 
-@pytest.fixture(params=["wood_spoon", "mailbox", "metal_spoon"])
+@pytest.fixture(params=[("wood_spoon", "material"), ("mailbox", "material"),
+                        ("metal_spoon", "material"), ("wood_spoon", "wood")])
 def experiment(tmp_path, monkeypatch, request):
     if os.name == "nt":
         pytest.skip("The actual Linux <M*>.bin checkpoint filename is invalid on Windows")
     torch = pytest.importorskip("torch")
-    source_id = request.param
+    source_id, initializer = request.param
     torch.set_num_threads(2)
     root = tmp_path / "new_experiment"
     root.mkdir()
@@ -38,6 +39,8 @@ def experiment(tmp_path, monkeypatch, request):
         "baseline_rows": {"500": baseline}, "source_transfer": str(tmp_path / "old_transfer")}
     if source_id != "wood_spoon":
         plan["source_id"] = source_id
+    if initializer != "material":
+        plan["initializer"] = {"word": initializer, "token_ids": [1704]}
     write(root / "plan.json", plan)
     write(root / "source_locks.json", {str(old_image): old_hash})
     write(root / "status.json", {"status": "generating", "git": git})
@@ -131,7 +134,10 @@ def test_paired_cpu_exports_accept_fullrank_empty_self_attention_and_reuse_contr
     assert len(summary["contact_sheets"]) == 4
     assert calls == {"paired": ["fullrank", "lora_r64"], "loads": ["fullrank", "lora_r64"],
                      "generation": ["fullrank", "lora_r64"]}
-    assert json.loads((root / "step500/provenance.json").read_text())["status"] == "succeeded"
+    provenance = json.loads((root / "step500/provenance.json").read_text())
+    assert provenance["status"] == "succeeded"
+    plan = json.loads((root / "plan.json").read_text())
+    assert provenance["initializer"] == plan.get("initializer", {"word": "material"})["word"]
     locks = json.loads((root / "source_locks.json").read_text())
     assert all(transfer.probe.schema.sha256(path) == digest for path, digest in locks.items())
     records = [json.loads(line) for line in (root / "step500/generation_status.jsonl").read_text().splitlines()]

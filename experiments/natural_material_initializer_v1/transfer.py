@@ -8,7 +8,7 @@ import shutil
 
 from experiments.natural_material_initializer_v1.review import review_bundle
 from experiments.natural_material_initializer_v1.run import verify_locks
-from experiments.natural_material_initializer_v1.source import SOURCE_IDS
+from experiments.natural_material_initializer_v1.source import SOURCE_IDS, validate_initializer
 from experiments.natural_texture_material_v1 import probe
 from experiments.texture_material_disentangled_v1 import step_snapshots
 from scripts.launch.colorpeel_run import git_info
@@ -45,6 +45,8 @@ def run(root, step, device="cuda:0"):
         raise FileExistsError(output)
     plan = json.loads((root / "plan.json").read_text())
     source_id = plan.get("source_id", "wood_spoon")
+    initializer = plan.get("initializer", {}).get("word", "material")
+    validate_initializer(source_id, initializer)
     if source_id not in SOURCE_IDS:
         raise ValueError("Unknown Material source")
     git = git_info()
@@ -55,6 +57,8 @@ def run(root, step, device="cuda:0"):
     index = json.loads(index_path.read_text())
     if index["git"] != git or index["step"] != step or {x["method"] for x in index["runs"]} != {"fullrank", "lora_r64"}:
         raise ValueError("Selected step export index differs")
+    if any(ref.get("initializer", "material") != initializer for ref in index["references"].values()):
+        raise ValueError("Contact sheet initializer differs from training")
     import torch
     parents = {item["method"]: item for item in json.loads(
         (root / "training/training_index.json").read_text())["runs"]}
@@ -90,7 +94,7 @@ def run(root, step, device="cuda:0"):
     output.mkdir()
     (output / "images").mkdir()
     (output / "generation_manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf8")
-    provenance = {"status": "running", "git": git, "source_id": source_id, "training_steps": step, "initializer": "material",
+    provenance = {"status": "running", "git": git, "source_id": source_id, "training_steps": step, "initializer": initializer,
         "training": index["runs"], "source_locks": locks, "sampling": plan["protocol"]["inference"],
         "baseline_transfer": plan["source_transfer"], "new_images": 16, "reused_controls": 48}
     probe.write(output / "provenance.json", provenance)

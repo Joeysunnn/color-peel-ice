@@ -33,6 +33,42 @@ def test_initializer_is_the_only_training_argument_changed_and_original_is_untou
     assert new["texture_material"] == old["texture_material"]
 
 
+@pytest.mark.parametrize("method", ["fullrank", "lora_r64"])
+def test_wood_initializer_changes_only_initializer_and_preserves_source(method):
+    old = baseline(method)
+    before = copy.deepcopy(old)
+    new = source.build_config(old, method, "wood_spoon", "wood")
+    assert old == before
+    assert {key for key in old["args"] if old["args"][key] != new["args"][key]} == {"initializer_token"}
+    assert new["args"]["initializer_token"] == "wood"
+    assert new["run"]["variant"] == f"wood_spoon_material_{method}_init_wood_steps1000"
+    assert new["run"]["seed"] == old["run"]["seed"] == 42
+    assert new["data_manifest"] == old["data_manifest"]
+    assert new["texture_material"] == old["texture_material"]
+
+
+@pytest.mark.parametrize("source_id,initializer", [("mailbox", "wood"), ("metal_spoon", "wood"),
+    ("wood_spoon", "metal"), ("wood_spoon", "unknown"), ("wood_spoon", "")])
+def test_invalid_initializer_is_rejected_without_mutating_baseline(source_id, initializer):
+    old = baseline("fullrank", source_id)
+    before = copy.deepcopy(old)
+    with pytest.raises(ValueError, match="initializer"):
+        source.validate_initializer(source_id, initializer)
+    with pytest.raises(ValueError, match="initializer"):
+        source.build_config(old, "fullrank", source_id, initializer)
+    assert old == before
+
+
+@pytest.mark.parametrize("method", ["fullrank", "lora_r64"])
+def test_wood_initializer_rejects_mixed_source_and_nonmetal_baseline(method):
+    with pytest.raises(ValueError):
+        source.build_config(baseline(method, "mailbox"), method, "wood_spoon", "wood")
+    old = baseline(method)
+    old["args"]["initializer_token"] = "wood"
+    with pytest.raises(ValueError):
+        source.build_config(old, method, "wood_spoon", "wood")
+
+
 @pytest.mark.parametrize("key,value", [("initializer_token", "wood"), ("modifier_token", "<T*>"),
     ("max_train_steps", 750), ("checkpoint_steps", [500, 1000]), ("token_local_kv", False)])
 def test_reject_changed_original_fullrank_recipe(key, value):

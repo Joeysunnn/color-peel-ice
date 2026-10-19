@@ -1,7 +1,7 @@
 # Natural Material initializer ablation
 
 Retrain the selected source's two natural Material recipes with
-`initializer_token=material` instead of `metal`. All other training arguments,
+the selected initializer (`material` by default) instead of `metal`. All other training arguments,
 the eight RGB images/masks/captions,and extracted R/M are identical to the
 completed natural training. Each source retains its own data and raw R/M.
 Run metadata changes to isolate this experiment.
@@ -20,6 +20,26 @@ $PY -B -m experiments.natural_material_initializer_v1.run \
 ```
 
 `--source-id` accepts `wood_spoon` (default), `mailbox`, or `metal_spoon`.
+`--initializer` defaults to `material`; `wood` is allowed only for `wood_spoon`.
+For the wood-initialized Material ablation, retain the same environment and
+source paths,select a fresh output under the same experiment parent,and run:
+
+```bash
+$PY -B -m experiments.natural_material_initializer_v1.run \
+  --source-training "$BASE/20261018-190309__natural_tm_training__9077221__42" \
+  --source-transfer "$BASE/20261018-213417__ordinary_transfer__9d70d7a__42" \
+  --output "$NEW_EXTERNAL_RUN" --source-id wood_spoon --initializer wood --gpus 2
+```
+
+One GPU serializes both training jobs and all three transfer steps.
+Three distinct GPUs retain the original two training workers and three
+transfer workers. This changes scheduling only;training and sampling args
+remain fixed. The current tokenizer must encode the initializer as one token.
+The two learned contact-sheet columns are labelled with their actual old and
+new initializer words. Existing `learned_material_init` image IDs denote the
+new Material-branch arm;the actual word is recorded in the plan,provenance
+and training references,including `wood` for this experiment.
+
 For the two remaining sources, use the same source paths/environment with:
 
 ```bash
@@ -41,20 +61,20 @@ The two-source batch totals four1000-step runs,twelve paired exports,
 
 Use a new output directory. The runner audits the original training/exported
 tensors,dataset,and baseline transfer provenance before writing an exact
-training-argument comparison. It verifies that `material` is one CLIP token,
+training-argument comparison. It verifies that the selected initializer is one CLIP token,
 performs two launcher dry runs,then trains from the frozen SD1.5 base on the
-first two GPUs. There is no checkpoint resume. The rank64 trainer allowlist
-additionally accepts `<M*>` with `material` only in token-local mode.
+selected GPU(s). There is no checkpoint resume. The rank64 trainer allowlist
+accepts `<M*>` with `material` or `wood` only in token-local mode.
 
 Successful training automatically exports six paired500/750/1000 snapshots
-under `exports/`,then starts three transfer workers on the selected GPUs.
+under `exports/`,then runs three transfer steps on the selected GPU(s).
 The same chair/mug/vase/sofa prompts,seeds42/43,PNDM100,CFG3.5,512px,fp16
 and safety checker are reused. Each step generates16 new-token images and
 copies48 hash-verified old native/literal/metal-initialized controls into its
 own `step500/`, `step750/` or `step1000/` directory. Old images are never edited.
 
 Each step produces64 image files and four contact sheets. Four columns show
-native SD1.5,literal material,old `metal` initialization,and new `material`
+native SD1.5,literal material,old `metal` initialization,and the selected new
 initialization. Both learned columns share the same eight actual training
 images displayed above the grid;run/checkpoint provenance is labelled.
 Literal controls retain the frozen mapping:mailbox=`painted metal`,

@@ -7,7 +7,7 @@ import unittest
 
 
 class MaterialInitializerGateTests(unittest.TestCase):
-    def test_allowlist_only_adds_material_for_token_local_material(self):
+    def test_allowlist_adds_material_and_wood_for_token_local_material(self):
         root = Path(__file__).resolve().parents[3]
         tree = ast.parse((root / "src/train/train_colorpeel.py").read_text())
         assignment = next(node for node in ast.walk(tree) if isinstance(node, ast.Assign)
@@ -19,7 +19,7 @@ class MaterialInitializerGateTests(unittest.TestCase):
                 for mode in ("token_local_kv", "full_kv", None):
                     expected = ((token, initializer) == ("<S*>", "mailbox")
                                 or (mode == "token_local_kv" and (
-                                    token == "<M*>" and initializer in ("metal", "material")
+                                    token == "<M*>" and initializer in ("metal", "material", "wood")
                                     or (token, initializer) == ("<T*>", "texture"))))
                     with self.subTest(token=token, initializer=initializer, mode=mode):
                         actual = eval(expression, {"lora_token": token,

@@ -19,9 +19,10 @@ def baseline(method, protocol, source_id="wood_spoon"):
     return build_config(recipe, Path("staging"), protocol)
 
 
-@pytest.fixture(params=["wood_spoon", "mailbox", "metal_spoon"])
+@pytest.fixture(params=[("wood_spoon", "material"), ("mailbox", "material"),
+                        ("metal_spoon", "material"), ("wood_spoon", "wood")])
 def harness(tmp_path, monkeypatch, request):
-    source_id = request.param
+    source_id, initializer = request.param
     monkeypatch.setenv("COLORPEEL_OUTPUT_ROOT", str(tmp_path))
     protocol = json.loads(source.schema.PARENT.read_text())
     configs = {method: baseline(method, protocol, source_id) for method in ("fullrank", "lora_r64")}
@@ -40,14 +41,16 @@ def harness(tmp_path, monkeypatch, request):
         "baseline_rows": {}, "source_locks": {str(marker): old_digest}}
     if source_id != "wood_spoon":
         plan["source_id"] = source_id
-    events, exports, children = [], [], []
+    events, exports, children, queues = [], [], [], []
+    settings = {"gpus": [1, 2, 3]}
     mode = {"failure": None}
     output = tmp_path / "new_experiment"
     git = {"commit": "a" * 40, "branch": "codex/wood-init", "dirty": False}
     monkeypatch.setattr(experiment, "prepare", lambda *_: copy.deepcopy(plan))
     monkeypatch.setattr(experiment, "git_info", lambda: git)
     monkeypatch.setattr(experiment.shared, "verify_model", lambda: {"root": str(tmp_path / "model")})
-    tokenizer = SimpleNamespace(encode=lambda text, **kwargs: [7118] if text == "material" else [])
+    tokenizer = SimpleNamespace(encode=lambda text, **kwargs:
+        {"material": [7118], "wood": [1704]}.get(text, []))
     monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(
         AutoTokenizer=SimpleNamespace(from_pretrained=lambda *args, **kwargs: tokenizer)))
     monkeypatch.setattr(experiment.shutil, "disk_usage", lambda _: SimpleNamespace(free=20 * (1 << 30)))
@@ -64,19 +67,22 @@ def harness(tmp_path, monkeypatch, request):
 
     def queue(gpu, jobs, batch):
         assert len([event for event in events if event[0] == "preflight"]) == 2
-        assert len(jobs) == 1
-        job = jobs[0]
-        method = job["recipe"]["method"]
-        assert job["recipe"]["concept_id"] == f"{source_id}_material"
-        assert job["recipe"]["source_id"] == source_id
-        assert job["recipe"]["branch"] == "material"
-        assert {key for key in configs[method]["args"]
-                if configs[method]["args"][key] != job["config"]["args"][key]} == {"initializer_token"}
-        assert job["config"]["args"]["initializer_token"] == "material"
-        events.append(("training", method))
-        return [{"status": "verified", "audit": {"method": method, "steps": 1000,
-            "concept_id": f"{source_id}_material", "source_id": source_id, "branch": "material",
-            "run": job["run"], "checkpoint": str(Path(job["run"]) / "checkpoints")}}]
+        assert len(jobs) == (2 if len(settings["gpus"]) == 1 else 1)
+        queues.append((gpu, [job["recipe"]["method"] for job in jobs]))
+        results = []
+        for job in jobs:
+            method = job["recipe"]["method"]
+            assert job["recipe"]["concept_id"] == f"{source_id}_material"
+            assert job["recipe"]["source_id"] == source_id
+            assert job["recipe"]["branch"] == "material"
+            assert {key for key in configs[method]["args"]
+                    if configs[method]["args"][key] != job["config"]["args"][key]} == {"initializer_token"}
+            assert job["config"]["args"]["initializer_token"] == initializer
+            events.append(("training", method))
+            results.append({"status": "verified", "audit": {"method": method, "steps": 1000,
+                "concept_id": f"{source_id}_material", "source_id": source_id, "branch": "material",
+                "run": job["run"], "checkpoint": str(Path(job["run"]) / "checkpoints")}})
+        return results
 
     def export(item, step, destination):
         assert len([event for event in events if event[0] == "training"]) == 2
@@ -88,6 +94,8 @@ def harness(tmp_path, monkeypatch, request):
     class Child:
         def __init__(self, command, **kwargs):
             assert len(exports) == 6
+            if len(settings["gpus"]) == 1:
+                assert len([event for event in events if event[0] == "wait"]) == len(children)
             self.step = int(command[command.index("--step") + 1])
             self.pid = 1000 + self.step
             self.gpu = kwargs["env"]["CUDA_VISIBLE_DEVICES"]
@@ -107,7 +115,10 @@ def harness(tmp_path, monkeypatch, request):
                 "training_steps": self.step, "contact_sheets": sheets})
 
         def wait(self):
-            assert len(children) == 3, "all GPU workers must start before waiting"
+            if len(settings["gpus"]) == 3:
+                assert len(children) == 3, "all GPU workers must start before waiting"
+            else:
+                assert len(children) == 1 + len([event for event in events if event[0] == "wait"])
             events.append(("wait", self.step))
             return int(mode["failure"] == "child" and self.step == 750)
 
@@ -116,13 +127,15 @@ def harness(tmp_path, monkeypatch, request):
     monkeypatch.setattr(experiment.shared, "run_queue", queue)
     monkeypatch.setattr(experiment, "export_step", export)
     return SimpleNamespace(output=output, source=source_root, transfer=old_transfer, plan=plan,
-        source_id=source_id, events=events, exports=exports, children=children, mode=mode,
-        marker=marker, digest=old_digest)
+        source_id=source_id, initializer=initializer, events=events, exports=exports, children=children, mode=mode,
+        marker=marker, digest=old_digest, queues=queues, settings=settings)
 
 
 def run_experiment(harness):
     arguments = {} if harness.source_id == "wood_spoon" else {"source_id": harness.source_id}
-    return experiment.run(harness.source, harness.transfer, harness.output, [1, 2, 3], **arguments)
+    if harness.initializer != "material":
+        arguments["initializer"] = harness.initializer
+    return experiment.run(harness.source, harness.transfer, harness.output, harness.settings["gpus"], **arguments)
 
 
 def test_two_preflights_two_initializer_only_runs_six_exports_then_parallel_transfer(harness):
@@ -140,18 +153,49 @@ def test_two_preflights_two_initializer_only_runs_six_exports_then_parallel_tran
     assert list(harness.source.iterdir()) == [harness.marker]
     comparison = json.loads((harness.output / "train_outputs/CONFIG_COMPARISON.json").read_text())
     assert set(comparison) == {"fullrank", "lora_r64"}
-    assert all(value == {"initializer_token": {"old": "metal", "new": "material"}}
+    assert all(value == {"initializer_token": {"old": "metal", "new": harness.initializer}}
                for value in comparison.values())
     saved_plan = json.loads((harness.output / "plan.json").read_text())
+    assert saved_plan["initializer"] == {"word": harness.initializer,
+        "token_ids": [7118] if harness.initializer == "material" else [1704]}
     assert saved_plan.get("source_id", "wood_spoon") == harness.source_id
     assert {row["concept_id"] for row in saved_plan["recipes"]} == {f"{harness.source_id}_material"}
     for step in experiment.STEPS:
         index = json.loads((harness.output / f"exports/step{step}/index.json").read_text())
         assert len(index["runs"]) == 2
         for method, reference in index["references"].items():
+            assert reference["initializer"] == harness.initializer
             assert reference["baseline_run"] == before["references"][str(step)][method]["run"]
             assert reference["baseline_checkpoint"] == before["references"][str(step)][method]["checkpoint"]
             assert reference["images"] == before["references"][str(step)][method]["images"]
+
+
+def test_single_gpu_serializes_both_training_jobs_and_all_transfer_steps(harness):
+    harness.settings["gpus"] = [2]
+    result = run_experiment(harness)
+    assert result["status"] == "execution_verified"
+    assert result["completed_training_runs"] == 2 and result["completed_steps"] == 2000
+    assert result["new_images"] == 48 and result["reused_images"] == 144
+    assert len(harness.queues) == 1
+    assert harness.queues[0][0] == 2
+    assert set(harness.queues[0][1]) == {"fullrank", "lora_r64"}
+    assert [(child.step, child.gpu) for child in harness.children] == [(500, "2"), (750, "2"), (1000, "2")]
+    assert [event[0] for event in harness.events if event[0] in ("launch", "wait")] == [
+        "launch", "wait", "launch", "wait", "launch", "wait"]
+    assert source.schema.sha256(harness.marker) == harness.digest
+
+
+@pytest.mark.parametrize("failure", ["child", "missing_sheet"])
+def test_single_gpu_failed_transfer_does_not_start_later_steps(harness, failure):
+    harness.settings["gpus"] = [2]
+    harness.mode["failure"] = failure
+    with pytest.raises(RuntimeError):
+        run_experiment(harness)
+    assert [(child.step, child.gpu) for child in harness.children] == [(500, "2"), (750, "2")]
+    state = json.loads((harness.output / "status.json").read_text())
+    assert state["status"] == "failed"
+    assert [record["status"] for record in state["transfer"]] == ["succeeded", "failed"]
+    assert source.schema.sha256(harness.marker) == harness.digest
 
 
 @pytest.mark.parametrize("failure", ["preflight", "child", "missing_sheet"])
