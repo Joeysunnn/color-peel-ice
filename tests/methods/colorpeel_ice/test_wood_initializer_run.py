@@ -13,17 +13,18 @@ from experiments.natural_material_initializer_v1 import source, transfer
 from experiments.natural_texture_material_v1.training_config import build_config, recipes
 
 
-def baseline(method, protocol):
-    recipe = next(row for row in recipes() if row["concept_id"] == "wood_spoon_material"
+def baseline(method, protocol, source_id="wood_spoon"):
+    recipe = next(row for row in recipes() if row["concept_id"] == f"{source_id}_material"
                   and row["method"] == method)
     return build_config(recipe, Path("staging"), protocol)
 
 
-@pytest.fixture
-def harness(tmp_path, monkeypatch):
+@pytest.fixture(params=["wood_spoon", "mailbox", "metal_spoon"])
+def harness(tmp_path, monkeypatch, request):
+    source_id = request.param
     monkeypatch.setenv("COLORPEEL_OUTPUT_ROOT", str(tmp_path))
     protocol = json.loads(source.schema.PARENT.read_text())
-    configs = {method: baseline(method, protocol) for method in ("fullrank", "lora_r64")}
+    configs = {method: baseline(method, protocol, source_id) for method in ("fullrank", "lora_r64")}
     source_root, old_transfer = tmp_path / "old_training", tmp_path / "old_transfer"
     source_root.mkdir()
     old_transfer.mkdir()
@@ -31,12 +32,14 @@ def harness(tmp_path, monkeypatch):
     marker.write_bytes(b"immutable original training checkpoint")
     old_digest = source.schema.sha256(marker)
     plan = {"protocol": protocol, "configs": configs,
-        "recipes": [row for row in recipes() if row["concept_id"] == "wood_spoon_material"],
+        "recipes": [row for row in recipes() if row["concept_id"] == f"{source_id}_material"],
         "references": {str(step): {method: {"run": str(source_root / method),
             "checkpoint": str(source_root / method / f"step{step}"),
             "images": [{"id": f"rgb_{index}"} for index in range(8)]}
             for method in configs} for step in experiment.STEPS},
         "baseline_rows": {}, "source_locks": {str(marker): old_digest}}
+    if source_id != "wood_spoon":
+        plan["source_id"] = source_id
     events, exports, children = [], [], []
     mode = {"failure": None}
     output = tmp_path / "new_experiment"
@@ -64,11 +67,15 @@ def harness(tmp_path, monkeypatch):
         assert len(jobs) == 1
         job = jobs[0]
         method = job["recipe"]["method"]
+        assert job["recipe"]["concept_id"] == f"{source_id}_material"
+        assert job["recipe"]["source_id"] == source_id
+        assert job["recipe"]["branch"] == "material"
         assert {key for key in configs[method]["args"]
                 if configs[method]["args"][key] != job["config"]["args"][key]} == {"initializer_token"}
         assert job["config"]["args"]["initializer_token"] == "material"
         events.append(("training", method))
         return [{"status": "verified", "audit": {"method": method, "steps": 1000,
+            "concept_id": f"{source_id}_material", "source_id": source_id, "branch": "material",
             "run": job["run"], "checkpoint": str(Path(job["run"]) / "checkpoints")}}]
 
     def export(item, step, destination):
@@ -109,12 +116,18 @@ def harness(tmp_path, monkeypatch):
     monkeypatch.setattr(experiment.shared, "run_queue", queue)
     monkeypatch.setattr(experiment, "export_step", export)
     return SimpleNamespace(output=output, source=source_root, transfer=old_transfer, plan=plan,
-        events=events, exports=exports, children=children, mode=mode, marker=marker, digest=old_digest)
+        source_id=source_id, events=events, exports=exports, children=children, mode=mode,
+        marker=marker, digest=old_digest)
+
+
+def run_experiment(harness):
+    arguments = {} if harness.source_id == "wood_spoon" else {"source_id": harness.source_id}
+    return experiment.run(harness.source, harness.transfer, harness.output, [1, 2, 3], **arguments)
 
 
 def test_two_preflights_two_initializer_only_runs_six_exports_then_parallel_transfer(harness):
     before = copy.deepcopy(harness.plan)
-    result = experiment.run(harness.source, harness.transfer, harness.output, [1, 2, 3])
+    result = run_experiment(harness)
     assert result["status"] == "execution_verified"
     assert result["completed_training_runs"] == 2
     assert result["completed_steps"] == 2000
@@ -129,6 +142,9 @@ def test_two_preflights_two_initializer_only_runs_six_exports_then_parallel_tran
     assert set(comparison) == {"fullrank", "lora_r64"}
     assert all(value == {"initializer_token": {"old": "metal", "new": "material"}}
                for value in comparison.values())
+    saved_plan = json.loads((harness.output / "plan.json").read_text())
+    assert saved_plan.get("source_id", "wood_spoon") == harness.source_id
+    assert {row["concept_id"] for row in saved_plan["recipes"]} == {f"{harness.source_id}_material"}
     for step in experiment.STEPS:
         index = json.loads((harness.output / f"exports/step{step}/index.json").read_text())
         assert len(index["runs"]) == 2
@@ -142,7 +158,7 @@ def test_two_preflights_two_initializer_only_runs_six_exports_then_parallel_tran
 def test_incomplete_preflight_or_transfer_cannot_claim_completion(harness, failure):
     harness.mode["failure"] = failure
     with pytest.raises(RuntimeError):
-        experiment.run(harness.source, harness.transfer, harness.output, [1, 2, 3])
+        run_experiment(harness)
     state = json.loads((harness.output / "status.json").read_text())
     assert state["status"] == "failed"
     assert state["stop_reason"] == "execution_error"
@@ -156,19 +172,24 @@ def test_incomplete_preflight_or_transfer_cannot_claim_completion(harness, failu
         assert [record["status"] for record in state["transfer"]] == ["succeeded", "failed", "succeeded"]
 
 
-def test_comparison_rows_reuse_exact_controls_and_add_only_sixteen_material_token_prompts():
+@pytest.mark.parametrize("source_id", ["wood_spoon", "mailbox", "metal_spoon"])
+def test_comparison_rows_reuse_exact_controls_and_add_only_sixteen_material_token_prompts(source_id):
     protocol = json.loads(source.schema.PARENT.read_text())
     for step in experiment.STEPS:
         old = []
         for row in transfer.probe.build_rows(protocol, step, transfer=True):
-            if row["concept_id"] == "wood_spoon_material":
+            if row["concept_id"] == f"{source_id}_material":
                 old.append({**row, "source_image": "/original/" + row["image_path"], "status": "ok",
                     "texture_adapter_loaded": False,
                     "material_adapter_loaded": row["condition"] == "learned_material",
                     "image_sha256": "b" * 64})
         before = copy.deepcopy(old)
-        rows = transfer.comparison_rows(protocol, old, step)
+        arguments = {} if source_id == "wood_spoon" else {"source_id": source_id}
+        rows = transfer.comparison_rows(protocol, old, step, **arguments)
         assert len(rows) == len({row["id"] for row in rows}) == 64
+        assert {row["concept_id"] for row in rows} == {f"{source_id}_material"}
+        assert {row["source_id"] for row in rows} == {source_id}
+        assert sum(row["reused"] for row in rows) == 48
         for condition in ("base", "literal", "learned_metal_init", "learned_material_init"):
             selected = [row for row in rows if row["condition"] == condition]
             assert len(selected) == 16

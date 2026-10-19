@@ -1,4 +1,5 @@
 import itertools
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,7 +11,9 @@ from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 
 
 class WoodInitializerReviewTests(unittest.TestCase):
-    def fixture(self, root):
+    def fixture(self, root, source_id="wood_spoon"):
+        concept = source_id + "_material"
+        literal = json.loads(review.TRANSFER_PROMPTS.read_text(encoding="utf8"))["literal_material"][source_id]
         (root / "images").mkdir()
         source = root / "source.png"
         Image.new("RGB", (128, 128), (200, 30, 50)).save(source)
@@ -22,8 +25,8 @@ class WoodInitializerReviewTests(unittest.TestCase):
             Image.new("RGB", (128, 128), color).save(path)
             images.append({"id": f"training_{index}", "image": str(path), "image_sha256": sha256(path),
                            "prompt": f"actual RGB training caption {index}"})
-        references = {method: {"method": method, "branch": "material", "source_id": "wood_spoon",
-            "concept_id": review.CONCEPT, "step": 750, "run": str(root / "material_init_run" / method),
+        references = {method: {"method": method, "branch": "material", "source_id": source_id,
+            "concept_id": concept, "step": 750, "run": str(root / "material_init_run" / method),
             "checkpoint": str(root / "material_init_step750" / method),
             "baseline_run": str(root / "metal_init_run" / method),
             "baseline_checkpoint": str(root / "metal_init_step750" / method),
@@ -36,9 +39,10 @@ class WoodInitializerReviewTests(unittest.TestCase):
             identity = f"{method}_{context}_{seed}_{condition}"
             path = f"images/{identity}.png"
             Image.new("RGB", (16, 16), (10, 20, 30)).save(root / path)
-            attribute = "wood" if condition == "literal" else "<M*>"
+            attribute = literal if condition == "literal" else "<M*>"
             prompt = f"a photo of a {context}" + ("" if condition == "base" else f" made of {attribute}")
-            rows.append({"id": identity, "method": method, "concept_id": review.CONCEPT,
+            rows.append({"id": identity, "method": method, "concept_id": concept,
+                         "source_id": source_id, "branch": "material",
                          "context": context, "seed": seed, "condition": condition, "prompt": prompt,
                          "image_path": path, "image_sha256": sha256(root / path), "status": "ok"})
         return rows, references, colors
@@ -90,6 +94,41 @@ class WoodInitializerReviewTests(unittest.TestCase):
             rows, references, _ = self.fixture(root)
             rows[-1] = dict(rows[0])
             with self.assertRaisesRegex(ValueError, "64 distinct"):
+                review.review_bundle(root, rows, references)
+            self.assertFalse((root / "contact_sheets").exists())
+
+    def test_mailbox_and_metal_spoon_use_frozen_literals_and_source_paths(self):
+        for source_id, literal in (("mailbox", "painted metal"), ("metal_spoon", "polished metal")):
+            with self.subTest(source=source_id), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                rows, references, _ = self.fixture(root, source_id)
+                sheets = review.review_bundle(root, rows, references)
+                self.assertEqual(len(sheets), 4)
+                self.assertTrue(all(f"__{source_id}_material__" in path for path in sheets))
+                index = (root / "index.html").read_text(encoding="utf8")
+                self.assertIn(f"{source_id} Material initializer transfer", index)
+                self.assertIn(f"literal {literal}", index)
+                self.assertNotIn("literal wood", index)
+                groups = read_json(root / "training_references.json")["groups"]
+                self.assertEqual({group["source_id"] for group in groups}, {source_id})
+                self.assertEqual({group["concept_id"] for group in groups}, {source_id + "_material"})
+
+    def test_mixed_reference_sources_are_rejected_before_publishing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows, references, _ = self.fixture(root, "mailbox")
+            references["lora_r64"]["source_id"] = "metal_spoon"
+            references["lora_r64"]["concept_id"] = "metal_spoon_material"
+            with self.assertRaisesRegex(ValueError, "reference identity"):
+                review.review_bundle(root, rows, references)
+            self.assertFalse((root / "contact_sheets").exists())
+
+    def test_mixed_row_sources_are_rejected_before_publishing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows, references, _ = self.fixture(root, "mailbox")
+            rows[0]["source_id"] = "metal_spoon"
+            with self.assertRaisesRegex(ValueError, "64 distinct single-source"):
                 review.review_bundle(root, rows, references)
             self.assertFalse((root / "contact_sheets").exists())
 

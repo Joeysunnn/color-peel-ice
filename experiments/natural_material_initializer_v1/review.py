@@ -1,7 +1,8 @@
-"""Wood Material initializer comparison with all actual RGB training references."""
+"""Natural Material initializer comparison with all actual RGB training references."""
 
 import html
 import itertools
+import json
 import os
 from pathlib import Path
 import textwrap
@@ -9,23 +10,29 @@ import textwrap
 from PIL import Image, ImageDraw
 
 from experiments.natural_texture_material_v1.probe_review import _font
+from experiments.natural_texture_material_v1.dataset_protocol import SOURCES
 from experiments.sd15_token_local_kv_v1.contract import sha256
 from experiments.sd_native_comparison_v1.generate import write_json
 
 METHODS = ("fullrank", "lora_r64")
 CONTEXTS = ("chair", "mug", "vase", "sofa")
 CONDITIONS = ("base", "literal", "learned_metal_init", "learned_material_init")
-CONCEPT = "wood_spoon_material"
+TRANSFER_PROMPTS = Path(__file__).resolve().parents[1] / "natural_texture_material_v1/transfer_protocol.json"
 
 
 def review_bundle(output, rows, references):
     output = Path(output)
     if set(references) != set(METHODS):
-        raise ValueError("expected both Wood Material training references")
+        raise ValueError("expected both Material training references")
+    source_id = references[METHODS[0]]["source_id"]
+    if source_id not in SOURCES:
+        raise ValueError("unexpected Material source identity")
+    concept = source_id + "_material"
+    literal = json.loads(TRANSFER_PROMPTS.read_text(encoding="utf8"))["literal_material"][source_id]
     for method, reference in references.items():
         images = reference["images"]
-        if (reference["method"] != method or reference["concept_id"] != CONCEPT
-                or reference["branch"] != "material" or reference["source_id"] != "wood_spoon"
+        if (reference["method"] != method or reference["concept_id"] != concept
+                or reference["branch"] != "material" or reference["source_id"] != source_id
                 or len(images) != 8 or len({item["id"] for item in images}) != 8
                 or len({item["image"] for item in images}) != 8):
             raise ValueError("actual training reference identity or image count differs")
@@ -41,15 +48,17 @@ def review_bundle(output, rows, references):
         raise ValueError("both methods must reference the same eight training RGB images")
     by_key = {(row["method"], row["concept_id"], row["context"], row["seed"], row["condition"]): row
               for row in rows}
-    expected = set(itertools.product(METHODS, (CONCEPT,), CONTEXTS, (42, 43), CONDITIONS))
-    if len(rows) != 64 or set(by_key) != expected:
-        raise ValueError("expected 64 distinct Wood Material initializer transfer rows")
+    expected = set(itertools.product(METHODS, (concept,), CONTEXTS, (42, 43), CONDITIONS))
+    if (len(rows) != 64 or set(by_key) != expected
+            or any(row.get("source_id", source_id) != source_id
+                   or row.get("branch", "material") != "material" for row in rows)):
+        raise ValueError("expected 64 distinct single-source Material initializer transfer rows")
     (output / "contact_sheets").mkdir()
     font, sheets, groups, links = _font(), [], [], []
     for method, seed in itertools.product(METHODS, (42, 43)):
         reference = references[method]
-        metadata = [f"{method} / Wood Material initializer transfer / step {reference['step']} / seed {seed}",
-            "Columns: native SD1.5 / literal wood / learned <M*> initialized with metal / learned <M*> initialized with material.",
+        metadata = [f"{method} / {source_id} Material initializer transfer / step {reference['step']} / seed {seed}",
+            f"Columns: native SD1.5 / literal {literal} / learned <M*> initialized with metal / learned <M*> initialized with material.",
             "Both learned columns use the SAME eight ACTUAL RGB TRAINING IMAGES below. Source photo is not a training render.",
             "Native and literal columns: no concept-specific training. No Texture prompt or Texture adapter.",
             f"Fixed R={reference['source']['roughness']:.6f}, M={reference['source']['metallic']:.6f}; uniform albedo, no texture.",
@@ -79,11 +88,11 @@ def review_bundle(output, rows, references):
                 image.thumbnail((128, 128))
                 sheet.paste(image, (x, header))
             draw.text((x, header + 130), f"Train {index + 1:02d}", font=font, fill="black")
-        for column, label in enumerate(("Native SD1.5", "Literal wood", "Learned: metal init", "Learned: material init")):
+        for column, label in enumerate(("Native SD1.5", f"Literal {literal}", "Learned: metal init", "Learned: material init")):
             draw.text((10 + column * 384, grid_top - 24), label, font=font, fill="black")
         for line, context in enumerate(CONTEXTS):
             for column, condition in enumerate(CONDITIONS):
-                row = by_key[method, CONCEPT, context, seed, condition]
+                row = by_key[method, concept, context, seed, condition]
                 x, top = 10 + column * 384, grid_top + line * 466
                 with Image.open(output / row["image_path"]) as image:
                     sheet.paste(image.convert("RGB").resize((360, 360)), (x, top))
@@ -92,7 +101,7 @@ def review_bundle(output, rows, references):
                     draw.text((x, top + 383 + number * 18), prompt, font=font, fill="black")
                 if row["status"] == "safety_filtered":
                     draw.text((x, top + 444), "SAFETY FILTERED", font=font, fill="red")
-        path = f"contact_sheets/{method}__{CONCEPT}__seed{seed}.jpg"
+        path = f"contact_sheets/{method}__{concept}__seed{seed}.jpg"
         sheet.save(output / path, quality=90)
         sheets.append(path)
     for method, reference in references.items():
@@ -106,8 +115,9 @@ def review_bundle(output, rows, references):
                          f'{html.escape(item.get("prompt", item.get("caption", "")))}<br>'
                          f'{html.escape(item["image"])}<br>{item["image_sha256"]}</figcaption></figure>')
     write_json(output / "training_references.json", {"groups": groups})
-    (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Wood Material initializer transfer</title>'
-        '<p>Columns: native SD1.5, literal wood, metal initialization, material initialization. '
+    (output / "index.html").write_text('<!doctype html><meta charset="utf-8">'
+        f'<title>{html.escape(source_id)} Material initializer transfer</title>'
+        f'<p>Columns: native SD1.5, literal {html.escape(literal)}, metal initialization, material initialization. '
         'Both learned columns share the eight actual training RGB images shown. Source photo is separate. '
         'Native and literal have no concept-specific training. No Texture prompt or adapter. '
         'No automatic disentanglement score or accuracy claim.</p>'

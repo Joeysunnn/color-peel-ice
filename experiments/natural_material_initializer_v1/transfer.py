@@ -8,12 +8,17 @@ import shutil
 
 from experiments.natural_material_initializer_v1.review import review_bundle
 from experiments.natural_material_initializer_v1.run import verify_locks
+from experiments.natural_material_initializer_v1.source import SOURCE_IDS
 from experiments.natural_texture_material_v1 import probe
 from experiments.texture_material_disentangled_v1 import step_snapshots
 from scripts.launch.colorpeel_run import git_info
 
 
-def comparison_rows(protocol, baseline, step):
+def comparison_rows(protocol, baseline, step, source_id="wood_spoon"):
+    if source_id not in SOURCE_IDS or any(
+            row["source_id"] != source_id or row["concept_id"] != source_id + "_material"
+            or row["branch"] != "material" for row in baseline):
+        raise ValueError("Initializer comparison must contain one selected Material source")
     rows = []
     for old in baseline:
         condition = "learned_metal_init" if old["condition"] == "learned_material" else old["condition"]
@@ -21,7 +26,7 @@ def comparison_rows(protocol, baseline, step):
         rows.append({**old, "condition": condition, "id": identity,
                      "image_path": f"images/{identity}.png", "reused": True})
     for row in probe.build_rows(protocol, step, transfer=True):
-        if row["concept_id"] != "wood_spoon_material" or row["condition"] != "learned_material":
+        if row["concept_id"] != source_id + "_material" or row["condition"] != "learned_material":
             continue
         identity = row["id"].replace("__learned_material__", "__learned_material_init__")
         rows.append({**row, "condition": "learned_material_init", "id": identity,
@@ -39,6 +44,9 @@ def run(root, step, device="cuda:0"):
     if output.exists():
         raise FileExistsError(output)
     plan = json.loads((root / "plan.json").read_text())
+    source_id = plan.get("source_id", "wood_spoon")
+    if source_id not in SOURCE_IDS:
+        raise ValueError("Unknown Material source")
     git = git_info()
     if git != plan["git"]:
         raise ValueError("Inference checkout differs from new training")
@@ -53,7 +61,9 @@ def run(root, step, device="cuda:0"):
     for selection in index["runs"]:
         parent = parents[selection["method"]]
         checkpoint = Path(selection["checkpoint"])
-        if (selection["steps"] != step or selection["training_steps"] != 1000
+        if (any(item.get("source_id") != source_id or item.get("concept_id") != source_id + "_material"
+                or item.get("branch") != "material" for item in (selection, parent))
+                or selection["steps"] != step or selection["training_steps"] != 1000
                 or selection["source_checkpoint"] != parent["checkpoint"]
                 or selection["run"] != parent["run"] or selection["source_hashes"] != parent["hashes"]
                 or checkpoint != index_path.parent / "checkpoints" / selection["method"]
@@ -76,11 +86,11 @@ def run(root, step, device="cuda:0"):
                  index_path, probe.TRANSFER_PROMPTS):
         locks[str(path)] = probe.schema.sha256(path)
     verify_locks(locks)
-    rows = comparison_rows(plan["protocol"], plan["baseline_rows"][str(step)], step)
+    rows = comparison_rows(plan["protocol"], plan["baseline_rows"][str(step)], step, source_id)
     output.mkdir()
     (output / "images").mkdir()
     (output / "generation_manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf8")
-    provenance = {"status": "running", "git": git, "training_steps": step, "initializer": "material",
+    provenance = {"status": "running", "git": git, "source_id": source_id, "training_steps": step, "initializer": "material",
         "training": index["runs"], "source_locks": locks, "sampling": plan["protocol"]["inference"],
         "baseline_transfer": plan["source_transfer"], "new_images": 16, "reused_controls": 48}
     probe.write(output / "provenance.json", provenance)

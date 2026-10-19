@@ -1,4 +1,4 @@
-"""Train wood Material with one changed initializer, then run matched transfer."""
+"""Train one natural Material with a changed initializer and matched transfer."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 
-from experiments.natural_material_initializer_v1.source import build_config, prepare
+from experiments.natural_material_initializer_v1.source import SOURCE_IDS, build_config, prepare
 from experiments.natural_texture_material_v1.probe import STEPS, write
 from experiments.natural_texture_material_v1.dataset_protocol import sha256
 from experiments.texture_material_disentangled_v1 import train as shared
@@ -26,18 +26,18 @@ def verify_locks(locks):
         raise ValueError("Frozen source artifacts changed")
 
 
-def run(source_training, source_transfer, output, gpus):
+def run(source_training, source_transfer, output, gpus, source_id="wood_spoon"):
     source_training, source_transfer = Path(source_training).resolve(), Path(source_transfer).resolve()
     output = resolve_run_dir(Path(output))
     if (output.exists() or any(output.is_relative_to(path) for path in (ROOT, source_training, source_transfer))
-            or len(gpus) != 3 or len(set(gpus)) != 3 or min(gpus) < 0):
+            or len(gpus) != 3 or len(set(gpus)) != 3 or min(gpus) < 0 or source_id not in SOURCE_IDS):
         raise ValueError("Use a fresh external output and three distinct GPUs")
     git = git_info()
     output.mkdir(parents=True)
     batch, report = output / "training", output / "train_outputs"
     for folder in (batch / "configs", batch / "logs", batch / "audits", output / "preflight", report):
         folder.mkdir(parents=True)
-    state = {"status": "auditing_sources", "git": git, "source_training": str(source_training),
+    state = {"status": "auditing_sources", "git": git, "source_id": source_id, "source_training": str(source_training),
         "source_transfer": str(source_transfer), "initializer_change": {"old": "metal", "new": "material"},
         "planned_training_runs": 2, "max_steps": 2000, "max_steps_per_run": 1000, "completed_steps": 0,
         "completed_training_runs": 0, "best_metric": None, "best_checkpoint": None,
@@ -46,7 +46,7 @@ def run(source_training, source_transfer, output, gpus):
     write(output / "status.json", state)
     completed = []
     try:
-        plan = prepare(source_training, source_transfer)
+        plan = prepare(source_training, source_transfer, source_id)
         model = shared.verify_model()
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(model["root"], subfolder="tokenizer", local_files_only=True)
@@ -56,7 +56,7 @@ def run(source_training, source_transfer, output, gpus):
         if shutil.disk_usage(output).free < 15 * (1 << 30):
             raise RuntimeError("Less than15GiB free for new training snapshots")
         locks = plan.pop("source_locks")
-        plan.update(git=git, source_training=str(source_training), source_transfer=str(source_transfer),
+        plan.update(git=git, source_id=source_id, source_training=str(source_training), source_transfer=str(source_transfer),
                     initializer={"word": "material", "token_ids": ids}, model=model)
         write(output / "plan.json", plan)
         write(output / "source_locks.json", locks)
@@ -65,7 +65,7 @@ def run(source_training, source_transfer, output, gpus):
         for recipe in plan["recipes"]:
             method = recipe["method"]
             baseline = plan["configs"][method]
-            config = build_config(baseline, method)
+            config = build_config(baseline, method, source_id)
             differences[method] = {key: {"old": baseline["args"].get(key), "new": config["args"].get(key)}
                 for key in set(baseline["args"]) | set(config["args"])
                 if baseline["args"].get(key) != config["args"].get(key)}
@@ -88,7 +88,7 @@ def run(source_training, source_transfer, output, gpus):
             f"CUDA_VISIBLE_DEVICES={gpu} " + shlex.join(job["command"])
             for gpu, job in zip(gpus, jobs)) + "\n", encoding="utf8")
         (report / "SCIENTIFIC_CHANGELOG.md").write_text(
-            "Wood Material only;initializer metal->material. Same eight RGB/masks/captions and raw R/M. "
+            f"{source_id} Material only;initializer metal->material. Same eight RGB/masks/captions and raw R/M. "
             "No resume,new loss or architecture. Original/fullrank and rank64 both1000 updates,save500/750/1000.\n",
             encoding="utf8")
         (report / "COMPARABILITY_REPORT.md").write_text(
@@ -127,7 +127,7 @@ def run(source_training, source_transfer, output, gpus):
         state.update(completed_training_runs=sum(record["status"] == "verified" for record in completed),
                      completed_steps=sum(record.get("audit", {}).get("steps", 0) for record in completed))
         if len(completed) != 2 or state["completed_training_runs"] != 2:
-            raise RuntimeError("Wood initializer training or checkpoint audit failed")
+            raise RuntimeError(f"{source_id} initializer training or checkpoint audit failed")
         selections = [record["audit"] for record in completed]
         write(batch / "training_index.json", {"git": git, "runs": selections})
         state["status"] = "exporting"
@@ -156,8 +156,8 @@ def run(source_training, source_transfer, output, gpus):
             state["transfer"].append(record)
             processes.append((process, record))
         write(output / "status.json", state)
-        (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Wood Material initializer</title>'
-            '<p>Native / literal wood / metal initialization / material initialization. '
+        (output / "index.html").write_text(f'<!doctype html><meta charset="utf-8"><title>{source_id} Material initializer</title>'
+            f'<p>{source_id}: native / literal material / metal initialization / material initialization. '
             'Both learned columns share the same eight training RGB images shown.</p>' +
             "".join(f'<p><a href="step{step}/index.html">step{step}</a></p>' for step in STEPS), encoding="utf8")
         with (report / "COMMANDS.md").open("a", encoding="utf8") as handle:
@@ -190,7 +190,7 @@ def run(source_training, source_transfer, output, gpus):
         write(output / "status.json", state)
         write(report / "status.json", state)
         (report / "SUMMARY.md").write_text(
-            f"Wood Material initializer ablation:{state['status']}. Audited updates{state['completed_steps']}/2000. "
+            f"{source_id} Material initializer ablation:{state['status']}. Audited updates{state['completed_steps']}/2000. "
             "No R/M calibration or Texture retraining. See status and GPU queues for partial progress.\n", encoding="utf8")
         (report / "LOG.md").write_text("Training:../training/gpu_*.json and trainer logs;transfer:../logs/step*.log.\n" +
                                        json.dumps(completed, indent=2), encoding="utf8")
@@ -203,5 +203,6 @@ if __name__ == "__main__":
     parser.add_argument("--source-transfer", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gpus", type=int, nargs=3, required=True)
+    parser.add_argument("--source-id", choices=SOURCE_IDS, default="wood_spoon")
     args = parser.parse_args()
-    print(json.dumps({"status": run(args.source_training, args.source_transfer, args.output, args.gpus)["status"]}))
+    print(json.dumps({"status": run(args.source_training, args.source_transfer, args.output, args.gpus, args.source_id)["status"]}))

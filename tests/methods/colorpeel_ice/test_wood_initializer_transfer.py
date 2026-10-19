@@ -15,11 +15,12 @@ def write(path, value):
     path.write_text(json.dumps(value), encoding="utf8")
 
 
-@pytest.fixture
-def experiment(tmp_path, monkeypatch):
+@pytest.fixture(params=["wood_spoon", "mailbox", "metal_spoon"])
+def experiment(tmp_path, monkeypatch, request):
     if os.name == "nt":
         pytest.skip("The actual Linux <M*>.bin checkpoint filename is invalid on Windows")
     torch = pytest.importorskip("torch")
+    source_id = request.param
     torch.set_num_threads(2)
     root = tmp_path / "new_experiment"
     root.mkdir()
@@ -32,9 +33,12 @@ def experiment(tmp_path, monkeypatch):
                  "texture_adapter_loaded": False,
                  "material_adapter_loaded": row["condition"] == "learned_material"}
                 for row in transfer.probe.build_rows(protocol, 500, True)
-                if row["concept_id"] == "wood_spoon_material"]
-    write(root / "plan.json", {"git": git, "protocol": protocol,
-        "baseline_rows": {"500": baseline}, "source_transfer": str(tmp_path / "old_transfer")})
+                if row["concept_id"] == f"{source_id}_material"]
+    plan = {"git": git, "protocol": protocol,
+        "baseline_rows": {"500": baseline}, "source_transfer": str(tmp_path / "old_transfer")}
+    if source_id != "wood_spoon":
+        plan["source_id"] = source_id
+    write(root / "plan.json", plan)
     write(root / "source_locks.json", {str(old_image): old_hash})
     write(root / "status.json", {"status": "generating", "git": git})
     parents, selections, paired = [], [], {}
@@ -45,7 +49,8 @@ def experiment(tmp_path, monkeypatch):
         source_marker.write_text(method)
         source_hashes = {str(source_marker): transfer.probe.schema.sha256(source_marker)}
         parent = {"method": method, "run": str(run), "checkpoint": str(run / "checkpoints"),
-                  "hashes": source_hashes}
+                  "hashes": source_hashes, "concept_id": f"{source_id}_material",
+                  "source_id": source_id, "branch": "material"}
         parents.append(parent)
         shapes, empty = transfer.step_snapshots.adapter_schema(method)
         adapter = {key: torch.full(shape, value) for key, shape in shapes.items()}
@@ -63,6 +68,7 @@ def experiment(tmp_path, monkeypatch):
         hashes = {**source_hashes, **snapshot_hashes,
             **{str(path): transfer.probe.schema.sha256(path) for path in checkpoint.iterdir()}}
         selection = {"method": method, "run": str(run), "checkpoint": str(checkpoint),
+            "concept_id": f"{source_id}_material", "source_id": source_id, "branch": "material",
             "weight": weight, "steps": 500, "training_steps": 1000,
             "source_checkpoint": parent["checkpoint"], "source_hashes": source_hashes,
             "source_snapshot_hashes": snapshot_hashes, "hashes": hashes}
@@ -86,6 +92,8 @@ def experiment(tmp_path, monkeypatch):
     def generate(pipe, rows, output, sampling, device, learned):
         assert len(rows) == 8 and learned is True and device == "cpu"
         assert sampling == protocol["inference"]
+        assert {row["concept_id"] for row in rows} == {f"{source_id}_material"}
+        assert {row["source_id"] for row in rows} == {source_id}
         calls["generation"].append(rows[0]["method"])
         with (output / "generation_status.jsonl").open("a", encoding="utf8") as ledger:
             for row in rows:
@@ -97,6 +105,8 @@ def experiment(tmp_path, monkeypatch):
 
     def review(output, rows, references):
         assert len(rows) == 64 and references == {}
+        assert {row["concept_id"] for row in rows} == {f"{source_id}_material"}
+        assert sum(row["reused"] for row in rows) == 48
         (output / "contact_sheets").mkdir()
         paths = [f"contact_sheets/sheet_{i}.jpg" for i in range(4)]
         for path in paths:
@@ -122,6 +132,14 @@ def test_paired_cpu_exports_accept_fullrank_empty_self_attention_and_reuse_contr
     assert calls == {"paired": ["fullrank", "lora_r64"], "loads": ["fullrank", "lora_r64"],
                      "generation": ["fullrank", "lora_r64"]}
     assert json.loads((root / "step500/provenance.json").read_text())["status"] == "succeeded"
+    locks = json.loads((root / "source_locks.json").read_text())
+    assert all(transfer.probe.schema.sha256(path) == digest for path, digest in locks.items())
+    records = [json.loads(line) for line in (root / "step500/generation_status.jsonl").read_text().splitlines()]
+    assert len(records) == len({row["id"] for row in records}) == 64
+    assert sum(row["reused"] for row in records) == 48
+    for row in records:
+        if row["reused"]:
+            assert Path(row["source_image"]).read_bytes() == (root / "step500" / row["image_path"]).read_bytes()
 
 
 def test_mismatched_token_tensor_is_rejected_before_pipeline_generation(experiment):
@@ -134,6 +152,19 @@ def test_mismatched_token_tensor_is_rejected_before_pipeline_generation(experime
     write(checkpoint / "receipt.json", selection)
     write(root / "exports/step500/index.json", index)
     with pytest.raises(ValueError, match="paired adapter/token export"):
+        transfer.run(root, 500, device="cpu")
+    assert calls["loads"] == calls["generation"] == []
+    assert not (root / "step500").exists()
+
+
+def test_other_source_checkpoint_is_rejected_before_pipeline_generation(experiment):
+    root, index, _, calls, _ = experiment
+    selection = index["runs"][0]
+    other_source = "mailbox" if selection["source_id"] != "mailbox" else "metal_spoon"
+    selection.update(source_id=other_source, concept_id=f"{other_source}_material")
+    write(Path(selection["checkpoint"]) / "receipt.json", selection)
+    write(root / "exports/step500/index.json", index)
+    with pytest.raises(ValueError):
         transfer.run(root, 500, device="cpu")
     assert calls["loads"] == calls["generation"] == []
     assert not (root / "step500").exists()

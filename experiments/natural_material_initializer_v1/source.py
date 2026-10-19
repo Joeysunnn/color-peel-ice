@@ -1,4 +1,4 @@
-"""Read-only source locks for the wood Material initializer ablation."""
+"""Read-only source locks for single-source Material initializer ablations."""
 
 import copy
 import json
@@ -11,26 +11,39 @@ from experiments.natural_texture_material_v1.training_config import recipes as n
 from scripts.launch.colorpeel_run import read_config
 
 
-def build_config(baseline, method):
+SOURCE_IDS = ("wood_spoon", "mailbox", "metal_spoon")
+
+
+def _concept(source_id):
+    if source_id not in SOURCE_IDS:
+        raise ValueError("Expected wood_spoon, mailbox or metal_spoon source_id")
+    return source_id + "_material"
+
+
+def build_config(baseline, method, source_id="wood_spoon"):
+    concept_id = _concept(source_id)
     args = baseline["args"]
     if (method not in ("fullrank", "lora_r64") or args.get("modifier_token") != "<M*>"
             or args.get("initializer_token") != "metal" or args.get("max_train_steps") != 1000
             or args.get("checkpoint_steps") != list(STEPS)
-            or baseline.get("texture_material", {}).get("concept_id") != "wood_spoon_material"
+            or baseline.get("texture_material", {}).get("concept_id") != concept_id
+            or baseline["texture_material"].get("source_id") != source_id
+            or baseline["texture_material"].get("branch") != "material"
             or baseline["texture_material"].get("method") != method
             or (method == "fullrank" and args.get("token_local_kv") is not True)
             or (method == "lora_r64" and (args.get("subject_lora_mode") != "token_local_kv"
                 or args.get("subject_lora_rank") != 64 or args.get("subject_lora_alpha") != 64
                 or args.get("token_local_kv", False)))):
-        raise ValueError("Expected the original wood Material method and 1000-step recipe")
+        raise ValueError(f"Expected the original {source_id} Material method and 1000-step recipe")
     config = copy.deepcopy(baseline)
     config["args"]["initializer_token"] = "material"
     config["run"].update(study="natural_material_initializer_v1",
-        variant=f"wood_spoon_material_{method}_init_material_steps1000")
+        variant=f"{concept_id}_{method}_init_material_steps1000")
     return config
 
 
-def _baseline_rows(folder, expected, locks):
+def _baseline_rows(folder, expected, locks, source_id="wood_spoon"):
+    concept_id = _concept(source_id)
     ledger = folder / "generation_status.jsonl"
     locks[str(ledger)] = schema.sha256(ledger)
     rows = [json.loads(line) for line in ledger.read_text(encoding="utf8").splitlines()]
@@ -41,7 +54,7 @@ def _baseline_rows(folder, expected, locks):
         raise ValueError("Baseline generation identities differ")
     selected = []
     for reference in expected:
-        if reference["concept_id"] != "wood_spoon_material":
+        if reference["concept_id"] != concept_id:
             continue
         row = by_id[reference["id"]]
         learned = row["condition"] == "learned_material"
@@ -55,11 +68,12 @@ def _baseline_rows(folder, expected, locks):
         locks[str(image)] = row["image_sha256"]
         selected.append({**row, "source_image": str(image)})
     if len(selected) != 48:
-        raise ValueError("Expected 48 wood Material baseline rows per step")
+        raise ValueError(f"Expected 48 {source_id} Material baseline rows per step")
     return selected
 
 
-def prepare(source_training, source_transfer):
+def prepare(source_training, source_transfer, source_id="wood_spoon"):
+    concept_id = _concept(source_id)
     training, transfer = Path(source_training).resolve(), Path(source_transfer).resolve()
     audit = audit_training(training)
     locks = dict(audit["source_locks"])
@@ -83,13 +97,13 @@ def prepare(source_training, source_transfer):
             or state.get("prompt_protocol_sha256") != schema.sha256(TRANSFER_PROMPTS)):
         raise ValueError("Baseline transfer prompts differ from the accepted ordinary prompts")
     protocol = read(training / "protocol.json")
-    recipes = [item for item in natural_recipes() if item["concept_id"] == "wood_spoon_material"]
+    recipes = [item for item in natural_recipes() if item["concept_id"] == concept_id]
     parents = read(training / "training/training_index.json")["runs"]
     configs = {item["method"]: read_config(Path(item["run"]) / "config.yaml")
-               for item in parents if item["concept_id"] == "wood_spoon_material"}
+               for item in parents if item["concept_id"] == concept_id}
     for method, config in configs.items():
-        build_config(config, method)
-    group = read(training / "training_references.json")["groups"]["wood_spoon_material"]
+        build_config(config, method, source_id)
+    group = read(training / "training_references.json")["groups"][concept_id]
     ledger = Path(group["training_assets_manifest"])
     actual = [json.loads(line) for line in ledger.read_text(encoding="utf8").splitlines()]
     sampling = {**protocol["inference"], "conditions": {
@@ -115,24 +129,24 @@ def prepare(source_training, source_transfer):
         reference_groups = read(folder / "training_references.json")["groups"]
         chosen_refs = {}
         for item in selections:
-            if item["concept_id"] != "wood_spoon_material":
+            if item["concept_id"] != concept_id:
                 continue
-            expected = {"method": item["method"], "branch": "material", "source_id": "wood_spoon",
-                "concept_id": "wood_spoon_material", "step": step, "run": item["run"],
+            expected = {"method": item["method"], "branch": "material", "source_id": source_id,
+                "concept_id": concept_id, "step": step, "run": item["run"],
                 "checkpoint": item["checkpoint"], "source": group["source"],
                 "dataset_manifest": str(ledger), "dataset_manifest_sha256": schema.sha256(ledger),
                 "images": [{key: row[key] for key in ("id", "image", "image_sha256", "prompt", "shape",
                     "color", "light", "material_id", "roughness", "metallic", "seed") if key in row}
                     for row in actual], "conditions": {"base": None, "literal": None, "learned_material": "images"}}
             matching = [ref for ref in reference_groups if ref.get("method") == item["method"]
-                        and ref.get("concept_id") == "wood_spoon_material"]
+                        and ref.get("concept_id") == concept_id]
             if matching != [expected] or len(actual) != 8:
-                raise ValueError("Baseline references do not match the actual eight wood training RGB images")
+                raise ValueError(f"Baseline references do not match the actual eight {source_id} training RGB images")
             chosen_refs[item["method"]] = expected
         references[str(step)] = chosen_refs
-        baseline_rows[str(step)] = _baseline_rows(folder, build_rows(protocol, step, True), locks)
+        baseline_rows[str(step)] = _baseline_rows(folder, build_rows(protocol, step, True), locks, source_id)
     if any(schema.sha256(path) != digest for path, digest in locks.items()):
         raise ValueError("Training or baseline sources changed while preparing the experiment")
-    return {"protocol": protocol, "recipes": recipes, "configs": configs, "references": references,
+    return {"source_id": source_id, "protocol": protocol, "recipes": recipes, "configs": configs, "references": references,
             "baseline_rows": baseline_rows, "source_locks": locks,
             "training_git": audit["training_git"], "transfer_git": state["git"]}
