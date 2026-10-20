@@ -121,7 +121,10 @@ def run(preview, output, gpu, full_grid=False):
         clay, _ = pbr_data.composite(pbr_data.read_exr(output / "renders/clay_diagnostic.exr"), original, mask)
         Image.fromarray(clay).save(output / "clay.png")
         import cv2
-        normal = cv2.imread(str(next((output / "renders").glob("normal_*.exr"))), cv2.IMREAD_UNCHANGED)[:, :, :3][:, :, ::-1]
+        normal = cv2.imread(str(next((output / "renders").glob("normal_*.exr"))), cv2.IMREAD_UNCHANGED)
+        if normal is None or normal.ndim != 3 or normal.shape[2] < 3:
+            raise ValueError("normal EXR must contain explicit RGB vector components")
+        normal = normal[:, :, :3][:, :, ::-1]
         if not np.isfinite(normal).all() or np.median(np.linalg.norm(normal[core], axis=1)) < .98:
             raise ValueError("actual foreground normal pass is nonfinite or not approximately unit length")
         display_normal = np.rint(np.clip((normal + 1) / 2, 0, 1) * 255).astype(np.uint8)

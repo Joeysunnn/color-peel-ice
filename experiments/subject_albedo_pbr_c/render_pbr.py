@@ -147,7 +147,17 @@ def render(plan, output):
         node.format.file_format = "OPEN_EXR"
         node.format.color_depth = "32"
         node.format.color_mode = "RGB"
-        scene.node_tree.links.new(layers.outputs[name], node.inputs[0])
+        if name == "Normal":
+            # Convert the vector socket to explicit RGB channels for EXR readers.
+            identity = scene.node_tree.nodes.new("CompositorNodeMixRGB")
+            identity.blend_type = "MULTIPLY"
+            identity.inputs[0].default_value = 1
+            identity.inputs[2].default_value = (1, 1, 1, 1)
+            identity.use_clamp = False
+            scene.node_tree.links.new(layers.outputs[name], identity.inputs[1])
+            scene.node_tree.links.new(identity.outputs[0], node.inputs[0])
+        else:
+            scene.node_tree.links.new(layers.outputs[name], node.inputs[0])
     scene.render.filepath = str(output / "clay_diagnostic.exr")
     bpy.ops.render.render(write_still=True)
     scene.use_nodes = False
