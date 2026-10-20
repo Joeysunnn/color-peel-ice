@@ -2,8 +2,9 @@
 
 This independent SD1.5 Subject study prepares five mailbox colors
 (`pink,green,cyan,blue,purple`) x two surface appearances (`metallic,matte`).
-The current stage prepares and shows data only;it does not train or generate
-model outputs. Existing assets,checkpoints and results are read-only.
+The preparation entrypoint only shows data. After data approval,the independent
+`run` entrypoint trains both methods and automatically generates the three
+checkpoint grids. Existing assets,checkpoints and results are read-only.
 
 The current SD1.5 balanced Subject baseline already uses the same ten RGB
 images with explicit `glossy painted metal` / `matte plastic` captions.
@@ -54,7 +55,7 @@ The output contains:
 - `preflight/`:two shared-launcher dry runs;no optimizer updates.
 - `inference_plan/step500`, `step750`, `step1000`:fixed prompts and training-image sheets only,no generated inference images.
 
-## Prepared training recipes;not started
+## Training recipes
 
 The methods inherit their respective frozen SD1.5 Subject recipes:
 
@@ -87,6 +88,33 @@ $PY -B -m experiments.subject_multicolor_multimaterial_b.training \
 Completed method runs write an audited `training_index.json`. Combine the two
 complete selections under `{"git": <same git record>, "runs": [<fullrank audit>,<rank64 audit>]}`
 before actual inference. Do not relabel an old checkpoint as a missing step.
+
+## Authorized training followed by automatic inference
+
+Reuse the accepted preview's dataset without regenerating or editing it.
+The runner checks that both recipes exactly match its sibling
+`training_plan/configs/`. Choose a fresh peer run directory,not any directory
+inside the accepted preview. One GPU executes original,then rank64/alpha64,
+then step500,step750,step1000. Each training process performs its shared-launcher
+preflight and full audit;both must finish successfully before inference starts.
+Failure stops the chain,without retry or resume. Do not update the checkout
+while this batch is active: every child requires the same clean revision.
+
+```bash
+DATA=/var/tmp/colorpeel-r12user5/runs/subject_multicolor_multimaterial_b/20261020-113427__data_preview__7ec744e__42/dataset
+$PY -B -m experiments.subject_multicolor_multimaterial_b.run \
+  --dataset "$DATA" --output "$NEW_TRAIN_AND_INFER_RUN" --gpu 2 --execute
+```
+
+Omit `--execute` to validate the approved recipes and write a command plan
+without starting training or inference. The new output contains
+`training/{fullrank,lora_r64}/` with configs,logs,checkpoints and audits,
+the merged `training_index.json`,and independent `step500/`, `step750/`,
+`step1000/` image folders. Each step writes20 images and three contact sheets
+(training references plus two method result sheets). The result sheets show
+all ten actual training images and full captions above the generated grid.
+Root `train_outputs/` records commands,phase logs,comparability notes and
+`status.json`;only a completely audited batch is `execution_verified`.
 
 ## Fixed material transfer plan
 
