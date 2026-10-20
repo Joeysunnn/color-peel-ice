@@ -2,6 +2,7 @@
 
 import copy
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -177,3 +178,9 @@ def test_protocol_digest_is_independent_of_json_line_endings(source):
     before = data.protocol_sha256()
     data.PROTOCOL.write_bytes(data.PROTOCOL.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
     assert data.protocol_sha256() == before
+
+def test_frozen_source_hashes_are_complete_sha256_values():
+    specification = data.read_json(data.PROTOCOL)
+    for key, value in specification.items():
+        if key.endswith("_sha256"):
+            assert re.fullmatch("[0-9a-f]{64}", value), key
