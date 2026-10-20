@@ -6,6 +6,9 @@ SuperMat extraction after checking its input/output receipt chain, rather than
 rerunning a GPU extractor with changed settings. No training or diffusion
 inference is started by this study.
 
+The first server preview and its observed limits are recorded in
+[`reports/01_parameter_preview.md`](reports/01_parameter_preview.md).
+
 ## Implemented boundary
 
 The current repository has a Cycles PBR renderer for generic shapes, but it
