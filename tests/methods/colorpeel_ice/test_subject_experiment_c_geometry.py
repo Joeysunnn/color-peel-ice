@@ -75,13 +75,51 @@ def test_cap_to_body_transition_is_continuous_and_depth_is_config_driven():
     config = copy.deepcopy(DEFAULT_GEOMETRY)
     near, far = np.asarray(config["axis_near_px"]), np.asarray(config["axis_far_px"])
     u = (far - near) / np.linalg.norm(far - near)
-    t = np.linspace(-1, 27, 2801)
-    xy = near + t[:, None] * u
-    depth = surface_depth(xy[:, 0], xy[:, 1], config)
-    assert np.max(np.abs(np.diff(depth))) < 0.001
+    perpendicular = np.array([-u[1], u[0]])
+    for q in (-45, -25, 0, 25, 45):
+        arc = np.sqrt(1.0 - (q / config["radius_px"]) ** 2)
+        boundary = config["cap_projection_radius_px"] * arc + config["cap_boundary_offset_px"]
+        t = np.linspace(boundary - 4, boundary + 4, 1601)
+        xy = near + t[:, None] * u + q * perpendicular
+        depth = surface_depth(xy[:, 0], xy[:, 1], config)
+        assert np.max(np.abs(np.diff(depth))) < 0.0001
+        expected = config["backplate_depth"] + config["axis_depth_tilt"] * (
+            1 - boundary / np.linalg.norm(far - near)) + config["body_height"] * arc
+        assert depth[len(depth) // 2] == pytest.approx(expected, abs=1e-12)
+        derivative = np.gradient(depth, t)
+        assert abs(derivative[800] - derivative[799]) < 2e-5
     config["body_height"] = 0.18
     assert surface_depth(near[0] + u[0] * 90, near[1] + u[1] * 90, config) != surface_depth(
         near[0] + u[0] * 90, near[1] + u[1] * 90, DEFAULT_GEOMETRY)
+
+
+def test_elliptical_join_is_closer_to_the_observed_cap_edge_than_old_straight_join():
+    config = DEFAULT_GEOMETRY
+    near, far = np.asarray(config["axis_near_px"]), np.asarray(config["axis_far_px"])
+    u = (far - near) / np.linalg.norm(far - near)
+    perpendicular = np.array([-u[1], u[0]])
+    q = np.linspace(-config["radius_px"], config["radius_px"], 10001)
+    t = config["cap_projection_radius_px"] * np.sqrt(1 - (q / config["radius_px"]) ** 2)
+    t += config["cap_boundary_offset_px"]
+    curve = near + t[:, None] * u + q[:, None] * perpendicular
+    landmarks = np.array([[191, 441], [221, 451], [247, 478], [260, 511]])
+    fitted_distances = np.array([np.linalg.norm(curve - point, axis=1).min() for point in landmarks])
+    # The old 0..25px transition's center was a straight t=12.5 join.
+    old_distances = np.abs((landmarks - near) @ u - 12.5)
+    assert np.all(fitted_distances < old_distances)
+    assert fitted_distances.max() < 12 and fitted_distances.mean() < 5
+
+
+def test_negative_depth_origin_does_not_change_projection_faces_or_uv():
+    mask = np.zeros((512, 512), dtype=bool)
+    mask[477:507, 180:225] = True
+    mesh = build_mesh(mask, DEFAULT_GEOMETRY)
+    moved = build_mesh(mask, {**DEFAULT_GEOMETRY, "backplate_depth": -1.0})
+    assert mesh["depth_statistics"]["minimum"] < 0
+    assert moved["depth_statistics"]["minimum"] < -1
+    assert mesh["faces"] == moved["faces"] and mesh["uv"] == moved["uv"]
+    assert np.array_equal(np.asarray(mesh["vertices"])[:, :2], np.asarray(moved["vertices"])[:, :2])
+    assert np.allclose(np.asarray(moved["vertices"])[:, 2] - np.asarray(mesh["vertices"])[:, 2], -1.02)
 
 
 def test_json_serializable_and_identical_across_all_material_conditions():
@@ -106,6 +144,7 @@ def test_invalid_masks_are_rejected(mask):
 
 
 @pytest.mark.parametrize("change", [{"radius_px": 0}, {"cap_blend_px": 0},
+                                   {"cap_projection_radius_px": 0},
                                    {"body_height": float("nan")}, {"image_size": 256},
                                    {"axis_far_px": [207, 500]}, {"top_transition_px": 100}])
 def test_invalid_geometry_is_rejected(change):

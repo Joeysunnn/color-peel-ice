@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import html
 import json
 import os
 from pathlib import Path
@@ -23,17 +24,20 @@ ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL = Path(__file__).with_name("pbr_protocol.json")
 
 
-def review(output, rows):
+def review(output, rows, accepted=False, reference_root=None):
+    reference_root = output if reference_root is None else Path(reference_root)
     colors = list(dict.fromkeys(row["color"] for row in rows))
     sheet = Image.new("RGB", (1536, 285 + len(colors) * 280), "white")
     draw, font = ImageDraw.Draw(sheet), _font(15)
-    draw.text((10, 8), "Actual Cycles RGB candidates; manually fitted single-view geometry; fixed A / scene; only M/R vary", font=font, fill="black")
-    draw.text((10, 30), "Below: identical object crops from the full 512px images. Not yet visually accepted or used for training.", font=font, fill="darkred")
+    label = "Actual training RGB" if accepted else "Actual Cycles RGB candidates"
+    draw.text((10, 8), label + "; manually fitted single-view geometry; fixed A / scene; only M/R vary", font=font, fill="black")
+    note = "All 30 images accepted after visual review. Training has not started." if accepted else "Not yet visually accepted or used for training."
+    draw.text((10, 30), "Fixed object crops from full 512px images. " + note, font=font, fill="darkred")
     for index, (name, path) in enumerate([
-            ("Original RGB", output / "source/original.jpg"),
-            ("Actual fitted geometry / clay", output / "clay.png"),
-            ("Actual mesh normals", output / "normal.png"),
-            ("UV diagnostic / NOT training", output / "uv.png")]):
+            ("Original RGB", reference_root / "source/original.jpg"),
+            ("Actual fitted geometry / clay", reference_root / "clay.png"),
+            ("Actual mesh normals", reference_root / "normal.png"),
+            ("UV diagnostic / NOT training", reference_root / "uv.png")]):
         image = Image.open(path).convert("RGB")
         image.thumbnail((235, 210))
         sheet.paste(image, (index * 300 + 8, 72))
@@ -47,16 +51,20 @@ def review(output, rows):
                 crop = image.crop((120, 270, 470, 512)).resize((250, 173), Image.Resampling.LANCZOS)
                 sheet.paste(crop, (x + 3, y + 25))
             draw.text((x + 5, y + 205), f"clip={row['qc']['clipped_pixel_fraction']:.1%}", font=font, fill="black")
-            draw.text((x + 5, y + 227), "fixed A / fixed original background", font=font, fill="black")
+            draw.text((x + 5, y + 227), "fixed A / fixed background", font=font, fill="black")
     sheet.save(output / "contact_sheet.png")
     (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>Subject C Cycles candidates</title>'
         '<h1>Fixed-view mailbox: true foreground PBR, manually fitted 2.5D geometry</h1>'
         '<p>Not measured geometry or recovered lighting. Original background shadows stay fixed. No training started.</p>'
-        '<p>All images are candidates pending visual acceptance. Crops below reference complete 512px RGB files.</p>'
-        '<a href="status.json">Status</a> | <a href="plan.json">Frozen scene and inputs</a> | '
-        '<a href="dataset_manifest.jsonl">Images, captions and numeric checks</a>'
+        + ('<p>All 30 actual training RGB images passed numeric and visual review. No training started.</p>' if accepted
+           else '<p>All images are candidates pending visual acceptance.</p>')
+        + ('<a href="dataset_audit.json">Dataset audit</a> | <a href="concepts.json">Training concepts</a> | '
+           '<a href="training_assets_manifest.jsonl">Actual training images and captions</a>' if accepted
+           else '<a href="status.json">Status</a> | <a href="plan.json">Frozen scene and inputs</a> | '
+           '<a href="dataset_manifest.jsonl">Images, captions and numeric checks</a>')
+        +
         '<p><a href="contact_sheet.png"><img style="max-width:100%" src="contact_sheet.png"></a></p>'
-        + ''.join(f'<p><a href="images/{row["id"]}.png">{row["id"]}</a></p>' for row in rows), encoding="utf-8")
+        + ''.join(f'<p><a href="{Path(row["image"]).relative_to(output).as_posix()}">{row["id"]}</a>: {html.escape(row["caption"])}</p>' for row in rows), encoding="utf-8")
 
 
 def run(preview, output, gpu, full_grid=False):
