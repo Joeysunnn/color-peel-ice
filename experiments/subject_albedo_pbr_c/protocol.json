@@ -1,0 +1,17 @@
+{
+  "schema": "subject_albedo_pbr_c/v1",
+  "subject": "mailbox",
+  "seed": 42,
+  "source_fullmaps_run": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_fullmaps_v1/run_20261004_fullmaps_threeway_lighting_v2",
+  "colors": {"pink": 0.0, "green": 120.0, "cyan": 180.0, "blue": 240.0, "purple": 300.0},
+  "metallic": {"nonmetallic": 0.0, "metallic": 1.0},
+  "roughness": {"low": 0.15, "medium": 0.5, "high": 0.85},
+  "roughness_words": {"low": "glossy", "medium": "moderately rough", "high": "rough"},
+  "albedo_encoding": "project convention: sRGB uint8; uncalibrated SuperMat estimate",
+  "parameter_encoding": "float32 linear NPY maps are authoritative; PNGs are quantized display previews only",
+  "edit_region": "original SuperMat input object alpha; not the small material measurement region or B repaired mask",
+  "material_edit": "constant foreground M/R intervention; preserve extracted values outside original object mask",
+  "qc": {"max_delta_L_p95": 0.5, "minimum_chromatic_support_C": 5.0},
+  "renderer": "unavailable for original subject; no proxy geometry or RGB recoloring fallback",
+  "training_enabled": false
+}
