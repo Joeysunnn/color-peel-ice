@@ -3,8 +3,9 @@
 This independent data-only study starts from the original orange mailbox
 photograph used by SuperMat and Subject B. It reuses the existing official
 SuperMat extraction after checking its input/output receipt chain, rather than
-rerunning a GPU extractor with changed settings. No training or diffusion
-inference is started by this study.
+rerunning a GPU extractor with changed settings. Data-generation commands never
+start training or diffusion inference; the separately authorized runner below
+requires explicit execution.
 
 The first server preview and its observed limits are recorded in
 [`reports/01_parameter_preview.md`](reports/01_parameter_preview.md).
@@ -208,3 +209,46 @@ object continues below the photograph. For partially covered silhouette
 pixels, a fixed background plate is completed inside the mask with TELEA3;
 all visible outside-mask background pixels remain byte-identical. The plate
 is hidden under opaque foreground and is never used as a training subject.
+
+## Authorized C training and automatic material-prompt inference
+
+`data.verify_dataset` reads and rechecks the accepted thirty-image dataset,
+its actual RGB/mask pairs, full captions, five frozen Albedos and every original
+source receipt. It never edits data. `training.build_config` reuses B's recipe
+builder; only experiment metadata and dataset paths change. Shared training
+preflight, trainer, parameter freezing, losses, optimizer and checkpoint audits
+are reused. B's default configuration and execution are unchanged.
+
+Both methods run1000 updates, seed42, batch1,512px, no mixed precision, constant
+LR, no augmentation; token LR=1e-5, K/V LR=1e-5(original) or5e-5(rank64),
+rank=alpha=64 for LoRA. Paired Token/KV state is saved at500/750/1000. Thirty
+images replace B's ten pairs, so fixed updates imply different per-image exposure.
+
+```bash
+DATA=/var/tmp/colorpeel-r12user5/runs/subject_albedo_pbr_c/20261020-210555__pbr30_dataset__8c639fe__42
+# Inspect all configuration differences and commands without GPU training:
+$PY -B -m experiments.subject_albedo_pbr_c.run \
+  --dataset "$DATA" --output "$FRESH_PLAN" --gpu 2
+# Each method also supports a real shared-launcher preflight (no execute flag):
+$PY -B -m experiments.subject_albedo_pbr_c.training \
+  --dataset "$DATA" --output "$FRESH_PREFLIGHT" --method lora_r64 --gpu 2
+# Full detached kickoff; select another fresh output and keep this checkout fixed:
+nohup "$PY" -u -B -m experiments.subject_albedo_pbr_c.run \
+  --dataset "$DATA" --output "$FRESH_RUN" --gpu 2 --execute \
+  > "$FRESH_RUN.launch.log" 2>&1 < /dev/null &
+```
+
+One isolated GPU trains original then rank64/alpha64, audits both and then
+automatically generates `step500/`, `step750/`, `step1000/`. Each contains20
+images (two methods, five material prompts, seeds42/43), full provenance,
+generation receipts and three contact sheets with all30 actual training
+images and their full captions. Prompt rows and paired snapshot export are
+directly reused from B. Sampling stays PNDM100, CFG3.5,512px,fp16 with safety
+checker. The five exact prompts are `a photo of <S*> mailbox with a {material}
+surface` for metallic, matte, glossy plastic, ceramic and wood. This entrypoint
+does not regenerate an old baseline or alter any old result directory.
+
+`train_outputs/` records commands, logs, scientific changes, comparability,
+summary and status. Training indexes are merged only after both completed
+audits; any failure stops downstream work and preserves partial results.
+Kickoff verification is not evidence of completed training or disentanglement.

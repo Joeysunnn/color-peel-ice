@@ -44,8 +44,10 @@ def build_config(method, dataset):
     return config
 
 
-def build_configuration_bundle(dataset, output):
-    from experiments.subject_multicolor_multimaterial_b.data import verify_dataset
+def build_configuration_bundle(dataset, output, *, verify_dataset=None, config_builder=None):
+    if verify_dataset is None:
+        from experiments.subject_multicolor_multimaterial_b.data import verify_dataset
+    config_builder = build_config if config_builder is None else config_builder
 
     dataset, output = Path(dataset).resolve(), Path(output).resolve()
     audit = verify_dataset(dataset)
@@ -54,7 +56,7 @@ def build_configuration_bundle(dataset, output):
     configs, comparison = {}, {}
     for method in METHODS:
         baseline = read_json(BASELINES[method])
-        config = build_config(method, dataset)
+        config = config_builder(method, dataset)
         differences = {key: {"old": baseline["args"].get(key), "new": config["args"].get(key)}
                        for key in set(baseline["args"]) | set(config["args"])
                        if baseline["args"].get(key) != config["args"].get(key)}
@@ -73,14 +75,15 @@ def build_configuration_bundle(dataset, output):
         if read_config(path) != config:
             raise ValueError("training configuration fails shared-launcher YAML roundtrip")
         paths[method] = str(path)
-    record = {"study": STUDY, "comparison": comparison, "source_hashes": source_hashes,
+    record = {"study": configs[METHODS[0]]["run"]["study"], "comparison": comparison, "source_hashes": source_hashes,
               "dataset_audit": audit, "checkpoint_steps": [500, 750, 1000]}
     _write(output / "CONFIG_COMPARISON.json", record)
     return {"configs": configs, "paths": paths, "comparison": record}
 
 
-def run(dataset, output, method, gpu, execute_training=False):
-    from experiments.subject_multicolor_multimaterial_b.data import verify_dataset
+def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=None, config_builder=None):
+    if verify_dataset is None:
+        from experiments.subject_multicolor_multimaterial_b.data import verify_dataset
 
     if method not in METHODS or type(gpu) is not int or gpu < 0:
         raise ValueError("select one supported method and a nonnegative GPU index")
@@ -88,7 +91,7 @@ def run(dataset, output, method, gpu, execute_training=False):
     if output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(dataset):
         raise ValueError("use a fresh external output outside the dataset")
     git = git_info()
-    bundle = build_configuration_bundle(dataset, output)
+    bundle = build_configuration_bundle(dataset, output, verify_dataset=verify_dataset, config_builder=config_builder)
     state = {"status": "preflight", "git": git, "method": method, "gpu": gpu,
              "execute_training": execute_training, "max_steps": 1000, "completed_steps": 0,
              "checkpoint_steps": [500, 750, 1000], "resume": False,
@@ -99,7 +102,7 @@ def run(dataset, output, method, gpu, execute_training=False):
     try:
         state["model"] = shared.verify_model()
         config = bundle["configs"][method]
-        name = f"{datetime.now():%Y%m%d-%H%M%S}__{STUDY}__{config['run']['variant']}__{git['commit'][:7]}__42"
+        name = f"{datetime.now():%Y%m%d-%H%M%S}__{config['run']['study']}__{config['run']['variant']}__{git['commit'][:7]}__42"
         command = [sys.executable, "-B", str(ROOT / "scripts/launch/colorpeel_run.py"),
                    "--config", bundle["paths"][method], "--run-dir", str(output / "runs" / name)]
         preflight = [*command[:-1], str(output / "preflight" / name), "--dry-run"]
