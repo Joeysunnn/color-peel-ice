@@ -81,20 +81,54 @@ def run(preview, output, gpu, full_grid=False):
     locks[str(PROTOCOL)] = sha256(PROTOCOL)
     output.mkdir(parents=True)
     (output / "source").mkdir()
-    for name in ("original.jpg", "object_mask.png"):
-        shutil.copyfile(preview / "source" / name, output / "source" / name)
+    shutil.copyfile(preview / "source/original.jpg", output / "source/original.jpg")
+    base_mask_path = preview / "source/object_mask.png"
+    shutil.copyfile(base_mask_path, output / "source/original_mask.png")
+    mask_spec = protocol["render_mask"]
+    repaired = Path(mask_spec["source"])
+    if sha256(repaired) != mask_spec["sha256"]:
+        raise ValueError("reviewed repaired Subject mask changed")
+    locks[str(repaired)] = mask_spec["sha256"]
+    shutil.copyfile(repaired, output / "source/object_mask.png")
     original = np.asarray(Image.open(output / "source/original.jpg").convert("RGB"))
     mask = np.asarray(Image.open(output / "source/object_mask.png").convert("L"))
+    base_mask = np.asarray(Image.open(base_mask_path).convert("L"))
+    added = (mask > 0) & (base_mask == 0)
+    if (mask.shape != base_mask.shape or set(np.unique(mask)) != {0, 255}
+            or np.any((base_mask > 0) & (mask == 0)) or added.sum() != mask_spec["added_pixels"]):
+        raise ValueError("reviewed mask must preserve original foreground and add exactly the frozen border repair")
+    import cv2
+    _, labels = cv2.distanceTransformWithLabels((base_mask == 0).astype(np.uint8), cv2.DIST_L2, 5,
+                                                labelType=cv2.DIST_LABEL_PIXEL)
+    source_y, source_x = np.nonzero(base_mask > 0)
+    lookup = np.zeros((int(labels.max()) + 1, 2), dtype=np.int32)
+    lookup[labels[source_y, source_x]] = np.column_stack((source_x, source_y))
+    nearest_xy = lookup[labels]
     mesh = geometry.build_mesh(mask, protocol["geometry"])
+    face_uv, extension = geometry.boundary_uv(mesh, base_mask, nearest_xy)
+    mesh, face_uv, padding = geometry.frame_padding(mesh, face_uv, mask, protocol["geometry"])
+    background = cv2.inpaint(original, mask, 3, cv2.INPAINT_TELEA)
+    if not np.array_equal(background[mask == 0], original[mask == 0]):
+        raise ValueError("background completion changed visible background pixels")
+    Image.fromarray(background).save(output / "source/background_plate.png")
+    background_path = output / "source/background_plate.png"
+    locks[str(background_path)] = sha256(background_path)
     arrays = {name: np.asarray(mesh.pop(name), dtype=np.int32 if name == "faces" else np.float32)
               for name in ("vertices", "faces", "uv")}
+    arrays["face_uv"] = np.asarray(face_uv, dtype=np.float32)
+    mesh["uv_boundary_extension"] = extension
+    mesh["viewport_padding"] = padding
     np.savez_compressed(output / "geometry.npz", **arrays)
     mesh["array_content_sha256"] = hashlib.sha256(b"".join(value.tobytes() for value in arrays.values())).hexdigest()
     write_json(output / "geometry_audit.json", mesh)
     protocol_sha = hashlib.sha256(json.dumps(protocol, sort_keys=True).encode()).hexdigest()
     plan = {"git": git, "preview": str(preview), "protocol": protocol, "protocol_sha256": protocol_sha,
             "mesh": str(output / "geometry.npz"), "mesh_sha256": sha256(output / "geometry.npz"),
-            "rows": rows, "source_locks": locks}
+            "rows": rows, "source_locks": locks,
+            "background_plate": {"path": str(background_path), "sha256": sha256(background_path),
+                "method": "fixed TELEA radius3 background completion inside subject mask only; visible only at antialiased boundary"},
+            "render_mask": {
+                **mask_spec, "base_mask_sha256": sha256(base_mask_path), "uv_policy": extension}}
     write_json(output / "plan.json", plan)
     command = [protocol["renderer"]["blender"], "--background", "--python-exit-code", "1",
                "--python", str(Path(__file__).with_name("render_pbr.py")), "--",
@@ -115,8 +149,11 @@ def run(preview, output, gpu, full_grid=False):
             raise ValueError("rendered A/M/R grid is incomplete")
         uv = pbr_data.read_exr(output / "renders/uv_diagnostic.exr")
         albedo = np.asarray(Image.open(rows[0]["maps"]["albedo"]["path"]).convert("RGB"))
+        expected_albedo = albedo.copy()
+        nearest_added = nearest_xy[added]
+        expected_albedo[added] = albedo[nearest_added[:, 1], nearest_added[:, 0]]
         core = (mask == 255) & (uv[:, :, 3] > .999)
-        error = np.abs(uv[:, :, :3] - _srgb_to_linear(albedo) * uv[:, :, 3:4])
+        error = np.abs(uv[:, :, :3] - _srgb_to_linear(expected_albedo) * uv[:, :, 3:4])
         uv_p95 = float(np.percentile(error[core], 95))
         predicted = uv[:, :, 3] > .5
         iou = float(np.count_nonzero(predicted & (mask > 0)) / np.count_nonzero(predicted | (mask > 0)))
@@ -124,11 +161,10 @@ def run(preview, output, gpu, full_grid=False):
             raise ValueError(f"UV/alpha validation failed: p95={uv_p95}, mask IoU={iou}")
         write_json(output / "projection_audit.json", {"UV_linear_error_p95": uv_p95, "mask_IoU": iou,
             "limitations": "mask fit proves projection only, not true recovered geometry or normals"})
-        uv_image, _ = pbr_data.composite(uv, original, mask)
+        uv_image, _ = pbr_data.composite(uv, original, mask, background=background)
         Image.fromarray(uv_image).save(output / "uv.png")
-        clay, _ = pbr_data.composite(pbr_data.read_exr(output / "renders/clay_diagnostic.exr"), original, mask)
+        clay, _ = pbr_data.composite(pbr_data.read_exr(output / "renders/clay_diagnostic.exr"), original, mask, background=background)
         Image.fromarray(clay).save(output / "clay.png")
-        import cv2
         normal = cv2.imread(str(next((output / "renders").glob("normal_*.exr"))), cv2.IMREAD_UNCHANGED)
         if normal is None or normal.ndim != 3 or normal.shape[2] < 3:
             raise ValueError("normal EXR must contain explicit RGB vector components")
@@ -144,7 +180,7 @@ def run(preview, output, gpu, full_grid=False):
             if (receipt["sha256"] != sha256(receipt["path"]) or receipt["mesh_sha256"] != plan["mesh_sha256"]
                     or receipt["protocol_sha256"] != protocol_sha or receipt["albedo_sha256"] != row["maps"]["albedo"]["sha256"]):
                 raise ValueError("render scene or Albedo provenance changed")
-            image, qc = pbr_data.composite(pbr_data.read_exr(receipt["path"]), original, mask)
+            image, qc = pbr_data.composite(pbr_data.read_exr(receipt["path"]), original, mask, background=background)
             path = output / "images" / f"{row['id']}.png"
             Image.fromarray(image).save(path)
             generated.append({**row, "image": str(path), "image_sha256": sha256(path),

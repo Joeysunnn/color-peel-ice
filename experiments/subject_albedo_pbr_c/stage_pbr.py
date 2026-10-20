@@ -70,7 +70,8 @@ def run(candidates, review, output):
     if mesh_path.resolve() != (candidates / "geometry.npz").resolve() or sha256(mesh_path) != plan["mesh_sha256"]:
         raise ValueError("candidate scene geometry differs from its fixed plan")
     with np.load(mesh_path, allow_pickle=False) as mesh:
-        geometry_hash = hashlib.sha256(b"".join(mesh[name].tobytes() for name in ("vertices", "faces", "uv"))).hexdigest()
+        array_order = ["vertices", "faces", "uv"] + (["face_uv"] if "face_uv" in mesh.files else [])
+        geometry_hash = hashlib.sha256(b"".join(mesh[name].tobytes() for name in array_order)).hexdigest()
     geometry_audit = read_json(candidates / "geometry_audit.json")
     scene = read_json(candidates / "renders/scene_audit.json")
     if (plan.get("protocol_sha256") != protocol_hash or scene.get("protocol_sha256") != protocol_hash
@@ -90,7 +91,8 @@ def run(candidates, review, output):
         raise ValueError("candidate plan or original EXR receipt grid differs")
     planned, rendered = ({row["id"]: row for row in records} for records in (planned, rendered))
     original_path, mask_path = (candidates / "source" / name for name in ("original.jpg", "object_mask.png"))
-    for path in (original_path, mask_path):
+    render_mask = plan.get("render_mask")
+    for path in (original_path,) if render_mask is not None else (original_path, mask_path):
         source_path = str(Path(plan["preview"]) / "source" / path.name)
         if sha256(path) != plan["source_locks"].get(source_path):
             raise ValueError("candidate original RGB/mask differs from the immutable source preview")
@@ -103,6 +105,24 @@ def run(candidates, review, output):
         if image.mode != "L" or image.size != (512, 512) or set(np.unique(image)) != {0, 255}:
             raise ValueError("original source mask must be 512px nonempty binary")
         mask = np.asarray(image).copy()
+    if render_mask is not None:
+        repair_source = Path(render_mask["source"])
+        base_path = candidates / "source/original_mask.png"
+        base_hash = plan["source_locks"].get(str(preview / "source/object_mask.png"))
+        if (not repair_source.is_absolute() or render_mask.get("sha256") != sha256(mask_path)
+                or plan["source_locks"].get(str(repair_source)) != render_mask.get("sha256")
+                or sha256(repair_source) != render_mask.get("sha256")
+                or render_mask.get("base_mask_sha256") != base_hash or sha256(base_path) != base_hash
+                or render_mask.get("added_pixels") != 1450 or not render_mask.get("uv_policy")):
+            raise ValueError("fixed repaired render mask, original mask or UV repair provenance differs")
+        with Image.open(base_path) as image:
+            if image.mode != "L" or image.size != (512, 512) or set(np.unique(image)) != {0, 255}:
+                raise ValueError("pre-repair source mask must be 512px nonempty binary")
+            base_mask = np.asarray(image).copy()
+        if (np.any((base_mask == 255) & (mask != 255))
+                or int(np.count_nonzero((mask == 255) & (base_mask == 0))) != render_mask["added_pixels"]):
+            raise ValueError("repaired render mask must add exactly 1450 pixels without deleting original foreground")
+        locks[str(base_path)], locks[str(mask_path)] = sha256(base_path), sha256(mask_path)
     albedos = {}
     frozen_keys = ("id", "color", "hue_degrees", "metallic_state", "metallic", "roughness_state",
                    "roughness", "proposed_caption", "maps")
@@ -161,7 +181,8 @@ def run(candidates, review, output):
         staged.append({**row, "source_image": row["image"], "source_image_sha256": row["image_sha256"],
             "source_mask": row["mask"], "source_mask_sha256": sha256(mask_path),
             "image": str(target_image), "image_sha256": sha256(target_image),
-            "mask": str(target_mask), "mask_sha256": sha256(target_mask), "training_eligible": True})
+            "mask": str(target_mask), "mask_sha256": sha256(target_mask), "training_eligible": True,
+            "render_mask": render_mask})
     concepts = [{"instance_prompt": [row["caption"]], "instance_data_dir": str(Path(row["image"]).parent),
                  "instance_mask_dir": str(Path(row["mask"]).parent)} for row in staged]
     write_json(output / "concepts.json", concepts)
@@ -180,6 +201,7 @@ def run(candidates, review, output):
              "rows": 30, "training_eligible_images": 30, "training_started": False,
              "candidate_manifest_sha256": sha256(manifest), "visual_review_sha256": sha256(review),
              "scene_sha256": protocol_hash, "geometry_content_sha256": geometry_hash,
+             "geometry_array_order": array_order, "render_mask": render_mask,
              "limitations": reviewed["limitations"], "contact_sheets": sheets,
              "files": {name: sha256(output / name) for name in
                        ("concepts.json", "training_assets_manifest.jsonl", "source_locks.json", "visual_review.json")}}

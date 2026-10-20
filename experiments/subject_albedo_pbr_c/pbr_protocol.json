@@ -1,6 +1,7 @@
 {
   "schema": "subject_c_fixed_view_cycles/v1",
   "geometry_type": "manually fitted single-view 2.5D mailbox; not recovered ground-truth geometry",
+  "render_mask": {"source": "/var/tmp/colorpeel-r12user5/runs/subject_multicolor_multimaterial_b/20261020-113427__data_preview__7ec744e__42/dataset/assets/pink/metallic/masks/image.png", "sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "added_pixels": 1450, "policy": "reuse reviewed Subject border repair; fixed nearest-valid-pixel UV continuation only for added foreground; original Albedo files unchanged"},
   "camera": {"type": "ORTHO", "location": [0, 0, 4], "rotation": [0, 0, 0], "ortho_scale": 1},
   "renderer": {"blender": "/home/r12user5/Documents/Jiawei/tools/blender-4.2.11-linux-x64/blender", "version": [4, 2, 11], "engine": "CYCLES", "samples": 256, "seed": 42, "resolution": 512, "denoise": false, "adaptive_sampling": false, "film_transparent": true},
   "world_strength": 0.08,
@@ -10,6 +11,6 @@
     {"name": "Lower_strip", "location": [-0.2, -0.8, 1.4], "target": [0, -0.25, 0.1], "energy": 4, "size": 0.08, "size_y": 0.6, "color": [1, 0.9, 0.8]}
   ],
   "shader": {"type": "Principled BSDF", "IOR": 1.5, "Specular IOR Level": 0.5, "Coat Weight": 0, "Subsurface Weight": 0, "Sheen Weight": 0, "albedo_interpolation": "Closest", "normal_input": "unlinked mesh normals"},
-  "background_policy": "true Cycles foreground; scene-linear premultiplied EXR composited onto original RGB; original-mask-outside pixels unchanged; background shadows not recomputed",
+  "background_policy": "true Cycles foreground; scene-linear premultiplied EXR composited onto one fixed background plate completed only inside repaired Subject mask; visible background pixels unchanged; background shadows not recomputed",
   "acceptance": "numeric geometry, UV and coverage checks plus visual review; material effects are physical under this assumed scene, not measured source-image BRDF"
 }

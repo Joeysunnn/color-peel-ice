@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pytest
 
-from experiments.subject_albedo_pbr_c.geometry import DEFAULT_GEOMETRY, build_mesh, surface_depth
+from experiments.subject_albedo_pbr_c.geometry import DEFAULT_GEOMETRY, boundary_uv, build_mesh, frame_padding, surface_depth
 
 
 def test_each_foreground_pixel_has_exactly_one_unique_positive_facing_quad():
@@ -150,3 +150,159 @@ def test_invalid_masks_are_rejected(mask):
 def test_invalid_geometry_is_rejected(change):
     with pytest.raises(ValueError):
         surface_depth(200, 440, {**DEFAULT_GEOMETRY, **change})
+
+
+@pytest.fixture
+def repaired_uv_inputs():
+    base = np.zeros((512, 512), dtype=np.uint8)
+    base[210:213, 220:223] = 255
+    repaired = base.copy()
+    repaired[210:214, 220:224] = 255
+    y, x = np.indices(base.shape)
+    nearest = np.stack((np.clip(x, 220, 222), np.clip(y, 210, 212)), axis=2)
+    return build_mesh(repaired, DEFAULT_GEOMETRY), base, nearest
+
+
+def test_boundary_uv_preserves_every_original_face_exactly(repaired_uv_inputs):
+    mesh, base, nearest = repaired_uv_inputs
+    old_uv = np.asarray(mesh["uv"])[np.asarray(mesh["faces"])]
+    result, stats = boundary_uv(mesh, base, nearest)
+    vertices = np.asarray(mesh["vertices"])
+    centers = vertices[np.asarray(mesh["faces"])].mean(axis=1)
+    pixels = np.column_stack(((centers[:, 0] + 0.5) * 512, (0.5 - centers[:, 1]) * 512)).astype(int)
+    original_faces = base[pixels[:, 1], pixels[:, 0]] > 0
+    assert np.array_equal(result[original_faces], old_uv[original_faces])
+    assert stats["original_face_count"] == 9 and stats["render_face_count"] == 16
+    assert stats["added_face_count"] == 7 and stats["added_face_ratio"] == 7 / 16
+    assert stats["max_pixel_extension"] == pytest.approx(np.sqrt(2))
+
+
+def test_added_faces_sample_only_original_foreground_pixel_centers(repaired_uv_inputs):
+    mesh, base, nearest = repaired_uv_inputs
+    old_uv = np.asarray(mesh["uv"])[np.asarray(mesh["faces"])]
+    result, _ = boundary_uv(mesh, base, nearest)
+    changed = np.any(result != old_uv, axis=(1, 2))
+    assert changed.sum() == 7
+    assert np.all(result[changed] == result[changed, :1, :])
+    xy = np.stack((result[changed, 0, 0] * 512 - 0.5,
+                   (1 - result[changed, 0, 1]) * 512 - 0.5), axis=1)
+    assert np.array_equal(xy, np.rint(xy))
+    xy = xy.astype(int)
+    assert np.all(base[xy[:, 1], xy[:, 0]] == 255)
+
+
+def test_boundary_uv_is_material_independent_and_does_not_mutate_inputs(repaired_uv_inputs):
+    import inspect
+
+    mesh, base, nearest = repaired_uv_inputs
+    before = json.dumps(mesh)
+    original_mask, original_nearest = base.copy(), nearest.copy()
+    first, stats = boundary_uv(mesh, base, nearest)
+    second, second_stats = boundary_uv(mesh, base, nearest)
+    assert list(inspect.signature(boundary_uv).parameters) == ["mesh", "base_mask", "nearest_xy"]
+    assert np.array_equal(first, second) and stats == second_stats
+    assert json.dumps(mesh) == before
+    assert np.array_equal(base, original_mask) and np.array_equal(nearest, original_nearest)
+    assert "not recovered Albedo" in stats["description"]
+    assert json.loads(json.dumps(stats)) == stats
+
+
+@pytest.mark.parametrize("kind", ["outside_foreground", "out_of_bounds", "noninteger", "wrong_shape"])
+def test_boundary_uv_rejects_invalid_nearest(repaired_uv_inputs, kind):
+    mesh, base, nearest = repaired_uv_inputs
+    if kind == "outside_foreground":
+        nearest[0, 0] = [0, 0]
+    elif kind == "out_of_bounds":
+        nearest[0, 0] = [512, 0]
+    elif kind == "noninteger":
+        nearest = nearest.astype(float)
+    else:
+        nearest = nearest[:, :, 0]
+    with pytest.raises(ValueError, match="nearest"):
+        boundary_uv(mesh, base, nearest)
+
+
+def test_boundary_uv_rejects_empty_base_or_missing_original_coverage(repaired_uv_inputs):
+    mesh, base, nearest = repaired_uv_inputs
+    with pytest.raises(ValueError, match="nonempty"):
+        boundary_uv(mesh, np.zeros_like(base), nearest)
+    incomplete = copy.deepcopy(mesh)
+    incomplete["faces"].pop(0)
+    with pytest.raises(ValueError, match="cover"):
+        boundary_uv(incomplete, base, nearest)
+
+
+@pytest.fixture
+def bottom_padding_inputs():
+    mask = np.zeros((512, 512), dtype=bool)
+    mask[509:512, 200:204] = True
+    mesh = build_mesh(mask, DEFAULT_GEOMETRY)
+    face_uv = np.asarray(mesh["uv"])[np.asarray(mesh["faces"])].copy()
+    face_uv[-4:] = np.array([0.4, 0.01])
+    return mesh, face_uv, mask
+
+
+def test_frame_padding_preserves_visible_geometry_and_authoritative_uv_prefix(bottom_padding_inputs):
+    mesh, uv, mask = bottom_padding_inputs
+    before = json.dumps(mesh)
+    old_uv = uv.copy()
+    padded, padded_uv, stats = frame_padding(mesh, uv, mask, DEFAULT_GEOMETRY)
+    assert padded["vertices"][:len(mesh["vertices"])] == mesh["vertices"]
+    assert padded["faces"][:len(mesh["faces"])] == mesh["faces"]
+    assert padded["uv"][:len(mesh["uv"])] == mesh["uv"]
+    assert np.array_equal(padded_uv[:len(uv)], uv)
+    assert json.dumps(mesh) == before and np.array_equal(old_uv, uv)
+    assert stats["padded_faces"] == 4 and stats["outside_strip_pixels"] == 8
+    assert stats["added_vertices"] == 5
+    assert padded["vertex_count"] == mesh["vertex_count"] + 5
+    assert padded["face_count"] == mesh["face_count"] + 4
+
+
+def test_padded_faces_are_outside_frame_shared_and_positive_facing(bottom_padding_inputs):
+    mesh, uv, mask = bottom_padding_inputs
+    padded, padded_uv, _ = frame_padding(mesh, uv, mask, DEFAULT_GEOMETRY)
+    vertices = np.asarray(padded["vertices"])
+    added = np.asarray(padded["faces"])[len(mesh["faces"]):]
+    coordinates = vertices[added]
+    pixel_y = (0.5 - coordinates[:, :, 1]) * 512
+    assert np.all(pixel_y >= 512) and set(pixel_y.ravel()) == {512, 514}
+    assert np.array_equal(added[:-1, 2], added[1:, 1])
+    assert np.array_equal(added[:-1, 3], added[1:, 0])
+    normals = np.cross(coordinates[:, 1] - coordinates[:, 0], coordinates[:, 2] - coordinates[:, 0])
+    assert np.all(normals[:, 2] > 0)
+    assert np.all(padded_uv[len(uv):] == np.array([0.4, 0.01]))
+    assert np.all(np.asarray(padded["uv"])[len(mesh["uv"]):, 1] < 0)
+
+
+def test_frame_padding_is_deterministic_and_has_no_material_inputs(bottom_padding_inputs):
+    import hashlib
+    import inspect
+
+    mesh, uv, mask = bottom_padding_inputs
+    first, first_uv, stats = frame_padding(mesh, uv, mask, DEFAULT_GEOMETRY)
+    second, second_uv, other_stats = frame_padding(mesh, uv, mask, DEFAULT_GEOMETRY)
+    digest = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+    assert digest(first) == digest(second) and first_uv.tobytes() == second_uv.tobytes()
+    assert stats == other_stats
+    assert list(inspect.signature(frame_padding).parameters) == ["mesh", "face_uv", "render_mask", "config", "pixels"]
+
+
+def test_frame_padding_rejects_other_frame_edges(bottom_padding_inputs):
+    _, _, mask = bottom_padding_inputs
+    mask = mask.copy()
+    mask[0, 200] = True
+    mesh = build_mesh(mask, DEFAULT_GEOMETRY)
+    uv = np.asarray(mesh["uv"])[np.asarray(mesh["faces"])]
+    with pytest.raises(ValueError, match="bottom-frame contact only"):
+        frame_padding(mesh, uv, mask, DEFAULT_GEOMETRY)
+
+
+def test_frame_padding_with_no_bottom_contact_does_not_add_geometry():
+    mask = np.zeros((512, 512), dtype=bool)
+    mask[400:402, 200:203] = True
+    mesh = build_mesh(mask, DEFAULT_GEOMETRY)
+    uv = np.asarray(mesh["uv"])[np.asarray(mesh["faces"])]
+    padded, padded_uv, stats = frame_padding(mesh, uv, mask, DEFAULT_GEOMETRY)
+    assert padded["vertices"] == mesh["vertices"] and padded["faces"] == mesh["faces"]
+    assert np.array_equal(padded_uv, uv)
+    assert stats["padded_faces"] == stats["outside_strip_pixels"] == 0

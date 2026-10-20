@@ -75,7 +75,7 @@ def setup(plan, output):
         light.location = spec["location"]
         light.rotation_euler = (Vector(spec["target"]) - light.location).to_track_quat("-Z", "Y").to_euler()
     with np.load(plan["mesh"], allow_pickle=False) as archive:
-        arrays = {name: archive[name] for name in ("vertices", "faces", "uv")}
+        arrays = {name: archive[name] for name in archive.files}
     mesh = bpy.data.meshes.new("Photo_aligned_mailbox_surface")
     mesh.from_pydata(arrays["vertices"].tolist(), [], arrays["faces"].tolist())
     mesh.update()
@@ -83,7 +83,8 @@ def setup(plan, output):
     for polygon in mesh.polygons:
         polygon.use_smooth = True
         for index in polygon.loop_indices:
-            uv.data[index].uv = arrays["uv"][mesh.loops[index].vertex_index]
+            corner = index - polygon.loop_start
+            uv.data[index].uv = arrays["face_uv"][polygon.index, corner] if "face_uv" in arrays else arrays["uv"][mesh.loops[index].vertex_index]
     obj = bpy.data.objects.new(mesh.name, mesh)
     scene.collection.objects.link(obj)
     material = bpy.data.materials.new("Fixed_albedo_only_M_R_vary")

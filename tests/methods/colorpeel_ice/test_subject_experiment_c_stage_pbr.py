@@ -182,3 +182,79 @@ def test_staging_cannot_add_files_inside_the_immutable_parameter_preview(candida
     with pytest.raises(ValueError, match="immutable source preview"):
         module.run(root, review, output)
     assert not output.exists()
+
+
+@pytest.fixture
+def repaired(candidates):
+    root, review, output, rows, reseal, reviews, revision = candidates
+    plan = module.read_json(root / "plan.json")
+    base_path = root / "source/original_mask.png"
+    base_path.write_bytes((root / "source/object_mask.png").read_bytes())
+    mask = np.asarray(Image.open(base_path)).copy()
+    mask[470:475, 140:430] = 255  # Exactly 1450 newly covered bottom-edge pixels.
+    repair_source = root.parent / "approved_b_repaired_mask.png"
+    Image.fromarray(mask).save(repair_source)
+    (root / "source/object_mask.png").write_bytes(repair_source.read_bytes())
+    plan["source_locks"][str(repair_source)] = module.sha256(repair_source)
+    plan["render_mask"] = {"source": str(repair_source), "sha256": module.sha256(repair_source),
+        "base_mask_sha256": module.sha256(base_path), "added_pixels": 1450,
+        "uv_policy": "fixed nearest-valid-image UV extension; original five Albedo files remain unchanged"}
+    mesh_path = root / "geometry.npz"
+    with np.load(mesh_path, allow_pickle=False) as saved:
+        arrays = {name: saved[name].copy() for name in ("vertices", "faces", "uv")}
+    arrays["face_uv"] = np.full((1, 3, 2), .25, np.float32)
+    np.savez_compressed(mesh_path, **arrays)
+    geometry_hash = hashlib.sha256(b"".join(arrays[name].tobytes() for name in ("vertices", "faces", "uv", "face_uv"))).hexdigest()
+    plan["mesh_sha256"] = module.sha256(mesh_path)
+    module.write_json(root / "plan.json", plan)
+    module.write_json(root / "geometry_audit.json", {"array_content_sha256": geometry_hash})
+    scene = module.read_json(root / "renders/scene_audit.json")
+    scene["mesh_sha256"] = plan["mesh_sha256"]
+    module.write_json(root / "renders/scene_audit.json", scene)
+    rendered = module.read_json(root / "renders/renders.json")
+    for row, receipt in zip(rows, rendered):
+        row["geometry_content_sha256"] = geometry_hash
+        receipt["mesh_sha256"] = plan["mesh_sha256"]
+    module.write_json(root / "renders/renders.json", rendered)
+    reseal()
+    return candidates, plan, repair_source, arrays
+
+
+def test_repaired_render_mask_and_face_uv_are_bound_and_retained_in_staged_audit(repaired):
+    (root, review, output, rows, _, _, _), plan, repair_source, _ = repaired
+    original_albedos = {row["color"]: row["maps"]["albedo"]["sha256"] for row in rows}
+    result = module.run(root, review, output)
+    assert result["render_mask"] == plan["render_mask"]
+    assert result["geometry_array_order"] == ["vertices", "faces", "uv", "face_uv"]
+    locks = module.read_json(output / "source_locks.json")
+    assert locks[str(repair_source)] == plan["render_mask"]["sha256"]
+    assert str(root / "source/original_mask.png") in locks
+    staged = [json.loads(line) for line in (output / "training_assets_manifest.jsonl").read_text().splitlines()]
+    assert all(row["render_mask"] == plan["render_mask"] for row in staged)
+    assert all(row["mask_sha256"] == module.sha256(repair_source) for row in staged)
+    assert {row["color"]: row["maps"]["albedo"]["sha256"] for row in staged} == original_albedos
+
+
+@pytest.mark.parametrize("failure", ("source_lock", "base_hash", "deletes_foreground", "added_count", "face_uv_hash"))
+def test_repaired_mask_or_face_uv_provenance_errors_are_rejected(repaired, failure):
+    (root, review, output, _, _, _, _), plan, repair_source, arrays = repaired
+    if failure == "source_lock":
+        del plan["source_locks"][str(repair_source)]
+    elif failure == "base_hash":
+        plan["render_mask"]["base_mask_sha256"] = plan["render_mask"]["sha256"]
+    elif failure == "deletes_foreground":
+        mask = np.asarray(Image.open(repair_source)).copy()
+        mask[100, 200] = 0
+        Image.fromarray(mask).save(repair_source)
+        (root / "source/object_mask.png").write_bytes(repair_source.read_bytes())
+        plan["render_mask"]["sha256"] = module.sha256(repair_source)
+        plan["source_locks"][str(repair_source)] = module.sha256(repair_source)
+    elif failure == "added_count":
+        plan["render_mask"]["added_pixels"] = 1449
+    else:
+        old_three_array_hash = hashlib.sha256(b"".join(arrays[name].tobytes() for name in ("vertices", "faces", "uv"))).hexdigest()
+        module.write_json(root / "geometry_audit.json", {"array_content_sha256": old_three_array_hash})
+    module.write_json(root / "plan.json", plan)
+    with pytest.raises(ValueError, match="mask|geometry|UV"):
+        module.run(root, review, output)
+    assert not output.exists()

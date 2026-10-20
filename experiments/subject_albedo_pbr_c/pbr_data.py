@@ -107,7 +107,7 @@ def verify_preview(preview):
     return rows, locks
 
 
-def composite(premult_rgba_linear_float32, original_uint8RGB, mask_uint8):
+def composite(premult_rgba_linear_float32, original_uint8RGB, mask_uint8, background=None):
     """Composite fixed-exposure linear foreground only where the original mask permits."""
     rgba, original, mask = map(np.asarray, (premult_rgba_linear_float32, original_uint8RGB, mask_uint8))
     if (rgba.dtype != np.float32 or rgba.ndim != 3 or rgba.shape[2] != 4
@@ -122,6 +122,11 @@ def composite(premult_rgba_linear_float32, original_uint8RGB, mask_uint8):
     if np.any(np.abs(rgba[:, :, :3][alpha == 0]) > 1e-6):
         raise ValueError("premultiplied RGB must be zero wherever alpha is zero")
     inside = mask == 255
+    plate = original if background is None else np.asarray(background)
+    if plate.dtype != np.uint8 or plate.shape != original.shape:
+        raise ValueError("fixed background plate must match original uint8 RGB dimensions")
+    if not np.array_equal(plate[~inside], original[~inside]):
+        raise ValueError("fixed background plate must preserve every outside-mask original RGB pixel")
     padded = np.pad(inside, 1, constant_values=False)
     core = np.logical_and.reduce([padded[y:y + mask.shape[0], x:x + mask.shape[1]]
                                   for y, x in itertools.product(range(3), repeat=2)])
@@ -130,7 +135,7 @@ def composite(premult_rgba_linear_float32, original_uint8RGB, mask_uint8):
     coverage = float(np.mean(alpha[core] > 0.99))
     if coverage < 0.995:
         raise ValueError(f"render core coverage {coverage:.6f} is below 99.5%; source foreground cannot fill missing geometry")
-    linear = rgba[:, :, :3].astype(np.float64) + _srgb_to_linear(original) * (1 - alpha[:, :, None])
+    linear = rgba[:, :, :3].astype(np.float64) + _srgb_to_linear(plate) * (1 - alpha[:, :, None])
     foreground = linear[inside]
     clipped = (foreground < 0) | (foreground > 1)
     result = original.copy()
@@ -144,7 +149,10 @@ def composite(premult_rgba_linear_float32, original_uint8RGB, mask_uint8):
           "alpha_mean_inside": float(alpha[inside].mean()),
           "uncovered_inside_pixels": int(np.count_nonzero(alpha[inside] == 0)),
           "outside_mask_changed_pixels": int(np.count_nonzero(np.any(result[~inside] != original[~inside], axis=1))),
-          "compositing": "linear premultiplied foreground + linear original background * (1-alpha); write only inside original mask",
+          "background_source": "original_rgb" if background is None else "fixed_background_plate",
+          "compositing": "linear premultiplied foreground + linear "
+                         + ("original background" if background is None else "fixed background plate")
+                         + " * (1-alpha); write only inside original mask",
           "display": "fixed [0,1] clipping then sRGB; no per-image exposure or normalization"}
     return result, qc
 

@@ -156,7 +156,7 @@ scene, source locks, exact command, original scene-linear Combined EXRs,
 geometry normal/depth passes, projection audit, full512px PNGs, captions and
 contact sheet. Preview mode produces six green cases; full mode produces30.
 Masked background composition uses linear premultiplied RGB/alpha, with the
-original-mask-outside pixels copied exactly. Original background shadows stay
+shared repaired-mask-outside pixels copied exactly. Original background shadows stay
 fixed rather than being recomputed, so this is physical foreground rendering
 against a fixed photographic background, not recovery of the entire real scene.
 
@@ -188,3 +188,16 @@ No training command is run by this stage. The final lighting is globally
 calibrated against all five Albedos; illumination, display transform and
 256 samples with adaptive sampling disabled stay identical across all30
 conditions, with no per-image exposure adjustment.
+
+The initial SuperMat alpha misses1450 pixels at the cropped object bottom,
+which otherwise retain the original orange photo pixels. Final rendering uses
+the previously reviewed B border-repair mask (43719 foreground pixels), while
+the original42269-pixel mask is retained separately for provenance. No original
+asset or Albedo file is modified. Original-mask-visible UVs stay unchanged;
+only the added3.3% of foreground samples use fixed nearest-valid-source-pixel
+UV continuation. This is explicit boundary extrapolation, not newly extracted
+Albedo. A2px offscreen mesh strip avoids false transparency where the real
+object continues below the photograph. For partially covered silhouette
+pixels, a fixed background plate is completed inside the mask with TELEA3;
+all visible outside-mask background pixels remain byte-identical. The plate
+is hidden under opaque foreground and is never used as a training subject.

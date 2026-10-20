@@ -148,6 +148,37 @@ def test_hdr_clipping_is_reported_without_changing_other_pixels_by_normalization
     assert qc["clipped_channel_fraction"] == pytest.approx(2 / (484 * 3))
 
 
+def test_fixed_background_plate_removes_source_foreground_color_from_transparent_edge_only():
+    rgba, original, mask = render_arrays()
+    original[mask == 255] = (255, 50, 0)
+    rgba[4, 10] = (0.125, 0.125, 0.125, 0.5)
+    plate = original.copy()
+    plate[mask == 255] = (80, 80, 80)
+    before = plate.copy()
+    without_plate, _ = module.composite(rgba, original, mask)
+    image, qc = module.composite(rgba, original, mask, background=plate)
+    assert without_plate[4, 10, 0] > without_plate[4, 10, 2]
+    assert len(set(image[4, 10])) == 1  # Neutral rendered edge no longer receives old orange foreground.
+    assert np.array_equal(image[10, 10], without_plate[10, 10])  # Opaque core never exposes the plate.
+    assert np.array_equal(image[mask == 0], original[mask == 0])
+    assert np.array_equal(plate, before)
+    assert qc["background_source"] == "fixed_background_plate" and qc["outside_mask_changed_pixels"] == 0
+
+
+@pytest.mark.parametrize("failure", ("outside", "dtype", "shape"))
+def test_background_plate_cannot_change_outside_pixels_or_input_contract(failure):
+    rgba, original, mask = render_arrays()
+    plate = original.copy()
+    if failure == "outside":
+        plate[0, 0] = (10, 20, 30)
+    elif failure == "dtype":
+        plate = plate.astype(np.float32)
+    else:
+        plate = plate[:-1]
+    with pytest.raises(ValueError, match="background plate"):
+        module.composite(rgba, original, mask, background=plate)
+
+
 @pytest.mark.parametrize("failure", ("rgba_dtype", "rgb_dtype", "mask_shape", "mask_binary", "empty", "nan", "alpha", "straight_rgb", "no_core", "no_coverage"))
 def test_invalid_numeric_inputs_and_missing_geometry_are_rejected(failure):
     rgba, original, mask = render_arrays()
