@@ -8,6 +8,8 @@ inference is started by this study.
 
 The first server preview and its observed limits are recorded in
 [`reports/01_parameter_preview.md`](reports/01_parameter_preview.md).
+The subsequent fixed-view PBR dataset, numeric checks and remaining geometric
+limitations are recorded in [`reports/02_fixed_view_pbr_dataset.md`](reports/02_fixed_view_pbr_dataset.md).
 
 ## Implemented boundary
 
@@ -19,7 +21,7 @@ uses Generated/BOX projection on generic geometry; its own `PROTOCOL.md`
 calls this a single-view-to-3D approximation. Those renders cannot stand in
 for the original mailbox.
 
-Therefore this first C implementation deliberately produces **parameter maps
+The initial parameter-only C implementation deliberately produces **parameter maps
 and visualizations only**. It emits no recomposed RGB, no training concepts,
 no training images and no synthetic claims of physical material control.
 `renderer_readiness.json` records the missing inputs. All thirty manifest
@@ -27,6 +29,8 @@ rows have `rgb_image=null`, `render_status=not_rendered` and
 `training_eligible=false`. The intermediate-preview status is distinct from
 a complete dataset. A successful parameter audit does not establish identity
 preservation, material editing success or disentanglement in generated RGB.
+The separate fixed-view Cycles extension below supplies an explicit manual
+scene instead of claiming these missing quantities were recovered by SuperMat.
 
 ## Source and edits
 
