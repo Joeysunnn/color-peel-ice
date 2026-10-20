@@ -166,3 +166,25 @@ normals, internal components, boundary or material appearance. Outputs remain
 training candidates pending visual review; no training starts. If the fitted
 geometry or source Albedo fails those criteria, improve and revalidate it in a
 new version rather than labelling poor candidates as usable training data.
+
+After reviewing every full-grid RGB, save a separate review JSON with
+`candidate_manifest_sha256`, `reviewer`, thirty `decisions` (`id`, `accepted`,
+`reasons`) and explicit `limitations`. Staging refuses missing/rejected
+decisions, changed RGB/EXRs/scenes, more than1% clipped foreground pixels,
+incomplete foreground coverage or changed background. Both rendering and
+staging must use the same clean revision. It copies accepted RGB/masks into
+fresh per-image asset directories, with the frozen captions and shared
+Subject dataset format; source candidates remain unchanged.
+
+```bash
+$PY -B -m experiments.subject_albedo_pbr_c.stage_pbr \
+  --candidates "$NEW_FULL_GRID" --review "$SEPARATE_VISUAL_REVIEW_JSON" \
+  --output "$NEW_ACCEPTED_DATASET"
+```
+
+The accepted dataset's contact sheet shows the actual thirty training RGB
+images and references the original, clay and normal diagnostics separately.
+No training command is run by this stage. The final lighting is globally
+calibrated against all five Albedos; illumination, display transform and
+256 samples with adaptive sampling disabled stay identical across all30
+conditions, with no per-image exposure adjustment.

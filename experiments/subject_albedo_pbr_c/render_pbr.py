@@ -30,6 +30,7 @@ def setup(plan, output):
     scene.cycles.samples = protocol["renderer"]["samples"]
     scene.cycles.seed = protocol["renderer"]["seed"]
     scene.cycles.use_denoising = False
+    scene.cycles.use_adaptive_sampling = False
     scene.cycles.device = "GPU"
     preferences = bpy.context.preferences.addons["cycles"].preferences
     preferences.compute_device_type = "CUDA"
