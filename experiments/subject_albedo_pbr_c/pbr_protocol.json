@@ -1,7 +1,7 @@
 {
   "schema": "subject_c_fixed_view_cycles/v1",
   "geometry_type": "manually fitted single-view 2.5D mailbox; not recovered ground-truth geometry",
-  "render_mask": {"source": "/var/tmp/colorpeel-r12user5/runs/subject_multicolor_multimaterial_b/20261020-113427__data_preview__7ec744e__42/dataset/assets/pink/metallic/masks/image.png", "sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7", "added_pixels": 1450, "policy": "reuse reviewed Subject border repair; fixed nearest-valid-pixel UV continuation only for added foreground; original Albedo files unchanged"},
+  "render_mask": {"source": "/var/tmp/colorpeel-r12user5/runs/subject_albedo_pbr_c/20261020-153651__parameter_preview__ac92f46__42/source/object_mask.png", "sha256": "1b226d6b66c95c49ff2dddb734ff2c9efac172cddf6d3231bd12eebbad5d7157", "refinement": {"bottom_polygon": [[143, 506], [375, 506], [369, 511], [142, 511]]}, "policy": "preserve original mask; manually complete only the bottom crop using a fixed polygon; nearest-valid-pixel UV continuation only for added foreground; original Albedo files unchanged"},
   "camera": {"type": "ORTHO", "location": [0, 0, 4], "rotation": [0, 0, 0], "ortho_scale": 1},
   "renderer": {"blender": "/home/r12user5/Documents/Jiawei/tools/blender-4.2.11-linux-x64/blender", "version": [4, 2, 11], "engine": "CYCLES", "samples": 256, "seed": 42, "resolution": 512, "denoise": false, "adaptive_sampling": false, "film_transparent": true},
   "world_strength": 0.08,

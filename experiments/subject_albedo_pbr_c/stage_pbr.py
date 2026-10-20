@@ -109,19 +109,37 @@ def run(candidates, review, output):
         repair_source = Path(render_mask["source"])
         base_path = candidates / "source/original_mask.png"
         base_hash = plan["source_locks"].get(str(preview / "source/object_mask.png"))
-        if (not repair_source.is_absolute() or render_mask.get("sha256") != sha256(mask_path)
+        refinement = render_mask.get("refinement")
+        target_hash = render_mask.get("derived_mask_sha256") if refinement is not None else render_mask.get("sha256")
+        if (not repair_source.is_absolute() or target_hash != sha256(mask_path)
                 or plan["source_locks"].get(str(repair_source)) != render_mask.get("sha256")
                 or sha256(repair_source) != render_mask.get("sha256")
                 or render_mask.get("base_mask_sha256") != base_hash or sha256(base_path) != base_hash
-                or render_mask.get("added_pixels") != 1450 or not render_mask.get("uv_policy")):
+                or (refinement is None and render_mask.get("added_pixels") != 1450)
+                or not render_mask.get("uv_policy")):
             raise ValueError("fixed repaired render mask, original mask or UV repair provenance differs")
         with Image.open(base_path) as image:
             if image.mode != "L" or image.size != (512, 512) or set(np.unique(image)) != {0, 255}:
                 raise ValueError("pre-repair source mask must be 512px nonempty binary")
             base_mask = np.asarray(image).copy()
-        if (np.any((base_mask == 255) & (mask != 255))
-                or int(np.count_nonzero((mask == 255) & (base_mask == 0))) != render_mask["added_pixels"]):
-            raise ValueError("repaired render mask must add exactly 1450 pixels without deleting original foreground")
+        if refinement is None:
+            if (np.any((base_mask == 255) & (mask != 255))
+                    or int(np.count_nonzero((mask == 255) & (base_mask == 0))) != render_mask["added_pixels"]):
+                raise ValueError("repaired render mask must add exactly 1450 pixels without deleting original foreground")
+        else:
+            from experiments.subject_albedo_pbr_c.geometry import refine_render_mask
+            with Image.open(repair_source) as image:
+                if image.mode != "L" or image.size != (512, 512) or set(np.unique(image)) != {0, 255}:
+                    raise ValueError("fixed refinement source must remain a 512px binary mask")
+                source_mask = np.asarray(image).copy()
+            recomputed, stats = refine_render_mask(base_mask, source_mask, refinement)
+            recomputed = np.asarray(recomputed)
+            if recomputed.dtype == np.bool_:
+                recomputed = recomputed.astype(np.uint8) * 255
+            if (not np.array_equal(recomputed, mask)
+                    or any(type(stats.get(key)) is not int or stats[key] != render_mask.get(key)
+                           for key in ("added_pixels", "removed_reviewed_pixels"))):
+                raise ValueError("derived render mask or deterministic refinement pixel counts differ")
         locks[str(base_path)], locks[str(mask_path)] = sha256(base_path), sha256(mask_path)
     albedos = {}
     frozen_keys = ("id", "color", "hue_degrees", "metallic_state", "metallic", "roughness_state",

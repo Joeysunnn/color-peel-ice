@@ -189,12 +189,15 @@ calibrated against all five Albedos; illumination, display transform and
 256 samples with adaptive sampling disabled stay identical across all30
 conditions, with no per-image exposure adjustment.
 
-The initial SuperMat alpha misses1450 pixels at the cropped object bottom,
-which otherwise retain the original orange photo pixels. Final rendering uses
-the previously reviewed B border-repair mask (43719 foreground pixels), while
-the original42269-pixel mask is retained separately for provenance. No original
+The initial SuperMat alpha misses a strip at the cropped object bottom,
+which otherwise retains original orange photo pixels. The B border-repair mask
+was rejected for C after full-size inspection found background-post pixels in
+its additions. Final rendering instead preserves the original42269-pixel mask
+and completes only the bottom cut with the explicit fixed polygon in
+`pbr_protocol.json`:682 added pixels,42951 total. Both source and derived masks
+are hash-locked and the derivation is recomputed during staging. No original
 asset or Albedo file is modified. Original-mask-visible UVs stay unchanged;
-only the added3.3% of foreground samples use fixed nearest-valid-source-pixel
+only the added1.6% of foreground samples use fixed nearest-valid-source-pixel
 UV continuation. This is explicit boundary extrapolation, not newly extracted
 Albedo. A2px offscreen mesh strip avoids false transparency where the real
 object continues below the photograph. For partially covered silhouette

@@ -89,14 +89,15 @@ def run(preview, output, gpu, full_grid=False):
     if sha256(repaired) != mask_spec["sha256"]:
         raise ValueError("reviewed repaired Subject mask changed")
     locks[str(repaired)] = mask_spec["sha256"]
-    shutil.copyfile(repaired, output / "source/object_mask.png")
     original = np.asarray(Image.open(output / "source/original.jpg").convert("RGB"))
-    mask = np.asarray(Image.open(output / "source/object_mask.png").convert("L"))
     base_mask = np.asarray(Image.open(base_mask_path).convert("L"))
+    source_mask = np.asarray(Image.open(repaired).convert("L"))
+    mask, refinement_audit = geometry.refine_render_mask(base_mask, source_mask, mask_spec["refinement"])
+    Image.fromarray(mask).save(output / "source/object_mask.png")
     added = (mask > 0) & (base_mask == 0)
     if (mask.shape != base_mask.shape or set(np.unique(mask)) != {0, 255}
-            or np.any((base_mask > 0) & (mask == 0)) or added.sum() != mask_spec["added_pixels"]):
-        raise ValueError("reviewed mask must preserve original foreground and add exactly the frozen border repair")
+            or np.any((base_mask > 0) & (mask == 0)) or not added.any()):
+        raise ValueError("bottom completion must preserve the original foreground")
     import cv2
     _, labels = cv2.distanceTransformWithLabels((base_mask == 0).astype(np.uint8), cv2.DIST_L2, 5,
                                                 labelType=cv2.DIST_LABEL_PIXEL)
@@ -128,7 +129,8 @@ def run(preview, output, gpu, full_grid=False):
             "background_plate": {"path": str(background_path), "sha256": sha256(background_path),
                 "method": "fixed TELEA radius3 background completion inside subject mask only; visible only at antialiased boundary"},
             "render_mask": {
-                **mask_spec, "base_mask_sha256": sha256(base_mask_path), "uv_policy": extension}}
+                **mask_spec, **refinement_audit, "derived_mask_sha256": sha256(output / "source/object_mask.png"),
+                "base_mask_sha256": sha256(base_mask_path), "uv_policy": extension}}
     write_json(output / "plan.json", plan)
     command = [protocol["renderer"]["blender"], "--background", "--python-exit-code", "1",
                "--python", str(Path(__file__).with_name("render_pbr.py")), "--",

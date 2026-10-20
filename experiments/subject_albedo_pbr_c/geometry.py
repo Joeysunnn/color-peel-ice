@@ -113,6 +113,38 @@ def build_mesh(mask, config):
     }
 
 
+def refine_render_mask(base_mask, source_mask, config):
+    """Complete the cropped mailbox bottom using a fixed, reviewed pixel polygon."""
+    base, source = np.asarray(base_mask), np.asarray(source_mask)
+    if (base.shape != (512, 512) or source.shape != base.shape
+            or not np.isin(base, [0, 1, 255]).all() or not np.any(base)
+            or not np.isin(source, [0, 1, 255]).all()
+            or not np.array_equal(base.astype(bool), source.astype(bool))):
+        raise ValueError("bottom completion must start from the immutable original binary mask")
+    if not isinstance(config, dict) or set(config) != {"bottom_polygon"}:
+        raise ValueError("mask refinement requires the declared bottom polygon only")
+    polygon = np.asarray(config["bottom_polygon"], dtype=np.float64)
+    if (polygon.shape != (4, 2) or not np.isfinite(polygon).all()
+            or np.any(polygon < 0) or np.any(polygon > 511)
+            or polygon[0, 1] != polygon[1, 1]
+            or polygon[2, 1] != 511 or polygon[3, 1] != 511
+            or polygon[0, 1] >= 511 or polygon[0, 0] >= polygon[1, 0]
+            or polygon[3, 0] >= polygon[2, 0]):
+        raise ValueError("bottom polygon must be a finite left/right trapezoid ending at row 511")
+    result = base.astype(bool).copy()
+    for y in range(int(np.ceil(polygon[0, 1])), 512):
+        fraction = (y - polygon[0, 1]) / (511 - polygon[0, 1])
+        left = int(np.ceil(polygon[0, 0] * (1 - fraction) + polygon[3, 0] * fraction))
+        right = int(np.floor(polygon[1, 0] * (1 - fraction) + polygon[2, 0] * fraction))
+        result[y, left:right + 1] = True
+    return result.astype(np.uint8) * 255, {
+        "original_pixels": int(np.count_nonzero(base)), "final_pixels": int(result.sum()),
+        "added_pixels": int(np.count_nonzero(result & ~base.astype(bool))),
+        "removed_reviewed_pixels": 0,
+        "description": "Original mask unchanged except fixed manual bottom-cut polygon completion; no reused Experiment B foreground or background post; not a recovered segmentation.",
+    }
+
+
 def boundary_uv(mesh, base_mask, nearest_xy):
     """Extend UVs only on repaired-mask pixels, without editing any Albedo."""
     base = np.asarray(base_mask)

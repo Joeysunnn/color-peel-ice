@@ -6,7 +6,35 @@ import json
 import numpy as np
 import pytest
 
-from experiments.subject_albedo_pbr_c.geometry import DEFAULT_GEOMETRY, boundary_uv, build_mesh, frame_padding, surface_depth
+from experiments.subject_albedo_pbr_c.geometry import DEFAULT_GEOMETRY, boundary_uv, build_mesh, frame_padding, refine_render_mask, surface_depth
+
+
+def test_bottom_completion_preserves_subject_and_excludes_background_post():
+    base = np.zeros((512, 512), dtype=np.uint8)
+    base[480:507, 143:376] = 255
+    base[507:511, 342:370] = 255
+    original = base.copy()
+    config = {"bottom_polygon": [[143, 506], [375, 506], [369, 511], [142, 511]]}
+    result, audit = refine_render_mask(base, base, config)
+    assert np.array_equal(base, original)
+    assert np.array_equal(result[:506], base[:506])
+    assert np.all(result[base > 0] == 255)
+    assert np.all(result[480:, 410:440] == 0)
+    assert np.all(result[511, 142:370] == 255)
+    assert np.all(result[511, :142] == 0) and np.all(result[511, 370:] == 0)
+    assert audit["added_pixels"] == np.count_nonzero((result > 0) & (base == 0))
+    assert audit["removed_reviewed_pixels"] == 0
+    assert result.dtype == np.uint8
+    assert set(np.unique(result)) == {0, 255}
+
+
+def test_bottom_completion_rejects_changed_source_mask():
+    base = np.zeros((512, 512), dtype=np.uint8)
+    base[506, 150] = 255
+    changed = base.copy()
+    changed[510, 430] = 255
+    with pytest.raises(ValueError, match="immutable original"):
+        refine_render_mask(base, changed, {"bottom_polygon": [[143, 506], [375, 506], [369, 511], [142, 511]]})
 
 
 def test_each_foreground_pixel_has_exactly_one_unique_positive_facing_quad():

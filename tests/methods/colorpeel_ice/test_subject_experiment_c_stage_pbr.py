@@ -258,3 +258,58 @@ def test_repaired_mask_or_face_uv_provenance_errors_are_rejected(repaired, failu
     with pytest.raises(ValueError, match="mask|geometry|UV"):
         module.run(root, review, output)
     assert not output.exists()
+
+
+@pytest.fixture
+def refined(candidates):
+    root, review, output, rows, reseal, reviews, revision = candidates
+    plan = module.read_json(root / "plan.json")
+    base_path = root / "source/original_mask.png"
+    base_path.write_bytes((root / "source/object_mask.png").read_bytes())
+    source_path = Path(plan["preview"]) / "source/object_mask.png"
+    base = np.asarray(Image.open(base_path)).copy()
+    config = {"bottom_polygon": [[143, 506], [375, 506], [369, 511], [142, 511]]}
+    derived, stats = pbr.geometry.refine_render_mask(base, np.asarray(Image.open(source_path)), config)
+    Image.fromarray(derived).save(root / "source/object_mask.png")
+    plan["render_mask"] = {"source": str(source_path), "sha256": module.sha256(source_path),
+        "base_mask_sha256": module.sha256(base_path), "derived_mask_sha256": module.sha256(root / "source/object_mask.png"),
+        "refinement": config, "uv_policy": "fixed nearest original-mask pixel UV extension; five Albedo files unchanged", **stats}
+    module.write_json(root / "plan.json", plan)
+    reseal()
+    return candidates, plan, source_path
+
+
+def test_refined_mask_is_recomputed_from_original_and_preserved_without_1450_assumption(refined):
+    (root, review, output, _, _, _, _), plan, source_path = refined
+    source_bytes = source_path.read_bytes()
+    assert plan["render_mask"]["added_pixels"] != 1450
+    assert plan["render_mask"]["removed_reviewed_pixels"] == 0
+    result = module.run(root, review, output)
+    assert result["render_mask"] == plan["render_mask"]
+    assert result["render_mask"]["sha256"] != result["render_mask"]["derived_mask_sha256"]
+    staged = [json.loads(line) for line in (output / "training_assets_manifest.jsonl").read_text().splitlines()]
+    assert all(row["mask_sha256"] == plan["render_mask"]["derived_mask_sha256"] for row in staged)
+    assert source_path.read_bytes() == source_bytes
+
+
+@pytest.mark.parametrize("failure", ("derived_hash", "recomputed_mask", "added_count", "removed_count", "polygon"))
+def test_derived_hash_exact_refinement_and_pixel_count_mismatches_are_rejected(refined, failure):
+    (root, review, output, _, _, _, _), plan, _ = refined
+    if failure == "derived_hash":
+        plan["render_mask"]["derived_mask_sha256"] = plan["render_mask"]["sha256"]
+    elif failure == "recomputed_mask":
+        path = root / "source/object_mask.png"
+        mask = np.asarray(Image.open(path)).copy()
+        mask[500, 145] = 255
+        Image.fromarray(mask).save(path)
+        plan["render_mask"]["derived_mask_sha256"] = module.sha256(path)
+    elif failure == "added_count":
+        plan["render_mask"]["added_pixels"] += 1
+    elif failure == "removed_count":
+        plan["render_mask"]["removed_reviewed_pixels"] = 1
+    else:
+        plan["render_mask"]["refinement"]["bottom_polygon"][0][0] += 3
+    module.write_json(root / "plan.json", plan)
+    with pytest.raises(ValueError, match="mask|refinement|provenance"):
+        module.run(root, review, output)
+    assert not output.exists()
