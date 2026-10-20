@@ -123,3 +123,46 @@ wood (PNDM100,CFG3.5,512px,fp16,safety checker,seeds42/43). Add corresponding
 color-only and crossed color/material prompts with the same sampling. Compare
 identity, requested color and requested material separately; unseen material
 generalization cannot be evaluated at this parameter-preview stage.
+
+## Physical foreground rendering with an explicit manual geometry fit
+
+`pbr.py` adds a separately versioned Cycles scene after the user's choice of
+strict PBR. It constructs a photo-aligned mailbox heightfield with a curved
+cylindrical body, cap transition and backplate. This is a manually fitted
+single-view2.5D surface, not recovered true geometry, hidden structure or
+measured source normals/lighting. It supports only the fixed source viewpoint.
+Geometry uses mask/explicit coordinates, never Albedo brightness or M/R.
+
+The five accepted Albedo files remain unchanged and are projected by fixed UVs.
+Actual Principled BSDF/Cycles computes diffuse/specular transport with fixed
+geometry, camera, area lights, environment, samples256,seed42 and exposure.
+Only A selection and numeric Metallic/Roughness inputs vary. There is no
+imagegen, learned material editor, per-image normalization or RGB tone edit.
+An emission pass is used ONLY to verify image-to-UV correspondence, never as
+training RGB. Actual clay, normal and depth passes diagnose the fitted geometry.
+
+```bash
+# Clean independent codex/subject-c-pbr-scene server checkout.
+PREVIEW=/var/tmp/colorpeel-r12user5/runs/subject_albedo_pbr_c/20261020-153651__parameter_preview__ac92f46__42
+$PY -B -m experiments.subject_albedo_pbr_c.pbr \
+  --preview "$PREVIEW" --output "$NEW_SCENE_PREVIEW" --gpu 2
+# After inspecting the scene and six green M/R cases, use a NEW full-grid run:
+$PY -B -m experiments.subject_albedo_pbr_c.pbr \
+  --preview "$PREVIEW" --output "$NEW_FULL_GRID" --gpu 2 --full-grid
+```
+
+Both runs preserve the source preview. They save the mesh/config/hash, `.blend`
+scene, source locks, exact command, original scene-linear Combined EXRs,
+geometry normal/depth passes, projection audit, full512px PNGs, captions and
+contact sheet. Preview mode produces six green cases; full mode produces30.
+Masked background composition uses linear premultiplied RGB/alpha, with the
+original-mask-outside pixels copied exactly. Original background shadows stay
+fixed rather than being recomputed, so this is physical foreground rendering
+against a fixed photographic background, not recovery of the entire real scene.
+
+UV p95 error, silhouette IoU, finite EXRs, core coverage and provenance are
+checked. These numeric checks do not automatically approve the manually fitted
+normals, internal components, boundary or material appearance. Outputs remain
+training candidates pending visual review; no training starts. If the fitted
+geometry or source Albedo fails those criteria, improve and revalidate it in a
+new version rather than labelling poor candidates as usable training data.
