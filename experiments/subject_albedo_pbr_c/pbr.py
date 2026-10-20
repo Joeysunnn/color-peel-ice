@@ -122,6 +122,8 @@ def run(preview, output, gpu, full_grid=False):
         Image.fromarray(clay).save(output / "clay.png")
         import cv2
         normal = cv2.imread(str(next((output / "renders").glob("normal_*.exr"))), cv2.IMREAD_UNCHANGED)[:, :, :3][:, :, ::-1]
+        if not np.isfinite(normal).all() or np.median(np.linalg.norm(normal[core], axis=1)) < .98:
+            raise ValueError("actual foreground normal pass is nonfinite or not approximately unit length")
         display_normal = np.rint(np.clip((normal + 1) / 2, 0, 1) * 255).astype(np.uint8)
         display_normal[mask == 0] = 255
         Image.fromarray(display_normal).save(output / "normal.png")

@@ -150,8 +150,13 @@ def render(plan, output):
     scene.render.filepath = str(output / "clay_diagnostic.exr")
     bpy.ops.render.render(write_still=True)
     scene.use_nodes = False
-    bpy.ops.wm.save_as_mainfile(filepath=str(output / "fixed_scene.blend"))
     material.node_tree.links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
+    texture.image = bpy.data.images.load(first["maps"]["albedo"]["path"], check_existing=True)
+    texture.image.colorspace_settings.name = "sRGB"
+    texture.image.pack()
+    bsdf.inputs["Metallic"].default_value = first["metallic"]
+    bsdf.inputs["Roughness"].default_value = first["roughness"]
+    bpy.ops.wm.save_as_mainfile(filepath=str(output / "fixed_scene.blend"))
     records = []
     for row in plan["rows"]:
         albedo = Path(row["maps"]["albedo"]["path"])
