@@ -73,7 +73,8 @@ def setup(plan, output):
         scene.collection.objects.link(light)
         light.location = spec["location"]
         light.rotation_euler = (Vector(spec["target"]) - light.location).to_track_quat("-Z", "Y").to_euler()
-    arrays = np.load(plan["mesh"], allow_pickle=False)
+    with np.load(plan["mesh"], allow_pickle=False) as archive:
+        arrays = {name: archive[name] for name in ("vertices", "faces", "uv")}
     mesh = bpy.data.meshes.new("Photo_aligned_mailbox_surface")
     mesh.from_pydata(arrays["vertices"].tolist(), [], arrays["faces"].tolist())
     mesh.update()
