@@ -5,6 +5,10 @@ PBR image reuse, new losses or Subject training. Current scope is six original-
 color material-edit candidates and quality review. There is no30-image or
 training entrypoint. Later training methods are outside this phase.
 
+The first executed six-image grid and its **failed quality verdict** are
+recorded in [PHASE1_RESULTS.md](PHASE1_RESULTS.md). Generation completed;
+none of those images is accepted for training.
+
 ## Official implementation
 
 Source: https://github.com/Stability-AI/marble at
