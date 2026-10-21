@@ -35,7 +35,7 @@ def test_identity_metrics_are_descriptive_and_do_not_approve(source):
     image, mask = source
     qc = evaluate(image, image, image, mask)
     assert qc["structure_proxy"]["source_edge_recall"] == 1
-    assert qc["structure_proxy"]["final_edge_precision"] == 1
+    assert qc["structure_proxy"]["raw_edge_precision"] == 1
     assert qc["color"]["hue_median_degrees"] == 0
     assert qc["manual_review_required"] is True
     assert qc["flags"] == ["manual_review_required"]
@@ -61,6 +61,23 @@ def test_edge_change_is_flagged_without_claiming_geometry_failure(source):
     final = np.full_like(image, 50)
     qc = evaluate(image, final, final, mask)
     assert qc["structure_proxy"]["source_edge_recall"] == 0
+    assert "inspect_structure_or_reflection_change" in qc["flags"]
+
+
+def test_restored_final_cannot_hide_raw_object_displacement():
+    image = np.full((64, 64, 3), 50, dtype=np.uint8)
+    image[18:32, 18:32] = [160, 50, 30]
+    image[22:28, 24:26] = [40, 10, 10]
+    mask = np.zeros((64, 64), dtype=np.uint8)
+    mask[17:33, 17:33] = 255
+    raw = np.full_like(image, 50)
+    raw[48:62, 48:62] = image[18:32, 18:32]
+    qc = evaluate(image, raw, image.copy(), mask)
+    assert qc["final_background"]["changed_pixels"] == 0
+    assert qc["color"]["hue_median_degrees"] == 0
+    assert qc["structure_proxy"]["source_edge_recall"] == 0
+    assert qc["structure_proxy"]["mask_boundary_band_edge_recall"] == 0
+    assert qc["structure_proxy"]["evaluated_image"] == "raw_resized_before_background_composite"
     assert "inspect_structure_or_reflection_change" in qc["flags"]
 
 

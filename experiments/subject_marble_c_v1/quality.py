@@ -53,23 +53,25 @@ def evaluate(original, raw, final, mask):
     interior = foreground & ~_dilate(background)
     region = interior if interior.any() else foreground
     source_edges, _ = _edges(original, region)
-    final_edges, gradient = _edges(final, region)
+    raw_edges, _ = _edges(raw, region)
     boundary_band = _dilate(foreground) & _dilate(background)
     source_boundary_edges, _ = _edges(original, boundary_band)
-    final_boundary_edges, _ = _edges(final, boundary_band)
+    raw_boundary_edges, _ = _edges(raw, boundary_band)
     metrics["structure_proxy"] = {
+        "evaluated_image": "raw_resized_before_background_composite",
         "edge_tolerance_pixels": 2,
-        "source_edge_count": int(source_edges.sum()), "final_edge_count": int(final_edges.sum()),
-        "source_edge_recall": float((_dilate(final_edges) & source_edges).sum() / source_edges.sum())
+        "source_edge_count": int(source_edges.sum()), "raw_edge_count": int(raw_edges.sum()),
+        "source_edge_recall": float((_dilate(raw_edges) & source_edges).sum() / source_edges.sum())
         if source_edges.any() else None,
-        "final_edge_precision": float((_dilate(source_edges) & final_edges).sum() / final_edges.sum())
-        if final_edges.any() else None,
+        "raw_edge_precision": float((_dilate(source_edges) & raw_edges).sum() / raw_edges.sum())
+        if raw_edges.any() else None,
         "mask_boundary_band_source_edges": int(source_boundary_edges.sum()),
-        "mask_boundary_band_edge_recall": float((_dilate(final_boundary_edges) & source_boundary_edges).sum()
+        "mask_boundary_band_edge_recall": float((_dilate(raw_boundary_edges) & source_boundary_edges).sum()
                                                 / source_boundary_edges.sum())
         if source_boundary_edges.any() else None,
         "note": "Gradient agreement is confounded by changed reflections; no independent segmentation or IoU."}
     luminance = final.astype(float) @ np.array([.2126, .7152, .0722]) / 255
+    _, gradient = _edges(final, region)
     metrics["highlight_proxy"] = {
         "luminance_p50_p90_p99": np.quantile(luminance[foreground], [.5, .9, .99]).tolist(),
         "gradient_mean_255": float(gradient[region].mean()),
