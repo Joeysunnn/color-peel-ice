@@ -1,0 +1,21 @@
+{
+  "schema": "subject_marble_c_phase1/v1",
+  "subject": "mailbox",
+  "source": "experiments/natural_material_supermat_v1/assets/source_mailbox.jpg",
+  "source_sha256": "ba9c6624d9998cdfcd16308b0cf8fd8f3778909d8655efe2ba9cebba370483d0",
+  "mask": "experiments/natural_material_supermat_v1/assets/object_mask.png",
+  "mask_sha256": "1b226d6b66c95c49ff2dddb734ff2c9efac172cddf6d3231bd12eebbad5d7157",
+  "mask_policy": "original whole-object binary mask, white edits; official RGB mask resize1024; no new segmentation",
+  "metallic": {"low": 20, "high": -20},
+  "roughness": {"low": -1, "medium": 0, "high": 1},
+  "control_interpretation": "relative learned edit strengths, not absolute PBR values; negative metallic control means more metallic",
+  "seed": 42,
+  "num_inference_steps": 30,
+  "official_resolution": 1024,
+  "review_resolution": 512,
+  "target_as_texture_reference": true,
+  "depth": "one official DPT prediction from original; shared by six independent edits",
+  "memory": "model CPU offload after official adapter construction; no custom attention replacement",
+  "postprocess": "retain raw1024 MARBLE output; resize to512 with LANCZOS; copy original RGB outside binary edit mask into separate final candidate",
+  "phase_boundary": "exactly six original-color candidates; no hue editing, training concepts, Subject training or expansion to30"
+}
