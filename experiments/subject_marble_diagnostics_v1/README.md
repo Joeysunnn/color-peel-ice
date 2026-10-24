@@ -4,6 +4,9 @@ Independent output root: `/var/tmp/colorpeel-r12user5/runs/subject_marble_diagno
 All existing experiment scripts, checkpoints and results remain immutable.
 
 Actual completed runs and bounded findings: [RESULTS.md](RESULTS.md).
+The subsequently authorized two mailbox joint grids are specified in
+[JOINT_GRIDS.md](JOINT_GRIDS.md), with completed results in
+[JOINT_RESULTS.md](JOINT_RESULTS.md).
 
 ## Stage 1: official notebook example
 
