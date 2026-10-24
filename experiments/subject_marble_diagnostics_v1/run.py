@@ -20,6 +20,7 @@ from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
+STAGES = ("official", "mailbox", "mailbox_bowl", "mailbox_self")
 OLD_RUN = Path("/var/tmp/colorpeel-r12user5/runs/subject_marble_c_v1/"
                "20261021-125714__phase1_six__86fb6a2__42")
 
@@ -43,6 +44,13 @@ def mailbox_rows():
               "label": "Legacy512 | " + row["label"]}
              for row in rows if row["id"] in ("full__none", "full__M-20")]
     return rows
+
+
+def joint_mailbox_rows(stage):
+    if stage not in ("mailbox_bowl", "mailbox_self"):
+        raise ValueError("select a mailbox joint-grid stage")
+    reference = "bowl" if stage == "mailbox_bowl" else "self"
+    return [{**row, "reference": reference, "target_size": 1024} for row in official_rows()]
 
 
 def aligned_inputs(image, mask):
@@ -132,16 +140,19 @@ def run(asset_root, output, gpu, stage="official"):
     assets.official_state(official)
     locks = {**receipt["sha256"], str(receipt_path): sha256(receipt_path)}
     check_locks(locks)
-    if stage not in ("official", "mailbox"):
+    if stage not in STAGES:
         raise ValueError("unknown diagnostic stage")
-    rows = official_rows() if stage == "official" else mailbox_rows()
-    if stage == "mailbox":
+    rows = mailbox_rows() if stage == "mailbox" else official_rows()
+    if stage in ("mailbox_bowl", "mailbox_self"):
+        rows = joint_mailbox_rows(stage)
+    if stage != "official":
         protocol = read_json(ROOT / "experiments/subject_marble_c_v1/protocol.json")
         source_path = ROOT / protocol["source"]
         mask_path = Path(protocol["mask"])
-        depth_path = OLD_RUN / "source/depth.png"
-        locks.update({str(source_path): protocol["source_sha256"], str(mask_path): protocol["mask_sha256"],
-                      str(depth_path): sha256(depth_path)})
+        locks.update({str(source_path): protocol["source_sha256"], str(mask_path): protocol["mask_sha256"]})
+        if stage == "mailbox":
+            depth_path = OLD_RUN / "source/depth.png"
+            locks[str(depth_path)] = sha256(depth_path)
         check_locks(locks)
     output.mkdir(parents=True)
     for folder in ("source", "raw", "repro_outputs"):
@@ -160,19 +171,32 @@ def run(asset_root, output, gpu, stage="official"):
     else:
         shutil.copyfile(source_path, output / "source/original512.jpg")
         shutil.copyfile(mask_path, output / "source/object_mask512.png")
-        shutil.copyfile(depth_path, output / "source/depth.png")
         with Image.open(source_path) as image:
             original = image.convert("RGB")
         with Image.open(mask_path) as image:
             original_mask = image.convert("L")
         target, mask = aligned_inputs(original, original_mask)
-        references = {"full": original.copy(), "masked_gray": masked_reference(original, original_mask)}
+        if stage == "mailbox":
+            references = {"full": original.copy(), "masked_gray": masked_reference(original, original_mask)}
+            with Image.open(depth_path) as image:
+                depth = image.copy()
+        elif stage == "mailbox_bowl":
+            reference_path = official / "input_images/texture/metal_bowl.png"
+            with Image.open(reference_path) as image:
+                references = {"bowl": image.copy()}
+        else:
+            references = {"self": target.copy()}
+        if stage in ("mailbox_bowl", "mailbox_self"):
+            # A common review ROI only; bowl generation later uses official rembg.
+            mask.save(output / "source/review_mask.png")
         for name, image in references.items():
             image.save(output / "source" / f"reference_{name}.png")
         target.save(output / "source/target.png")
-        with Image.open(depth_path) as image:
-            depth = image.copy()
-        source_hashes = {str(path): locks[str(path)] for path in (source_path, mask_path, depth_path)}
+        source_hashes = {str(path): locks[str(path)] for path in (source_path, mask_path)}
+        if stage == "mailbox":
+            source_hashes[str(depth_path)] = locks[str(depth_path)]
+        elif stage == "mailbox_bowl":
+            source_hashes[str(reference_path)] = sha256(reference_path)
     if target.size != (1024, 1024) or target.mode != "RGB":
         raise ValueError("require a1024 RGB target before official initialization")
     command = f"{sys.executable} -B -m experiments.subject_marble_diagnostics_v1.run --assets {asset_root} --output {output} --gpu {gpu} --stage {stage}"
@@ -192,6 +216,16 @@ def run(asset_root, output, gpu, stage="official"):
             "16 aligned cases plus2 intentional old512 controls (none and M-20 only); these18 RGBs are diagnostics, not a dataset.",
             "No-attribute MLP still regenerates; zero controls may have nonzero learned offsets.",
         ]
+    elif stage in ("mailbox_bowl", "mailbox_self"):
+        deviations[0] = "Authorized full official M/R joint grid on the original mailbox, nine independent edits."
+        deviations[2] = "Official DPT freshly computed from the aligned1024 target, cached within this run only; no old depth cache."
+        deviations += [
+            "Target and Mask aligned to1024 before initialization; all raw outputs retained without background copying.",
+            ("Official native RGBA metal_bowl reference and unmodified official rembg auto-mask. Existing mailbox mask is review ROI only."
+             if stage == "mailbox_bowl" else
+             "Target itself is the1024 material reference via official texture_image=None; existing mailbox Mask is retained."),
+            "Two groups differ in BOTH Mask and reference, so between-group differences are not a reference-only ablation.",
+        ]
     write(output / "plan.json", {"git": revision, "official_commit": assets.OFFICIAL_COMMIT,
         "stage": stage, "rows": rows, "command": command, "source_hashes": source_hashes,
         "seed": 42, "num_inference_steps": 30, "deviations": deviations})
@@ -209,7 +243,7 @@ def run(asset_root, output, gpu, stage="official"):
         import marble
         from transformers import DPTForDepthEstimation, DPTImageProcessor
 
-        if stage == "official":
+        if stage != "mailbox":
             # Same official extraction operations, with explicit local pinned checkpoint paths.
             depth_model = DPTForDepthEstimation.from_pretrained(receipt["paths"]["depth"]).to("cuda", dtype=torch.float16)
             processor = DPTImageProcessor.from_pretrained(receipt["paths"]["depth"])
@@ -219,7 +253,8 @@ def run(asset_root, output, gpu, stage="official"):
             del depth_model, processor
             gc.collect()
             torch.cuda.empty_cache()
-            mask = marble.prepare_mask(target)
+            if stage in ("official", "mailbox_bowl"):
+                mask = marble.prepare_mask(target)
         init = marble.prepare_init_image(target, mask)
         depth.save(output / "source/depth.png")
         mask.save(output / "source/mask.png")
@@ -230,8 +265,10 @@ def run(asset_root, output, gpu, stage="official"):
         write(output / "source/conditions.json", {"target_size": target.size,
             "references": {name: {"size": image.size, "mode": image.mode} for name, image in references.items()},
             "mask_size": mask.size, "depth_size": depth.size,
+            "depth_input_size": [512, 512] if stage == "mailbox" else list(target.size),
+            "depth_policy": "old512 DPT cache" if stage == "mailbox" else "fresh official DPT from this1024 target",
             "foreground_fraction": float((np.asarray(mask.convert('L')) >= 128).mean()),
-            "mask_policy": "unmodified official prepare_mask/rembg" if stage == "official" else "frozen existing mask; official RGB BICUBIC resize",
+            "mask_policy": "unmodified official prepare_mask/rembg" if stage in ("official", "mailbox_bowl") else "frozen existing mask; official RGB BICUBIC resize",
             "rembg_weights": {str(p): sha256(p) for p in (asset_root / "diagnostics_rembg").glob("*.onnx")},
             "condition_hashes": {p.name: sha256(p) for p in (output / "source").glob("*.png")}})
 
@@ -259,7 +296,8 @@ def run(asset_root, output, gpu, stage="official"):
                 row_target = original if row.get("target_size") == 512 else target
                 result = marble.run_parametric_control(adapter, row_target.copy(),
                     {mlps[name]: value for name, value in row["controls"].items()},
-                    texture_image=references[row.get("reference", "official")].copy(), depth_map=depth.copy(), mask=mask.copy())
+                    texture_image=None if stage == "mailbox_self" else references[row.get("reference", "official")].copy(),
+                    num_inference_steps=30, seed=42, depth_map=depth.copy(), mask=mask.copy())
             if result.size != (1024, 1024) or result.mode != "RGB":
                 raise ValueError("unexpected official RGB output")
             path = output / "raw" / f"{row['id']}.png"
@@ -275,6 +313,16 @@ def run(asset_root, output, gpu, stage="official"):
         if stage == "official":
             sheet(output, generated, [("Official context", "source/target.png"), ("Metal reference", "source/reference.png"),
                 ("Official rembg mask", "source/mask.png"), ("Shared official DPT", "source/depth.png")])
+        elif stage in ("mailbox_bowl", "mailbox_self"):
+            reference = "bowl" if stage == "mailbox_bowl" else "self"
+            sources = [("Mailbox1024 target", "source/target.png"), (reference + " material reference", f"source/reference_{reference}.png"),
+                       ("Actual generation Mask", "source/mask.png"), ("Fresh1024-input DPT", "source/depth.png")]
+            sheet(output, generated, sources)
+            with Image.open(output / "source/review_mask.png") as image:
+                bbox = image.convert("L").getbbox()
+            crop = (max(0, bbox[0] - 24), max(0, bbox[1] - 24), min(1024, bbox[2] + 24), min(1024, bbox[3] + 24))
+            write(output / "review_crop.json", {"bbox": crop, "policy": "same existing mailbox ROI for both groups; does not change generation Mask"})
+            sheet(output, generated, sources, "subject_crop.png", crop=crop)
         else:
             bbox = mask.convert("L").getbbox()
             crop = (max(0, bbox[0] - 24), max(0, bbox[1] - 24), min(1024, bbox[2] + 24), min(1024, bbox[3] + 24))
@@ -315,6 +363,6 @@ if __name__ == "__main__":
     parser.add_argument("--assets", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gpu", type=int, required=True)
-    parser.add_argument("--stage", choices=("official", "mailbox"), default="official")
+    parser.add_argument("--stage", choices=STAGES, default="official")
     args = parser.parse_args()
     print(json.dumps(run(args.assets, args.output, args.gpu, args.stage)))

@@ -14,6 +14,16 @@ from experiments.subject_marble_diagnostics_v1 import run
 
 
 class InputRegression(unittest.TestCase):
+    def test_joint_grids_keep_both_networks_even_at_zero_controls(self):
+        for stage, reference in (("mailbox_bowl", "bowl"), ("mailbox_self", "self")):
+            rows = run.joint_mailbox_rows(stage)
+            self.assertEqual(len(rows), 9)
+            self.assertEqual(len({row["id"] for row in rows}), 9)
+            self.assertEqual({(row["controls"]["metallic"], row["controls"]["roughness"]) for row in rows},
+                             {(m, r) for m in (-20, 0, 20) for r in (-1, 0, 1)})
+            self.assertTrue(all(set(row["controls"]) == {"metallic", "roughness"} for row in rows))
+            self.assertTrue(all(row["reference"] == reference and row["target_size"] == 1024 for row in rows))
+
     @unittest.skipUnless(os.environ.get("MARBLE_OFFICIAL_ROOT"), "set pinned official source path")
     def test_official_preprocessing_reproduces_bug_and_verifies_alignment_fix(self):
         source = Path(os.environ["MARBLE_OFFICIAL_ROOT"]) / "marble.py"
