@@ -32,5 +32,41 @@ Python3.11/Torch2.5.1 environment and CPU offload are disclosed deviations.
 The official notebook has no saved generated PNGs; this is a visual sanity
 reproduction, not a claim of pixel equality or full-paper reproduction.
 
-Inspect Stage1 before implementing/running the mailbox size fix and controls.
+## Stage 2: mailbox size fix and attribute/reference controls
+
+Stage1 nine images were completed and inspected before implementing Stage2.
+The official example shows M/R responses but also creates gold decorations
+at M=-20, so it is not a clean identity-preserving reference at all controls.
+
+Add `--stage mailbox` to the command, using a different fresh output. This
+uses the frozen original512 mailbox, existing mask, and exact old DPT cache
+from the six-image pilot. The target is now resized to1024 **before** the
+official ImageChops initialization. Mask interpolation remains official RGB
+BICUBIC. The full material reference is explicitly the original512 photograph,
+so resizing the target does not silently resize the CLIP reference too.
+
+Two reference constructions retain the same512 canvas and foreground pixels:
+full photo, versus background replaced by RGB127 gray using the frozen mask.
+There is no crop, object enlargement or color normalization. This is a
+background-reference ablation; object lettering/plaques remain in both.
+
+Each reference uses eight controls: empty attribute dictionary, joint M0/R0,
+M-only[-20,0,+20], and R-only[-1,0,+1]. Empty MLP does not mean identity;
+all cases still use reference-guided diffusion. Zero controls are separate
+because MLP offsets are not structurally constrained to zero. Two intentional
+old512 controls (full-reference empty MLP and M-only-20) enable paired size
+comparisons: **18 diagnostic RGBs total**, not a counterfactual training set.
+All seed/sampling parameters remain unchanged.
+
+Keep raw1024 outputs as primary evidence; do not restore backgrounds in this
+study. Full-frame sheets, fixed subject crops and paired size comparisons
+are saved separately. Input and old-result hashes are verified before/after.
+
+CPU regression, using the real pinned official initialization function:
+
+```bash
+export MARBLE_OFFICIAL_ROOT=/path/to/pinned/marble
+python -B -m unittest discover -s tests/methods/colorpeel_ice -p test_marble_diagnostics.py -v
+```
+
 No30-image expansion and no Subject training are part of this study.

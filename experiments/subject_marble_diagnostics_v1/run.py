@@ -20,6 +20,8 @@ from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
+OLD_RUN = Path("/var/tmp/colorpeel-r12user5/runs/subject_marble_c_v1/"
+               "20261021-125714__phase1_six__86fb6a2__42")
 
 
 def official_rows():
@@ -28,10 +30,41 @@ def official_rows():
             for m in (-20, 0, 20) for r in (-1, 0, 1)]
 
 
-def sheet(output, rows, sources, filename="contact_sheet.png"):
+def mailbox_rows():
+    controls = [("none", {}, "No attribute MLP"),
+                ("joint_zero", {"metallic": 0, "roughness": 0}, "M=0 + R=0"),
+                *[(f"M{m:+d}", {"metallic": m}, f"M={m:+d} only") for m in (-20, 0, 20)],
+                *[(f"R{r:+d}", {"roughness": r}, f"R={r:+d} only") for r in (-1, 0, 1)]]
+    rows = [{"id": f"{reference}__{name}", "controls": values, "reference": reference,
+             "target_size": 1024, "label": f"{reference} | {label}"}
+            for reference in ("full", "masked_gray") for name, values, label in controls]
+    # Intentional old-size diagnostic controls, never used as the fixed default.
+    rows += [{**row, "id": "legacy512__" + row["id"], "target_size": 512,
+              "label": "Legacy512 | " + row["label"]}
+             for row in rows if row["id"] in ("full__none", "full__M-20")]
+    return rows
+
+
+def aligned_inputs(image, mask):
+    if image.size != mask.size:
+        raise ValueError("target and mask must start in the same coordinates")
+    # Match the official RGB mask interpolation; align target BEFORE ImageChops.
+    size = (1024, 1024)
+    return (image.convert("RGB").resize(size, Image.Resampling.BICUBIC),
+            mask.convert("RGB").resize(size, Image.Resampling.BICUBIC))
+
+
+def masked_reference(image, mask):
+    """Remove only background; preserve foreground pixels, canvas and object scale."""
+    return Image.composite(image, Image.new("RGB", image.size, (127, 127, 127)), mask.convert("L"))
+
+
+def sheet(output, rows, sources, filename="contact_sheet.png", columns=3, crop=None):
     """Show actual source inputs and uncomposited outputs, with explicit labels."""
-    width, tile, header = 1080, 360, 410
-    canvas = Image.new("RGB", (width, header + ((len(rows) + 2) // 3) * 410), "white")
+    width, header = 1080, 410
+    tile = width // columns
+    row_height = tile + 50
+    canvas = Image.new("RGB", (width, header + ((len(rows) + columns - 1) // columns) * row_height), "white")
     draw = ImageDraw.Draw(canvas)
     try:
         font = ImageFont.truetype("DejaVuSans.ttf", 17)
@@ -39,9 +72,11 @@ def sheet(output, rows, sources, filename="contact_sheet.png"):
         font = ImageFont.load_default()
     draw.text((12, 8), "MARBLE diagnostics | relative controls | seed42 / 30steps | NO training", fill="black", font=font)
 
-    def panel(path, x, y, size):
+    def panel(path, x, y, size, box=None):
         with Image.open(path) as image:
             image = image.convert("RGB")
+            if box is not None:
+                image = image.crop(box)
             image.thumbnail((size, size), Image.Resampling.LANCZOS)
             canvas.paste(image, (x, y))
 
@@ -50,10 +85,10 @@ def sheet(output, rows, sources, filename="contact_sheet.png"):
         draw.text((x, 42), label, font=font, fill="black")
         panel(output / path, x, 68, min(320, width // len(sources) - 16))
     for index, row in enumerate(rows):
-        x, y = (index % 3) * tile + 8, header + (index // 3) * 410
+        x, y = (index % columns) * tile + 8, header + (index // columns) * row_height
         draw.text((x, y), row["label"], font=font, fill="black")
-        panel(output / row["raw_image"], x, y + 30, 344)
-        draw.text((x, y + 378), "Raw model output; manual QC required", font=font, fill="black")
+        panel(output / row["raw_image"], x, y + 30, tile - 16, crop)
+        draw.text((x, y + tile + 18), "Raw output" + (" / fixed crop" if crop else "") + "; manual QC required", font=font, fill="black")
     canvas.save(output / filename)
 
 
@@ -73,16 +108,17 @@ def report(output, state, command, deviations):
     (target / "SCIENTIFIC_CHANGELOG.md").write_text("\n".join(deviations) + "\n", encoding="utf8")
     (target / "COMPARABILITY_REPORT.md").write_text(
         "Official notebook has no saved reference PNGs; visual agreement cannot establish pixel identity.\n"
-        "Relative M/R controls are not measured PBR parameters. Mask/depth are official-function outputs, "
-        "cached once and reused, rather than recomputed for every identical target.\n"
+        "Relative M/R controls are not measured PBR parameters. The plan identifies whether this is the "
+        "official example or the authorized mailbox diagnostics. Conditions are frozen per stage.\n"
         "No external background compositing is applied to raw outputs.\n", encoding="utf8")
     (target / "PATCHES.md").write_text(
         f"Branch: {state['git']['branch']}; execution commit: {state['git']['commit']}.\n"
         "New isolated diagnostic runner only. Existing official and experiment code is unchanged.\n"
+        "Mailbox target/mask alignment is fixed in the new caller; explicit old-size controls retain the prior error for comparison.\n"
         "Local paths, CPU offload and cached conditions are declared adaptations.\n", encoding="utf8")
 
 
-def run(asset_root, output, gpu):
+def run(asset_root, output, gpu, stage="official"):
     asset_root, output = Path(asset_root).resolve(), resolve_run_dir(Path(output))
     if (gpu < 0 or output.exists() or output.is_relative_to(ROOT)
             or output.is_relative_to(asset_root) or asset_root.is_relative_to(output)):
@@ -96,21 +132,50 @@ def run(asset_root, output, gpu):
     assets.official_state(official)
     locks = {**receipt["sha256"], str(receipt_path): sha256(receipt_path)}
     check_locks(locks)
-    rows = official_rows()
+    if stage not in ("official", "mailbox"):
+        raise ValueError("unknown diagnostic stage")
+    rows = official_rows() if stage == "official" else mailbox_rows()
+    if stage == "mailbox":
+        protocol = read_json(ROOT / "experiments/subject_marble_c_v1/protocol.json")
+        source_path = ROOT / protocol["source"]
+        mask_path = Path(protocol["mask"])
+        depth_path = OLD_RUN / "source/depth.png"
+        locks.update({str(source_path): protocol["source_sha256"], str(mask_path): protocol["mask_sha256"],
+                      str(depth_path): sha256(depth_path)})
+        check_locks(locks)
     output.mkdir(parents=True)
     for folder in ("source", "raw", "repro_outputs"):
         (output / folder).mkdir()
-    target_path = official / "input_images/context_image/toy_car.png"
-    reference_path = official / "input_images/texture/metal_bowl.png"
-    shutil.copyfile(target_path, output / "source/target.png")
-    shutil.copyfile(reference_path, output / "source/reference.png")
-    with Image.open(target_path) as image:
-        target = image.copy()
-    with Image.open(reference_path) as image:
-        reference = image.copy()  # preserve the official RGBA input mode
+    if stage == "official":
+        target_path = official / "input_images/context_image/toy_car.png"
+        reference_path = official / "input_images/texture/metal_bowl.png"
+        shutil.copyfile(target_path, output / "source/target.png")
+        shutil.copyfile(reference_path, output / "source/reference.png")
+        with Image.open(target_path) as image:
+            target = image.copy()
+        with Image.open(reference_path) as image:
+            reference = image.copy()  # preserve the official RGBA input mode
+        references = {"official": reference}
+        source_hashes = {str(target_path): sha256(target_path), str(reference_path): sha256(reference_path)}
+    else:
+        shutil.copyfile(source_path, output / "source/original512.jpg")
+        shutil.copyfile(mask_path, output / "source/object_mask512.png")
+        shutil.copyfile(depth_path, output / "source/depth.png")
+        with Image.open(source_path) as image:
+            original = image.convert("RGB")
+        with Image.open(mask_path) as image:
+            original_mask = image.convert("L")
+        target, mask = aligned_inputs(original, original_mask)
+        references = {"full": original.copy(), "masked_gray": masked_reference(original, original_mask)}
+        for name, image in references.items():
+            image.save(output / "source" / f"reference_{name}.png")
+        target.save(output / "source/target.png")
+        with Image.open(depth_path) as image:
+            depth = image.copy()
+        source_hashes = {str(path): locks[str(path)] for path in (source_path, mask_path, depth_path)}
     if target.size != (1024, 1024) or target.mode != "RGB":
-        raise ValueError("official toy-car target changed")
-    command = f"{sys.executable} -B -m experiments.subject_marble_diagnostics_v1.run --assets {asset_root} --output {output} --gpu {gpu}"
+        raise ValueError("require a1024 RGB target before official initialization")
+    command = f"{sys.executable} -B -m experiments.subject_marble_diagnostics_v1.run --assets {asset_root} --output {output} --gpu {gpu} --stage {stage}"
     deviations = [
         "Official 9-case toy_car + metal_bowl notebook grid, unchanged edit math and default sampling.",
         "Pinned local model paths; only M/R MLPs loaded because other attributes are unused.",
@@ -118,11 +183,20 @@ def run(asset_root, output, gpu):
         "Torch2.5.1+cu124 and Python3.11 reuse the isolated existing environment; official Torch pin is2.3.",
         "Model CPU offload enabled; no attention processor or scheduler replacement.",
     ]
+    if stage == "mailbox":
+        deviations[0] = "Authorized mailbox diagnostics, not an official notebook reproduction."
+        deviations[2] = "Existing mailbox mask and old512-target DPT cache reused without altering the old run."
+        deviations += [
+            "Fix: target resized to1024 before official ImageChops; mask keeps official RGB BICUBIC resize.",
+            "Full reference explicitly remains original512; masked-gray reference changes only background, not object scale.",
+            "16 aligned cases plus2 intentional old512 controls (none and M-20 only); these18 RGBs are diagnostics, not a dataset.",
+            "No-attribute MLP still regenerates; zero controls may have nonzero learned offsets.",
+        ]
     write(output / "plan.json", {"git": revision, "official_commit": assets.OFFICIAL_COMMIT,
-        "stage": "official_notebook_grid", "rows": rows, "command": command,
-        "source_hashes": {str(target_path): sha256(target_path), str(reference_path): sha256(reference_path)},
+        "stage": stage, "rows": rows, "command": command, "source_hashes": source_hashes,
         "seed": 42, "num_inference_steps": 30, "deviations": deviations})
     state = {"status": "initializing", "git": revision, "expected_images": len(rows), "generated_images": 0,
+             "stage": stage,
              "training_started": False, "expanded_to30": False, "training_eligible_images": 0}
     write(output / "status.json", state)
     try:
@@ -135,24 +209,30 @@ def run(asset_root, output, gpu):
         import marble
         from transformers import DPTForDepthEstimation, DPTImageProcessor
 
-        # Same official extraction operations, with explicit local pinned checkpoint paths.
-        depth_model = DPTForDepthEstimation.from_pretrained(receipt["paths"]["depth"]).to("cuda", dtype=torch.float16)
-        processor = DPTImageProcessor.from_pretrained(receipt["paths"]["depth"])
-        depth_model.eval()
-        with torch.inference_mode():
-            depth = marble.run_dpt_depth(target, depth_model, processor, device="cuda")
-        del depth_model, processor
-        gc.collect()
-        torch.cuda.empty_cache()
-        mask = marble.prepare_mask(target)
+        if stage == "official":
+            # Same official extraction operations, with explicit local pinned checkpoint paths.
+            depth_model = DPTForDepthEstimation.from_pretrained(receipt["paths"]["depth"]).to("cuda", dtype=torch.float16)
+            processor = DPTImageProcessor.from_pretrained(receipt["paths"]["depth"])
+            depth_model.eval()
+            with torch.inference_mode():
+                depth = marble.run_dpt_depth(target, depth_model, processor, device="cuda")
+            del depth_model, processor
+            gc.collect()
+            torch.cuda.empty_cache()
+            mask = marble.prepare_mask(target)
         init = marble.prepare_init_image(target, mask)
         depth.save(output / "source/depth.png")
         mask.save(output / "source/mask.png")
         init.save(output / "source/initialization.png")
-        write(output / "source/conditions.json", {"target_size": target.size, "reference_size": reference.size,
-            "reference_mode": reference.mode, "mask_size": mask.size, "depth_size": depth.size,
+        if stage == "mailbox":
+            marble.prepare_init_image(original, mask).save(output / "source/legacy_initialization.png")
+        locks.update({str(p): sha256(p) for p in (asset_root / "diagnostics_rembg").glob("*.onnx")})
+        write(output / "source/conditions.json", {"target_size": target.size,
+            "references": {name: {"size": image.size, "mode": image.mode} for name, image in references.items()},
+            "mask_size": mask.size, "depth_size": depth.size,
             "foreground_fraction": float((np.asarray(mask.convert('L')) >= 128).mean()),
-            "mask_policy": "unmodified official prepare_mask/rembg; not alpha replacement",
+            "mask_policy": "unmodified official prepare_mask/rembg" if stage == "official" else "frozen existing mask; official RGB BICUBIC resize",
+            "rembg_weights": {str(p): sha256(p) for p in (asset_root / "diagnostics_rembg").glob("*.onnx")},
             "condition_hashes": {p.name: sha256(p) for p in (output / "source").glob("*.png")}})
 
         marble.base_model_path = receipt["paths"]["base"]
@@ -176,9 +256,10 @@ def run(asset_root, output, gpu):
         for row in rows:
             start = time.monotonic()
             with torch.inference_mode():
-                result = marble.run_parametric_control(adapter, target.copy(),
+                row_target = original if row.get("target_size") == 512 else target
+                result = marble.run_parametric_control(adapter, row_target.copy(),
                     {mlps[name]: value for name, value in row["controls"].items()},
-                    texture_image=reference.copy(), depth_map=depth.copy(), mask=mask.copy())
+                    texture_image=references[row.get("reference", "official")].copy(), depth_map=depth.copy(), mask=mask.copy())
             if result.size != (1024, 1024) or result.mode != "RGB":
                 raise ValueError("unexpected official RGB output")
             path = output / "raw" / f"{row['id']}.png"
@@ -191,8 +272,30 @@ def run(asset_root, output, gpu):
             state["generated_images"] = len(generated)
             write(output / "status.json", state)
             print("Generated", row["id"], generated[-1]["seconds"], flush=True)
-        sheet(output, generated, [("Official context", "source/target.png"), ("Metal reference", "source/reference.png"),
-            ("Official rembg mask", "source/mask.png"), ("Shared official DPT", "source/depth.png")])
+        if stage == "official":
+            sheet(output, generated, [("Official context", "source/target.png"), ("Metal reference", "source/reference.png"),
+                ("Official rembg mask", "source/mask.png"), ("Shared official DPT", "source/depth.png")])
+        else:
+            bbox = mask.convert("L").getbbox()
+            crop = (max(0, bbox[0] - 24), max(0, bbox[1] - 24), min(1024, bbox[2] + 24), min(1024, bbox[3] + 24))
+            for name in references:
+                selected = [row for row in generated if row["reference"] == name and row["target_size"] == 1024]
+                sources = [("Original input", "source/original512.jpg"), ("Actual material reference", f"source/reference_{name}.png"),
+                           ("Fixed aligned initialization", "source/initialization.png")]
+                sheet(output, selected, sources, f"contact_sheet_{name}.png")
+                sheet(output, selected, sources, f"subject_crop_{name}.png", crop=crop)
+            by_id = {row["id"]: row for row in generated}
+            paired = [by_id[prefix + name] for name in ("full__none", "full__M-20") for prefix in ("", "legacy512__")]
+            sheet(output, paired, [("Aligned1024 init", "source/initialization.png"),
+                  ("Legacy512 init", "source/legacy_initialization.png")], "size_comparison.png", columns=2, crop=crop)
+            comparisons = []
+            for first, second in zip(paired[::2], paired[1::2]):
+                a, b = [np.asarray(Image.open(output / row["raw_image"]), dtype=float) for row in (first, second)]
+                comparisons.append({"aligned": first["id"], "legacy": second["id"],
+                    "foreground_MAE_255": float(np.abs(a - b)[binary_mask > 0].mean()),
+                    "background_MAE_255": float(np.abs(a - b)[binary_mask == 0].mean()),
+                    "identical_pixels": bool(np.array_equal(a, b))})
+            write(output / "size_pair_metrics.json", {"pairs": comparisons, "fixed_review_crop": crop})
         check_locks(locks)
         assets.official_state(official)
         if git_info() != revision:
@@ -212,5 +315,6 @@ if __name__ == "__main__":
     parser.add_argument("--assets", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gpu", type=int, required=True)
+    parser.add_argument("--stage", choices=("official", "mailbox"), default="official")
     args = parser.parse_args()
-    print(json.dumps(run(args.assets, args.output, args.gpu)))
+    print(json.dumps(run(args.assets, args.output, args.gpu, args.stage)))
