@@ -3,6 +3,8 @@
 Independent output root: `/var/tmp/colorpeel-r12user5/runs/subject_marble_diagnostics_v1`.
 All existing experiment scripts, checkpoints and results remain immutable.
 
+Actual completed runs and bounded findings: [RESULTS.md](RESULTS.md).
+
 ## Stage 1: official notebook example
 
 Use the pinned official checkout and model receipt already prepared by
@@ -60,13 +62,22 @@ All seed/sampling parameters remain unchanged.
 
 Keep raw1024 outputs as primary evidence; do not restore backgrounds in this
 study. Full-frame sheets, fixed subject crops and paired size comparisons
-are saved separately. Input and old-result hashes are verified before/after.
+are saved separately. Input/model hashes and old Depth hash are verified
+before/after; the old result directory is never written.
 
 CPU regression, using the real pinned official initialization function:
 
 ```bash
 export MARBLE_OFFICIAL_ROOT=/path/to/pinned/marble
 python -B -m unittest discover -s tests/methods/colorpeel_ice -p test_marble_diagnostics.py -v
+```
+
+For a compact reference comparison plus descriptive pair metrics, verify all
+18 raw hashes and write a NEW review directory, leaving generation unchanged:
+
+```bash
+python -B -m experiments.subject_marble_diagnostics_v1.review \
+  --input "$COMPLETED_MAILBOX_RUN" --output "$FRESH_REVIEW"
 ```
 
 No30-image expansion and no Subject training are part of this study.

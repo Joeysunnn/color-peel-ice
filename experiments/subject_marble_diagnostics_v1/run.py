@@ -88,7 +88,7 @@ def sheet(output, rows, sources, filename="contact_sheet.png", columns=3, crop=N
         x, y = (index % columns) * tile + 8, header + (index // columns) * row_height
         draw.text((x, y), row["label"], font=font, fill="black")
         panel(output / row["raw_image"], x, y + 30, tile - 16, crop)
-        draw.text((x, y + tile + 18), "Raw output" + (" / fixed crop" if crop else "") + "; manual QC required", font=font, fill="black")
+        draw.text((x, y + tile + 18), "Raw1024" + (" / crop" if crop else "") + " / review pending", font=font, fill="black")
     canvas.save(output / filename)
 
 
