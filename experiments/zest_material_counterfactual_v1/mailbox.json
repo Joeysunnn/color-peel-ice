@@ -1,0 +1,62 @@
+{
+  "subjects": [{
+    "id": "mailbox",
+    "image": "experiments/natural_material_supermat_v1/assets/source_mailbox.jpg",
+    "object_mask": "/var/tmp/colorpeel-r12user5/runs/subject_albedo_pbr_c/20261020-210233__pbr30_bottom_complete__8c639fe__42/source/object_mask.png",
+    "valid_mask": "experiments/natural_material_supermat_v1/assets/object_mask.png",
+    "material_region": "experiments/natural_material_supermat_v1/assets/material_region_preliminary.png",
+    "protected_mask": null,
+    "supermat_input": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_inputs/mailbox.png",
+    "original_maps": {
+      "albedo": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_outputs/mailbox/albedo.png",
+      "roughness": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_outputs/mailbox/roughness.png",
+      "metallic": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_outputs/mailbox/metallic.png"
+    },
+    "control_depth": "/var/tmp/colorpeel-r12user5/runs/subject_marble_rgb_mr_v1/20261025-153929__mr9__5227d28__42/source/depth.png",
+    "expected_sha256": {
+      "experiments/natural_material_supermat_v1/assets/source_mailbox.jpg": "ba9c6624d9998cdfcd16308b0cf8fd8f3778909d8655efe2ba9cebba370483d0",
+      "/var/tmp/colorpeel-r12user5/runs/subject_albedo_pbr_c/20261020-210233__pbr30_bottom_complete__8c639fe__42/source/object_mask.png": "550c1e13bee1435e1145f06e44bdef02d75b8b8fdfa7462d3b39f456dfc9a978",
+      "experiments/natural_material_supermat_v1/assets/object_mask.png": "1b226d6b66c95c49ff2dddb734ff2c9efac172cddf6d3231bd12eebbad5d7157",
+      "experiments/natural_material_supermat_v1/assets/material_region_preliminary.png": "5d9eedeffc14ff71c3afca6109bf3f3c9ad9eb9f21acfa6554f35ea432df6661",
+      "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_inputs/mailbox.png": "1ba1e5010c6732b9cd241f6bdf7cdaee4404210b2e9e89e65d822ff713433670",
+      "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_outputs/mailbox/albedo.png": "1578e61dfe6ae2ce286dd312af548ffc7349bd1818870ae1dca1db6b6efaa41f",
+      "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_outputs/mailbox/roughness.png": "a0c8568a421f95224294ba2954c4bc4cb48487d9cdeca9e30928ee1a26dfc338",
+      "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_semantic_constraint_v1/run_20261003_mailbox_spoon_v1/supermat_outputs/mailbox/metallic.png": "2651147f8e28a3910b3d443a704d4e298625dd8064a4708c3540f69defdafc5b",
+      "/var/tmp/colorpeel-r12user5/runs/subject_marble_rgb_mr_v1/20261025-153929__mr9__5227d28__42/source/depth.png": "6e921a6557e482accb8bc4631d733eb627dca61dce25479f2107e382057acc04"
+    }
+  }],
+  "bank_source": "mailbox",
+  "comparisons": [
+    {"label": "MARBLE self / gray / strength1 / no MLP", "path": "/var/tmp/colorpeel-r12user5/runs/subject_marble_identity_v1/20261025-134217__identity12__59b9c39__42_43_44/raw/seed42__none.png", "sha256": "d83f7b91d2241529ecc6d8dfd7de32ae8ac5d98f74ff71f204011476f6de9abb"},
+    {"label": "MARBLE self / RGB / strength.25 / no MLP", "path": "/var/tmp/colorpeel-r12user5/runs/subject_marble_rgb_init_v1/20261025-150952__init8__a4adeb0__42/raw/rgb__seed42__strength0.25.png", "sha256": "e81e079b4b4f1e1b896677d3aaf7914fee7caa40f3860a72b51e9c96f7159c00"}
+  ],
+  "renderer": {
+    "profile": "experiments/natural_material_fullmaps_v1/renderer_profile_v2.json",
+    "base_scene": "/home/r12user5/Documents/Jiawei/papers/CLEVER/image_generation/data/base_scene.blend",
+    "sphere_path": "/home/r12user5/Documents/Jiawei/papers/CLEVER/image_generation/data/shapes/Sphere.blend",
+    "resolution": 1024, "cycles_samples": 64, "seed": 42, "light": "soft_front"
+  },
+  "variants": ["baseline", "color", "texture", "combined"],
+  "inference": {
+    "strength": 0.9999, "guidance_scale": 5.0, "depth_scale": 0.9,
+    "edge_scale": 0.3, "scale": 1.0, "num_inference_steps": 30, "seed": 42,
+    "prompt": "best quality, high quality",
+    "negative_prompt": "monochrome, lowres, bad anatomy, worst quality, low quality"
+  },
+  "thresholds": {
+    "min_valid_pixels": 1000,
+    "max_albedo_deltaE76_p95": 12.0, "max_albedo_delta_ab_p95": 8.0,
+    "min_albedo_edge_precision": 0.6, "min_albedo_edge_recall": 0.6,
+    "min_albedo_high_frequency_correlation": 0.5, "max_aligned_depth_error": 0.08,
+    "max_background_mae255": 8.0, "max_protected_mae255": 5.0,
+    "min_material_direction_delta": 0.02, "require_manual_review": true
+  },
+  "supermat": {
+    "python": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_supermat_v1/deps/env/bin/python3.12",
+    "root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_supermat_v1/deps/SuperMat",
+    "checkpoint": "/home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_supermat_v1/deps/SuperMat/checkpoints/supermat.pth",
+    "base_model": "/home/r12user5/.cache/huggingface/hub/models--sd2-community--stable-diffusion-2-1/snapshots/bb2154823665391b4fb29b0b9cf82a198964ee05",
+    "official_commit": "4fe25bc6cb8cb7a3ed81ce74512f760dd33f80f4",
+    "checkpoint_sha256": "21d171726e8170e1ed566985be68ef3c5009d762800926ad85c1f288747b7b29"
+  }
+}
