@@ -1,6 +1,7 @@
 """Fresh SuperMat/output-depth QC with immutable, resumable estimate receipts."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -207,7 +208,9 @@ def run_assessment(run, asset_root, gpu=2, stage="all", resume=False, manual_rev
     all_records = manifest["records"]
     if len({row["id"] for row in all_records}) != len(all_records):
         raise ValueError("Duplicate generated IDs")
-    approvals = read(manual_review) if manual_review else {}
+    review_bytes = Path(manual_review).read_bytes() if manual_review else None
+    approvals = json.loads(review_bytes) if manual_review else {}
+    review_hash = hashlib.sha256(review_bytes).hexdigest() if manual_review else None
     if not isinstance(approvals, dict) or any(key not in {r["id"] for r in all_records} or not isinstance(value, bool)
                                              for key, value in approvals.items()):
         raise ValueError("Manual review must map existing case IDs to explicit boolean approvals")
@@ -274,7 +277,9 @@ def run_assessment(run, asset_root, gpu=2, stage="all", resume=False, manual_rev
     report = {"records": records, "identity_gate": gates, "stage": stage,
               "interpretation": "Reference targets are known renderer inputs; generated SuperMat estimates are approximate and not those target parameters.",
               "training_started": False, "estimates_manifest_sha256": sha256(cache_path)}
-    report["manual_review"] = {"path": str(Path(manual_review).resolve()), "sha256": sha256(manual_review)} if manual_review else None
+    if manual_review and sha256(manual_review) != review_hash:
+        raise ValueError("Manual review file changed during assessment")
+    report["manual_review"] = {"path": str(Path(manual_review).resolve()), "sha256": review_hash} if manual_review else None
     write(output / "report.json", report)
     dataset_record = {"records": dataset, "assessment": (output / "report.json").relative_to(run).as_posix(),
                       "training_eligible_images": sum(row["training_eligible"] for row in dataset), "training_started": False}

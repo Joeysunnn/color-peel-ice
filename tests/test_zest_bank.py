@@ -6,10 +6,29 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from PIL import Image, PngImagePlugin
+
 from experiments.zest_material_counterfactual_v1 import render_bank as bank
 
 
 class ReferenceBankTest(unittest.TestCase):
+    def test_render_timestamp_is_not_a_mask_pixel_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = [Path(directory) / name for name in ("first.png", "second.png")]
+            image = Image.new("L", (8, 8), 0)
+            image.paste(255, (2, 2, 6, 6))
+            for path, date in zip(paths, ("19:56:24", "19:56:26")):
+                metadata = PngImagePlugin.PngInfo()
+                metadata.add_text("Date", date)
+                image.save(path, pnginfo=metadata)
+            self.assertNotEqual(bank.sha256(paths[0]), bank.sha256(paths[1]))
+            digests = []
+            for path in paths:
+                with Image.open(path) as loaded:
+                    digests.append(bank.mask_pixels_sha256([value / 255 for pixel in loaded.convert("RGBA").getdata() for value in pixel]))
+            self.assertEqual(*digests)
+            self.assertNotEqual(bank.mask_pixels_sha256([0., 0., 0., 1.]), bank.mask_pixels_sha256([1., 1., 1., 1.]))
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

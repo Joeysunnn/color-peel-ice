@@ -5,6 +5,7 @@ Run inside Blender: --background --python-exit-code 1 --python this_file --
 """
 
 import argparse
+from array import array
 import hashlib
 import json
 import math
@@ -24,6 +25,11 @@ def sha256(path):
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def mask_pixels_sha256(pixels):
+    """Hash decoded samples; Blender PNG timestamps are not silhouette changes."""
+    return hashlib.sha256(array("f", pixels).tobytes()).hexdigest()
 
 
 def write(path, value):
@@ -141,6 +147,9 @@ def render_one(row, output, plan, profile, paths, bpy, base):
     for key, name in (("image", "image.png"), ("mask", "object_mask.png"), ("input_rgba", "input_rgba.png")):
         path = attempt / name
         record.update({key: str(path), key + "_sha256": sha256(path)})
+    decoded_mask = bpy.data.images.load(record["mask"], check_existing=False)
+    record["mask_pixels_sha256"] = mask_pixels_sha256(decoded_mask.pixels[:])
+    bpy.data.images.remove(decoded_mask)
     metadata = attempt / "metadata.json"
     write(metadata, record)
     return {**record, "metadata": str(metadata), "metadata_sha256": sha256(metadata)}
@@ -183,7 +192,7 @@ def main(argv=None):
                 record = render_one(row, output, plan, profile, paths, bpy, base)
                 if manifest["records"]:
                     first = manifest["records"][0]
-                    for key in ("geometry_sha256", "object_scale", "albedo_linear_rgb", "camera", "lights", "world_strength", "seed", "cycles_samples", "resolution", "mask_sha256"):
+                    for key in ("geometry_sha256", "object_scale", "albedo_linear_rgb", "camera", "lights", "world_strength", "seed", "cycles_samples", "resolution", "mask_pixels_sha256"):
                         if record[key] != first[key]:
                             raise ValueError(f"Reference bank fixed-scene invariant changed: {key}")
                 manifest["records"].append(record)
