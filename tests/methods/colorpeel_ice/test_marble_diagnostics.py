@@ -1,19 +1,55 @@
 """CPU regression for real official ImageChops semantics and immutable inputs."""
 
 import ast
+import __future__
 import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 from PIL import Image, ImageChops, ImageEnhance
 
-from experiments.subject_marble_diagnostics_v1 import identity, run
+from experiments.subject_marble_diagnostics_v1 import identity, run, strength
 
 
 class InputRegression(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get("MARBLE_OFFICIAL_ROOT"), "set pinned official source path")
+    def test_strength_ablation_changes_only_strength_in_actual_official_caller(self):
+        source = Path(os.environ["MARBLE_OFFICIAL_ROOT"]) / "marble.py"
+        module = ast.parse(source.read_text(encoding="utf8"))
+        function = next(node for node in module.body if isinstance(node, ast.FunctionDef)
+                        and node.name == "run_parametric_control")
+        target = Image.new("RGB", (1024, 1024), (210, 91, 32))
+        mask, depth, init = [Image.new("RGB", target.size, color) for color in (255, 80, 120)]
+        prepare_init = Mock(return_value=init)
+        namespace = {"prepare_init_image": prepare_init}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), "exec",
+                     flags=__future__.annotations.compiler_flag), namespace)
+        rows = strength.rows()
+        self.assertEqual([row["strength"] for row in rows], [1, .75, .5, .25])
+        calls = []
+        for row in rows:
+            self.assertEqual((row["controls"], row["seed"], row["reference"]), ({}, 42, "self"))
+            adapter = Mock()
+            adapter.generate_parametric_edits.return_value = [target]
+            result = namespace["run_parametric_control"](strength.StrengthOverride(adapter, row["strength"]),
+                target, {}, texture_image=None, depth_map=depth, mask=mask, num_inference_steps=30, seed=42)
+            self.assertIs(result, target)
+            args, kwargs = adapter.generate_parametric_edits.call_args
+            self.assertEqual(args, (target,))
+            self.assertIs(kwargs["image"], init)
+            self.assertEqual(kwargs.pop("strength"), row["strength"])
+            # PIL resize creates fresh objects; assert content before comparing other kwargs.
+            for key, expected in (("control_image", depth), ("mask_image", mask)):
+                self.assertEqual(kwargs.pop(key).tobytes(), expected.tobytes())
+            calls.append(kwargs)
+        self.assertTrue(all(call == calls[0] for call in calls))
+        self.assertEqual(calls[0], {"image": init, "controlnet_conditioning_scale": 1.0,
+                                   "num_samples": 1, "num_inference_steps": 30, "seed": 42, "edit_mlps": {}})
+        self.assertEqual(prepare_init.call_count, 4)
+
     def test_identity_controls_separate_empty_and_zero_networks_and_limit_extra_seeds(self):
         rows = identity.rows()
         self.assertEqual(len(rows), 12)
