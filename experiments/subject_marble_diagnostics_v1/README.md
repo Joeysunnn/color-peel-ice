@@ -13,7 +13,8 @@ The subsequent mailbox identity reconstruction test is specified in
 of Albedo leakage; no dataset expansion or training was performed.
 The authorized strength-only follow-up is specified in [STRENGTH_TEST.md](STRENGTH_TEST.md),
 with completed results in [STRENGTH_RESULTS.md](STRENGTH_RESULTS.md).
-The subsequent RGB-vs-gray initialization ablation is specified in [RGB_INIT_TEST.md](RGB_INIT_TEST.md).
+The subsequent RGB-vs-gray initialization ablation is specified in [RGB_INIT_TEST.md](RGB_INIT_TEST.md),
+with completed results in [RGB_INIT_RESULTS.md](RGB_INIT_RESULTS.md).
 
 ## Stage 1: official notebook example
 
