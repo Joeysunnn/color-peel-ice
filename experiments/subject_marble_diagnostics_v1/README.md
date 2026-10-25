@@ -15,7 +15,8 @@ The authorized strength-only follow-up is specified in [STRENGTH_TEST.md](STRENG
 with completed results in [STRENGTH_RESULTS.md](STRENGTH_RESULTS.md).
 The subsequent RGB-vs-gray initialization ablation is specified in [RGB_INIT_TEST.md](RGB_INIT_TEST.md),
 with completed results in [RGB_INIT_RESULTS.md](RGB_INIT_RESULTS.md).
-The RGB-initialized strength0.25 M/R joint grid is specified in [RGB_MR_TEST.md](RGB_MR_TEST.md).
+The RGB-initialized strength0.25 M/R joint grid is specified in [RGB_MR_TEST.md](RGB_MR_TEST.md),
+with completed results in [RGB_MR_RESULTS.md](RGB_MR_RESULTS.md).
 
 ## Stage 1: official notebook example
 
