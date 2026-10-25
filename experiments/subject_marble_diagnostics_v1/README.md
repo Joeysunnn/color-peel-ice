@@ -7,6 +7,10 @@ Actual completed runs and bounded findings: [RESULTS.md](RESULTS.md).
 The subsequently authorized two mailbox joint grids are specified in
 [JOINT_GRIDS.md](JOINT_GRIDS.md), with completed results in
 [JOINT_RESULTS.md](JOINT_RESULTS.md).
+The subsequent mailbox identity reconstruction test is specified in
+[IDENTITY_TEST.md](IDENTITY_TEST.md), with the limited three-seed visual review in
+[IDENTITY_RESULTS.md](IDENTITY_RESULTS.md). RGB changes are not treated as proof
+of Albedo leakage; no dataset expansion or training was performed.
 
 ## Stage 1: official notebook example
 
