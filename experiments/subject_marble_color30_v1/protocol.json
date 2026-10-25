@@ -1,0 +1,27 @@
+{
+  "schema": "mailbox_marble_color30/v1",
+  "original_root": "/home/r12user5/Documents/Jiawei/colorpeel-runs/20260916-163006__natural_image_subject_color_pilot__subject_recolor_mailbox_training_assets__bce4364__42",
+  "baseline_run": "/var/tmp/colorpeel-r12user5/runs/subject_marble_diagnostics_v1/20261024-150849__mailbox_self_grid__9cd67e7__42",
+  "mask": "/var/tmp/colorpeel-r12user5/runs/subject_albedo_pbr_c/20261020-210233__pbr30_bottom_complete__8c639fe__42/source/object_mask.png",
+  "mask_sha256": "550c1e13bee1435e1145f06e44bdef02d75b8b8fdfa7462d3b39f456dfc9a978",
+  "colors": [
+    {"name": "pink", "source_color": "red", "image_sha256": "4c62305b55f0e0aa494a402a643cec60897493fcdda25b802f7f3b4e81c6269b"},
+    {"name": "green", "source_color": "green", "image_sha256": "15b93e4e49502870daa3b71f524220943ccfaf2114f810c54da827e0a210aed0"},
+    {"name": "cyan", "source_color": "cyan", "image_sha256": "3a8114eb9738e655cbb47cdf088569cf02b1ae8e9fe9bb8f59015606f9ce1126"},
+    {"name": "blue", "source_color": "blue", "image_sha256": "5475c02c3713ce6353bd262f584f16105d24c23285ec1312eb427fb87edd4dc5"},
+    {"name": "purple", "source_color": "magenta", "image_sha256": "8fd34d57121ea58f89039e90badd3dd8c318ecf84d5c78158a048e5faf128ab8"}
+  ],
+  "metallic": [-20, 20],
+  "roughness": [-1, 0, 1],
+  "inference": {
+    "seed": 42, "num_inference_steps": 30, "guidance_scale": 5.0,
+    "strength": 1.0, "controlnet_scale": 1.0, "ip_adapter_scale": 1.0,
+    "prompt": "best quality, high quality",
+    "negative_prompt": "monochrome, lowres, bad anatomy, worst quality, low quality"
+  },
+  "initialization": "official grayscale foreground; unchanged RGB outside editing mask",
+  "reference": "each recolored1024 target as its own reference via texture_image=None",
+  "depth": "fresh official DPT from each color1024 target, shared only by its six independent edits",
+  "dataset": "30 raw1024 outputs resized LANCZOS512 plus five byte-identical original512 recolors; no RGB compositing",
+  "training_scope": "prepare and display35 candidate images and proposed captions only; no Subject training"
+}
