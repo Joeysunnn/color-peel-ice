@@ -15,12 +15,13 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from experiments.subject_marble_c_v1 import assets, quality
+from experiments.subject_marble_diagnostics_v1 import identity
 from experiments.subject_marble_c_v1.run import check_locks, write
 from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-STAGES = ("official", "mailbox", "mailbox_bowl", "mailbox_self")
+STAGES = ("official", "mailbox", "mailbox_bowl", "mailbox_self", "mailbox_identity")
 OLD_RUN = Path("/var/tmp/colorpeel-r12user5/runs/subject_marble_c_v1/"
                "20261021-125714__phase1_six__86fb6a2__42")
 
@@ -67,7 +68,7 @@ def masked_reference(image, mask):
     return Image.composite(image, Image.new("RGB", image.size, (127, 127, 127)), mask.convert("L"))
 
 
-def sheet(output, rows, sources, filename="contact_sheet.png", columns=3, crop=None):
+def sheet(output, rows, sources, filename="contact_sheet.png", columns=3, crop=None, title=None):
     """Show actual source inputs and uncomposited outputs, with explicit labels."""
     width, header = 1080, 410
     tile = width // columns
@@ -78,7 +79,7 @@ def sheet(output, rows, sources, filename="contact_sheet.png", columns=3, crop=N
         font = ImageFont.truetype("DejaVuSans.ttf", 17)
     except OSError:
         font = ImageFont.load_default()
-    draw.text((12, 8), "MARBLE diagnostics | relative controls | seed42 / 30steps | NO training", fill="black", font=font)
+    draw.text((12, 8), title or "MARBLE diagnostics | relative controls | seed42 / 30steps | NO training", fill="black", font=font)
 
     def panel(path, x, y, size, box=None):
         with Image.open(path) as image:
@@ -145,6 +146,8 @@ def run(asset_root, output, gpu, stage="official"):
     rows = mailbox_rows() if stage == "mailbox" else official_rows()
     if stage in ("mailbox_bowl", "mailbox_self"):
         rows = joint_mailbox_rows(stage)
+    elif stage == "mailbox_identity":
+        rows = identity.rows()
     if stage != "official":
         protocol = read_json(ROOT / "experiments/subject_marble_c_v1/protocol.json")
         source_path = ROOT / protocol["source"]
@@ -186,7 +189,7 @@ def run(asset_root, output, gpu, stage="official"):
                 references = {"bowl": image.copy()}
         else:
             references = {"self": target.copy()}
-        if stage in ("mailbox_bowl", "mailbox_self"):
+        if stage in ("mailbox_bowl", "mailbox_self", "mailbox_identity"):
             # A common review ROI only; bowl generation later uses official rembg.
             mask.save(output / "source/review_mask.png")
         for name, image in references.items():
@@ -226,9 +229,19 @@ def run(asset_root, output, gpu, stage="official"):
              "Target itself is the1024 material reference via official texture_image=None; existing mailbox Mask is retained."),
             "Two groups differ in BOTH Mask and reference, so between-group differences are not a reference-only ablation.",
         ]
+    elif stage == "mailbox_identity":
+        deviations[0] = "Identity reconstruction diagnostics, not counterfactual dataset expansion."
+        deviations[2] = "Fresh official DPT from1024 target; frozen existing mailbox Mask;1024 target itself as reference."
+        deviations += [
+            "Seed42: empty MLP, joint0, M-only[-20,0,20], R-only[-1,0,1]. Seeds43/44: empty MLP and joint0 only; twelve RGBs total.",
+            "All other official parameters unchanged. Empty MLP is still strength1 regeneration, not an identity passthrough.",
+            "Evaluate visible pattern, text and structure preservation; RGB differences do not establish albedo leakage.",
+            "No intrinsic ground truth: albedo preservation remains unverified. Three seeds provide only a limited stability check.",
+        ]
     write(output / "plan.json", {"git": revision, "official_commit": assets.OFFICIAL_COMMIT,
         "stage": stage, "rows": rows, "command": command, "source_hashes": source_hashes,
-        "seed": 42, "num_inference_steps": 30, "deviations": deviations})
+        "seed": 42, "seeds": sorted({row.get("seed", 42) for row in rows}),
+        "num_inference_steps": 30, "deviations": deviations})
     state = {"status": "initializing", "git": revision, "expected_images": len(rows), "generated_images": 0,
              "stage": stage,
              "training_started": False, "expanded_to30": False, "training_eligible_images": 0}
@@ -278,12 +291,14 @@ def run(asset_root, output, gpu, stage="official"):
         adapter.pipe.enable_model_cpu_offload(gpu_id=0)
         mlps = {name: marble.setup_control_mlp(name, device="cuda", dtype=torch.float16)
                 for name in ("metallic", "roughness")}
+        if stage == "mailbox_identity":
+            write(output / "zero_control_offsets.json", identity.zero_offsets(adapter, mlps, target))
         write(output / "runtime.json", {"pipeline": type(adapter.pipe).__name__,
             "scheduler": type(adapter.pipe.scheduler).__name__, "scheduler_config": dict(adapter.pipe.scheduler.config),
             "guidance_scale": inspect.signature(adapter.pipe.__call__).parameters["guidance_scale"].default,
             "unet_in_channels": adapter.pipe.unet.config.in_channels,
             "device": torch.cuda.get_device_name(0), "strength": 1, "controlnet_scale": 1, "ip_adapter_scale": 1,
-            "seed": 42, "num_inference_steps": 30,
+            "seed": 42, "seeds": sorted({row.get("seed", 42) for row in rows}), "num_inference_steps": 30,
             "prompt": "best quality, high quality", "negative_prompt": "monochrome, lowres, bad anatomy, worst quality, low quality",
             "packages": {p: importlib.metadata.version(p) for p in
                          ("torch", "diffusers", "transformers", "huggingface_hub", "accelerate", "Pillow", "numpy", "rembg")}})
@@ -296,15 +311,16 @@ def run(asset_root, output, gpu, stage="official"):
                 row_target = original if row.get("target_size") == 512 else target
                 result = marble.run_parametric_control(adapter, row_target.copy(),
                     {mlps[name]: value for name, value in row["controls"].items()},
-                    texture_image=None if stage == "mailbox_self" else references[row.get("reference", "official")].copy(),
-                    num_inference_steps=30, seed=42, depth_map=depth.copy(), mask=mask.copy())
+                    texture_image=None if stage in ("mailbox_self", "mailbox_identity") else references[row.get("reference", "official")].copy(),
+                    num_inference_steps=30, seed=row.get("seed", 42), depth_map=depth.copy(), mask=mask.copy())
             if result.size != (1024, 1024) or result.mode != "RGB":
                 raise ValueError("unexpected official RGB output")
             path = output / "raw" / f"{row['id']}.png"
             result.save(path)
             generated.append({**row, "raw_image": str(path.relative_to(output)), "sha256": sha256(path),
                 "seconds": time.monotonic() - start, "training_eligible": False,
-                "qc": quality.evaluate(np.asarray(target), np.asarray(result), np.asarray(result), binary_mask)})
+                "qc": identity.evaluate(target, result, binary_mask) if stage == "mailbox_identity" else
+                      quality.evaluate(np.asarray(target), np.asarray(result), np.asarray(result), binary_mask)})
             with (output / "manifest.jsonl").open("a", encoding="utf8") as stream:
                 stream.write(json.dumps(generated[-1]) + "\n")
             state["generated_images"] = len(generated)
@@ -313,6 +329,8 @@ def run(asset_root, output, gpu, stage="official"):
         if stage == "official":
             sheet(output, generated, [("Official context", "source/target.png"), ("Metal reference", "source/reference.png"),
                 ("Official rembg mask", "source/mask.png"), ("Shared official DPT", "source/depth.png")])
+        elif stage == "mailbox_identity":
+            identity.write_review(output, generated, sheet)
         elif stage in ("mailbox_bowl", "mailbox_self"):
             reference = "bowl" if stage == "mailbox_bowl" else "self"
             sources = [("Mailbox1024 target", "source/target.png"), (reference + " material reference", f"source/reference_{reference}.png"),

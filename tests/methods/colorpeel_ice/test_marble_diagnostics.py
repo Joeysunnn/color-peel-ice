@@ -10,10 +10,34 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image, ImageChops, ImageEnhance
 
-from experiments.subject_marble_diagnostics_v1 import run
+from experiments.subject_marble_diagnostics_v1 import identity, run
 
 
 class InputRegression(unittest.TestCase):
+    def test_identity_controls_separate_empty_and_zero_networks_and_limit_extra_seeds(self):
+        rows = identity.rows()
+        self.assertEqual(len(rows), 12)
+        self.assertEqual(len({row["id"] for row in rows}), 12)
+        by_id = {row["id"]: row for row in rows}
+        for seed in (42, 43, 44):
+            self.assertEqual(by_id[f"seed{seed}__none"]["controls"], {})
+            self.assertEqual(by_id[f"seed{seed}__joint_zero"]["controls"], {"metallic": 0, "roughness": 0})
+            if seed != 42:
+                self.assertEqual({row["control_name"] for row in rows if row["seed"] == seed}, {"none", "joint_zero"})
+        self.assertEqual(by_id["seed42__M+0"]["controls"], {"metallic": 0})
+        self.assertEqual(by_id["seed42__R+0"]["controls"], {"roughness": 0})
+
+    def test_large_RGB_difference_does_not_become_albedo_leakage_or_identity_verdict(self):
+        original = np.full((10, 10, 3), 20, dtype=np.uint8)
+        changed = np.full_like(original, 220)
+        mask = np.zeros((10, 10), dtype=np.uint8)
+        mask[2:8, 2:8] = 255
+        result = identity.evaluate(original, changed, mask)
+        self.assertEqual(result["appearance_diagnostics"]["foreground_RGB_MAE_255"], 200)
+        self.assertEqual(result["albedo_preservation"]["status"], "not_identifiable_from_RGB_alone")
+        self.assertEqual(result["flags"], ["manual_identity_review_required"])
+        self.assertEqual(result["content_review"]["texture_patterns"], "manual_review_required")
+
     def test_joint_grids_keep_both_networks_even_at_zero_controls(self):
         for stage, reference in (("mailbox_bowl", "bowl"), ("mailbox_self", "self")):
             rows = run.joint_mailbox_rows(stage)
