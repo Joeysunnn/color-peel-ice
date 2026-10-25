@@ -21,6 +21,8 @@ def review(output):
     manifest = read(output / "generation_manifest.json")
     generated = manifest["records"]
     experiment_label = "ZeST focused-reference diagnostic" if manifest.get("source_run") else "ZeST"
+    if plan.get("edge_diagnostic"):
+        experiment_label = "ZeST normalized-Albedo edge diagnostic"
     scores = {}
     if (output / "quality/latest.json").exists():
         latest = read(output / "quality/latest.json")

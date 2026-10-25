@@ -103,6 +103,24 @@ $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$FOC
 `summarize`另存`analysis/analysisNNN`，分开报告生成数、QC状态、自动阈值未拒收数及实际训练资格；
 同时记录近似M/R响应、有效区域覆盖、1024背景局部变化和初始化组间RGB差异。它不改变原QC阈值或状态。
 
+## 归一化Albedo边缘诊断
+
+首版Canny(100,200)遗漏了大部分内部低对比结构，不能据此否定有效Texture条件。
+`edge_diagnostic`另建prepared目录：有效编辑区域的Albedo灰度按2/98分位归一化，
+BICUBIC到1024后Gaussian sigma1、Canny(40,80)，在向内腐蚀3px的有效编辑域内保留边缘。
+先查看`edge_diagnostic/mailbox/input_check.png`及metrics，再运行texture／combined各两张Identity。
+采样、阈值、Reference、初始化、Depth和Mask沿用原实验；只替换新目录中的边缘条件，原结果不变。
+
+```bash
+$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.edge_diagnostic \
+  --run "$FRESH_ZEST_RUN" --output "$EDGE_RUN"
+$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.run --run "$EDGE_RUN" \
+  --assets "$ZEST_ASSETS" --stage identity --variants texture combined --gpu 2
+$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$EDGE_RUN" \
+  --assets "$ZEST_ASSETS" --stage identity --gpu 2 --resume --supermat-root "$ZEST_ASSETS/SuperMat"
+$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.review --run "$EDGE_RUN"
+```
+
 `--resume`锁配置、prepared输入、生成实现、模型／参考与已有输出hash；只补缺失项。
 中断尝试保留在`attemptNNN`，不覆盖旧结果。原始配置不可原地改后冒充续跑。
 新增载体可在独立config的`subjects`列表提供对齐RGB、Mask、保护Mask、SuperMat输入／估计和冻结Depth，
