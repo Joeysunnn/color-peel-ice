@@ -21,7 +21,7 @@ from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-STAGES = ("official", "mailbox", "mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength")
+STAGES = ("official", "mailbox", "mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init")
 OLD_RUN = Path("/var/tmp/colorpeel-r12user5/runs/subject_marble_c_v1/"
                "20261021-125714__phase1_six__86fb6a2__42")
 
@@ -150,6 +150,8 @@ def run(asset_root, output, gpu, stage="official"):
         rows = identity.rows()
     elif stage == "mailbox_strength":
         rows = strength.rows()
+    elif stage == "mailbox_rgb_init":
+        rows = strength.rgb_rows()
     if stage != "official":
         protocol = read_json(ROOT / "experiments/subject_marble_c_v1/protocol.json")
         source_path = ROOT / protocol["source"]
@@ -191,7 +193,7 @@ def run(asset_root, output, gpu, stage="official"):
                 references = {"bowl": image.copy()}
         else:
             references = {"self": target.copy()}
-        if stage in ("mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength"):
+        if stage in ("mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init"):
             # A common review ROI only; bowl generation later uses official rembg.
             mask.save(output / "source/review_mask.png")
         for name, image in references.items():
@@ -249,6 +251,15 @@ def run(asset_root, output, gpu, stage="official"):
             "Lower strength retains more of the grayscale initialization, not original RGB; actual denoising counts are recorded separately.",
             "RGB differences are not albedo leakage evidence; manually review new patterns, lettering and visible part details.",
         ]
+    elif stage == "mailbox_rgb_init":
+        deviations[0] = "Authorized RGB-vs-official-gray initialization ablation, not official default reproduction or training data."
+        deviations[2] = "Fresh1024 DPT, frozen mailbox Mask, identical1024 self reference; only initialization and strength vary."
+        deviations += [
+            "Two init groups each strength1/.75/.5/.25, seed42, empty MLP dict; eight raw1024 images total.",
+            "Gray uses official prepare_init_image unchanged; RGB overrides only image=target.copy() at the adapter boundary.",
+            "All remaining models, prompts, nominal30 steps, guidance5, ControlNet1, IPAdapter1 unchanged; no background compositing.",
+            "Init and strength recorded per image; actual denoising counts read after generation. No RGB-based albedo verdict.",
+        ]
     write(output / "plan.json", {"git": revision, "official_commit": assets.OFFICIAL_COMMIT,
         "stage": stage, "rows": rows, "command": command, "source_hashes": source_hashes,
         "seed": 42, "seeds": sorted({row.get("seed", 42) for row in rows}),
@@ -283,6 +294,8 @@ def run(asset_root, output, gpu, stage="official"):
         depth.save(output / "source/depth.png")
         mask.save(output / "source/mask.png")
         init.save(output / "source/initialization.png")
+        if stage == "mailbox_rgb_init":
+            target.save(output / "source/initialization_rgb.png")
         if stage == "mailbox":
             marble.prepare_init_image(original, mask).save(output / "source/legacy_initialization.png")
         locks.update({str(p): sha256(p) for p in (asset_root / "diagnostics_rembg").glob("*.onnx")})
@@ -308,7 +321,7 @@ def run(asset_root, output, gpu, stage="official"):
             "scheduler": type(adapter.pipe.scheduler).__name__, "scheduler_config": dict(adapter.pipe.scheduler.config),
             "guidance_scale": inspect.signature(adapter.pipe.__call__).parameters["guidance_scale"].default,
             "unet_in_channels": adapter.pipe.unet.config.in_channels,
-            "device": torch.cuda.get_device_name(0), "strength": [row["strength"] for row in rows] if stage == "mailbox_strength" else 1,
+            "device": torch.cuda.get_device_name(0), "strength": [row["strength"] for row in rows] if stage in ("mailbox_strength", "mailbox_rgb_init") else 1,
             "controlnet_scale": 1, "ip_adapter_scale": 1,
             "seed": 42, "seeds": sorted({row.get("seed", 42) for row in rows}), "num_inference_steps": 30,
             "prompt": "best quality, high quality", "negative_prompt": "monochrome, lowres, bad anatomy, worst quality, low quality",
@@ -321,10 +334,13 @@ def run(asset_root, output, gpu, stage="official"):
             start = time.monotonic()
             with torch.inference_mode():
                 row_target = original if row.get("target_size") == 512 else target
-                row_adapter = strength.StrengthOverride(adapter, row["strength"]) if stage == "mailbox_strength" else adapter
+                row_adapter = adapter
+                if stage in ("mailbox_strength", "mailbox_rgb_init"):
+                    row_adapter = strength.StrengthOverride(adapter, row["strength"],
+                        init_image=target if row.get("initialization") == "rgb" else None)
                 result = marble.run_parametric_control(row_adapter, row_target.copy(),
                     {mlps[name]: value for name, value in row["controls"].items()},
-                    texture_image=None if stage in ("mailbox_self", "mailbox_identity", "mailbox_strength") else references[row.get("reference", "official")].copy(),
+                    texture_image=None if stage in ("mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init") else references[row.get("reference", "official")].copy(),
                     num_inference_steps=30, seed=row.get("seed", 42), depth_map=depth.copy(), mask=mask.copy())
             if result.size != (1024, 1024) or result.mode != "RGB":
                 raise ValueError("unexpected official RGB output")
@@ -332,10 +348,12 @@ def run(asset_root, output, gpu, stage="official"):
             result.save(path)
             generated.append({**row, "raw_image": str(path.relative_to(output)), "sha256": sha256(path),
                 "seconds": time.monotonic() - start, "training_eligible": False,
-                "qc": identity.evaluate(target, result, binary_mask) if stage in ("mailbox_identity", "mailbox_strength") else
+                "qc": identity.evaluate(target, result, binary_mask) if stage in ("mailbox_identity", "mailbox_strength", "mailbox_rgb_init") else
                       quality.evaluate(np.asarray(target), np.asarray(result), np.asarray(result), binary_mask)})
-            if stage == "mailbox_strength":
+            if stage in ("mailbox_strength", "mailbox_rgb_init"):
                 generated[-1]["actual_denoising_steps"] = adapter.pipe.num_timesteps
+            if stage == "mailbox_rgb_init":
+                generated[-1]["initialization_sha256"] = sha256(output / row["initialization_image"])
             with (output / "manifest.jsonl").open("a", encoding="utf8") as stream:
                 stream.write(json.dumps(generated[-1]) + "\n")
             state["generated_images"] = len(generated)
@@ -348,6 +366,8 @@ def run(asset_root, output, gpu, stage="official"):
             identity.write_review(output, generated, sheet)
         elif stage == "mailbox_strength":
             strength.write_review(output, generated, sheet)
+        elif stage == "mailbox_rgb_init":
+            strength.write_rgb_review(output, generated, sheet)
         elif stage in ("mailbox_bowl", "mailbox_self"):
             reference = "bowl" if stage == "mailbox_bowl" else "self"
             sources = [("Mailbox1024 target", "source/target.png"), (reference + " material reference", f"source/reference_{reference}.png"),

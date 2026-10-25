@@ -16,6 +16,46 @@ from experiments.subject_marble_diagnostics_v1 import identity, run, strength
 
 class InputRegression(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("MARBLE_OFFICIAL_ROOT"), "set pinned official source path")
+    def test_rgb_initialization_changes_only_image_and_strength_in_official_caller(self):
+        source = Path(os.environ["MARBLE_OFFICIAL_ROOT"]) / "marble.py"
+        module = ast.parse(source.read_text(encoding="utf8"))
+        functions = [node for node in module.body if isinstance(node, ast.FunctionDef)
+                     and node.name in ("prepare_init_image", "run_parametric_control")]
+        namespace = {"Image": Image, "ImageChops": ImageChops, "ImageEnhance": ImageEnhance}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec",
+                     flags=__future__.annotations.compiler_flag), namespace)
+        target = Image.new("RGB", (1024, 1024), (210, 91, 32))
+        mask = Image.new("RGB", target.size, (255, 255, 255))
+        depth = Image.new("RGB", target.size, (80, 80, 80))
+        gray = namespace["prepare_init_image"](target, mask)
+        before = target.tobytes(), mask.tobytes(), depth.tobytes()
+        rows = strength.rgb_rows()
+        self.assertEqual(len({row["id"] for row in rows}), 8)
+        calls = []
+        for mode in ("gray", "rgb"):
+            selected = [row for row in rows if row["initialization"] == mode]
+            self.assertEqual([row["strength"] for row in selected], [1, .75, .5, .25])
+            for row in selected:
+                self.assertEqual((row["controls"], row["seed"], row["reference"]), ({}, 42, "self"))
+                adapter = Mock()
+                adapter.generate_parametric_edits.return_value = [target]
+                namespace["run_parametric_control"](strength.StrengthOverride(adapter, row["strength"],
+                    init_image=target if mode == "rgb" else None), target, {},
+                    texture_image=None, depth_map=depth, mask=mask, num_inference_steps=30, seed=42)
+                args, kwargs = adapter.generate_parametric_edits.call_args
+                self.assertEqual(args, (target,))
+                expected = target if mode == "rgb" else gray
+                self.assertEqual(kwargs.pop("image").tobytes(), expected.tobytes())
+                self.assertEqual(kwargs.pop("strength"), row["strength"])
+                for key, image in (("control_image", depth), ("mask_image", mask)):
+                    self.assertEqual(kwargs.pop(key).tobytes(), image.tobytes())
+                calls.append(kwargs)
+        self.assertTrue(all(call == calls[0] for call in calls))
+        self.assertEqual(calls[0], {"controlnet_conditioning_scale": 1.0, "num_samples": 1,
+                                   "num_inference_steps": 30, "seed": 42, "edit_mlps": {}})
+        self.assertEqual((target.tobytes(), mask.tobytes(), depth.tobytes()), before)
+
+    @unittest.skipUnless(os.environ.get("MARBLE_OFFICIAL_ROOT"), "set pinned official source path")
     def test_strength_ablation_changes_only_strength_in_actual_official_caller(self):
         source = Path(os.environ["MARBLE_OFFICIAL_ROOT"]) / "marble.py"
         module = ast.parse(source.read_text(encoding="utf8"))
