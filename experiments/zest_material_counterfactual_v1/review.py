@@ -18,7 +18,9 @@ def preview(path, box=None):
 def review(output):
     output = Path(output).resolve()
     plan = load_plan(output)
-    generated = read(output / "generation_manifest.json")["records"]
+    manifest = read(output / "generation_manifest.json")
+    generated = manifest["records"]
+    label = "ZeST focused-reference diagnostic" if manifest.get("source_run") else "ZeST"
     scores = {}
     if (output / "quality/latest.json").exists():
         latest = read(output / "quality/latest.json")
@@ -44,7 +46,7 @@ def review(output):
                 width, height = 1080, 300
                 sheet = Image.new("RGB", (width, 80 + height*len(selected)), "white")
                 draw = ImageDraw.Draw(sheet)
-                draw.text((10, 8), f"ZeST {subject['id']} | {stage} / {variant} | seed42 | raw outputs | NO training", font=font, fill="black")
+                draw.text((10, 8), f"{label} {subject['id']} | {stage} / {variant} | seed42 | raw outputs | NO training", font=font, fill="black")
                 for index, label in enumerate(("Original (same fixed crop)", "Actual material reference", "Generated (same fixed crop)", "Estimated QC; not ground truth")):
                     draw.text((index*270+8, 43), label, font=small, fill="black")
                 for index, row in enumerate(selected):
@@ -97,6 +99,8 @@ def review(output):
             draw.text((x, y), label, font=small, fill="black")
             sheet.paste(image, (x, y+28))
         sheet.save(folder / f"{subject['id']}__marble_comparison.png")
+    if not (output / "bank/manifest.json").exists():
+        return folder
     bank = read(output / "bank/manifest.json")
     sheet = Image.new("RGB", (1080, 90+360*4), "white")
     draw = ImageDraw.Draw(sheet)
