@@ -20,7 +20,7 @@ def review(output):
     plan = load_plan(output)
     manifest = read(output / "generation_manifest.json")
     generated = manifest["records"]
-    label = "ZeST focused-reference diagnostic" if manifest.get("source_run") else "ZeST"
+    experiment_label = "ZeST focused-reference diagnostic" if manifest.get("source_run") else "ZeST"
     scores = {}
     if (output / "quality/latest.json").exists():
         latest = read(output / "quality/latest.json")
@@ -46,7 +46,7 @@ def review(output):
                 width, height = 1080, 300
                 sheet = Image.new("RGB", (width, 80 + height*len(selected)), "white")
                 draw = ImageDraw.Draw(sheet)
-                draw.text((10, 8), f"{label} {subject['id']} | {stage} / {variant} | seed42 | raw outputs | NO training", font=font, fill="black")
+                draw.text((10, 8), f"{experiment_label} {subject['id']} | {stage} / {variant} | seed42 | raw outputs | NO training", font=font, fill="black")
                 for index, label in enumerate(("Original (same fixed crop)", "Actual material reference", "Generated (same fixed crop)", "Estimated QC; not ground truth")):
                     draw.text((index*270+8, 43), label, font=small, fill="black")
                 for index, row in enumerate(selected):
