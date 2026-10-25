@@ -11,7 +11,8 @@ The subsequent mailbox identity reconstruction test is specified in
 [IDENTITY_TEST.md](IDENTITY_TEST.md), with the limited three-seed visual review in
 [IDENTITY_RESULTS.md](IDENTITY_RESULTS.md). RGB changes are not treated as proof
 of Albedo leakage; no dataset expansion or training was performed.
-The authorized strength-only follow-up is specified in [STRENGTH_TEST.md](STRENGTH_TEST.md).
+The authorized strength-only follow-up is specified in [STRENGTH_TEST.md](STRENGTH_TEST.md),
+with completed results in [STRENGTH_RESULTS.md](STRENGTH_RESULTS.md).
 
 ## Stage 1: official notebook example
 
