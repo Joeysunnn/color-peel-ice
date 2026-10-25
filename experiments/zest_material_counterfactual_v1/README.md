@@ -79,7 +79,29 @@ $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.run --run "$FRESH_
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$FRESH_ZEST_RUN" \
   --assets "$ZEST_ASSETS" --stage all --gpu 2 --resume --supermat-root "$ZEST_ASSETS/SuperMat"
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.review --run "$FRESH_ZEST_RUN"
+$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.summarize --run "$FRESH_ZEST_RUN"
 ```
+
+## 参考构图诊断
+
+首轮球体只占参考图约5.6%，其余为灰色场景。官方CLIP编码整张参考图，不自动定位材质区域；
+self参考也含有Mailbox之外的彩色门牌。两者都可能干扰材质表征，尚不能据此确定唯一失败原因。
+`focus_reference`将参考对象Mask的方形bbox各边扩展10%后裁切、BICUBIC到1024，
+仅改变Reference，不裁切目标图，不改变初始化、Mask、Depth或推理参数。
+对baseline及combined各做self／estimated-original，共4张独立诊断，不混入原44张消融。
+
+```bash
+$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.focus_reference \
+  --run "$FRESH_ZEST_RUN" --assets "$ZEST_ASSETS" --gpu 3
+# FOCUS_RUN取上一命令返回的新diagnostics/reference_focusNNN目录。
+$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$FOCUS_RUN" \
+  --assets "$ZEST_ASSETS" --stage identity --gpu 3 --resume --supermat-root "$ZEST_ASSETS/SuperMat"
+```
+
+每次新建目录，保留Reference裁切框、占比、原始／裁切参考、原始输出、五列Comparison Sheet与输入hash。
+诊断目录复制原prepared文件并保留逐字节hash，可独立复用SuperMat／Depth评估，不修改原消融或批准训练。
+`summarize`另存`analysis/analysisNNN`，分开报告生成数、QC状态、自动阈值未拒收数及实际训练资格；
+同时记录近似M/R响应、有效区域覆盖、1024背景局部变化和初始化组间RGB差异。它不改变原QC阈值或状态。
 
 `--resume`锁配置、prepared输入、生成实现、模型／参考与已有输出hash；只补缺失项。
 中断尝试保留在`attemptNNN`，不覆盖旧结果。原始配置不可原地改后冒充续跑。
