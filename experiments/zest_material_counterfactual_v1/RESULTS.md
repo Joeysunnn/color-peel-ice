@@ -7,6 +7,7 @@
 - Blender固定场景：9个M/R网格参考球＋估计原材质参考球，共10张。
 - ZeST四组：baseline、Albedo色度初始化、Albedo边缘ControlNet、两者组合。每组2张Identity＋9张参数网格，共44张原始1024px输出。
 - 独立Reference裁切诊断：baseline／combined各2张，共4张，不混入原消融。
+- 内部边缘修正诊断：texture／combined各2张，共4张。总计52张生成输出，另有10张参考球。
 - 固定seed42、名义30步／实际29步、strength0.9999、CFG5、Depth0.9、IPAdapter1；边缘组额外Canny0.3。
 - 原图与生成图使用相同SuperMat参数重新提取；独立DPT估计输出几何。原始RGB未回贴到输出。
 
@@ -65,6 +66,25 @@ SuperMat Albedo仍可见细槽，首版边缘阈值却遗漏了这些低对比�
 
 裁切没有解决本轮Identity要求。球体参考可能使目标变成颜色接近、但缺少原纹样的光滑表面；自身参考仍出现新标记。不能据此断言所有Reference构造都无效，也不能将本轮失败归结为Reference未传入模型。
 
+## 内部边缘输入修正
+
+独立`diagnostics/edge_condition001`保留原始Reference和采样参数，只修改Albedo边缘提取：有效域灰度q02/q98=46/82，归一化后1024 Gaussian sigma1及Canny(40,80)，向内腐蚀3px排除对象轮廓。
+归一化裁剪比例3.50%；新边缘共7241，在与首版相同的内部支持区域内由35增加到5394。实际输入图已检查，包含盖板压纹、内框、投递口及锁附近结构。
+这些仍是从估计Albedo提取的可见结构边缘，不是经过验证的独立微纹理，也不能证明其中没有残余几何／光照。
+texture及combined各做self与估计原材质球两个Identity，对照原4张相同配置，不改变原消融结果。
+
+| 修正后的条件／参考 | 估计A DeltaE76 p95 | 边缘precision／recall | 高频相关 | QC |
+|---|---:|---|---:|---|
+| texture／self | 114.046 | 0.423 / 0.873 | 0.141 | rejected |
+| texture／球体 | 80.765 | 0.000 / 0.000 | 0.013 | rejected |
+| combined／self | 57.597 | 0.501 / 0.993 | 0.387 | rejected |
+| combined／球体 | 30.343 | 0.000 / 0.000 | 0.020 | rejected |
+
+4张仍全部拒收。combined/self的高频相关从原边缘条件的0.176提高到0.387，边缘召回增加，说明有效内部条件有改善；但precision、估计Albedo一致性与完整细节保持仍不够。球体参考下依然基本没有恢复原内部纹样。
+因此弱边缘输入是首版的一项问题，但修复后也尚未达到数据要求；不再扩展网格或训练。
+
+该独立诊断仅含texture／combined，缺少baseline/self，因此通用评估器的全局`identity_gate=pending_manual_review`表示缺少基线记录，不表示4张样本通过。以上逐图`rejected`及对应原因才是本次结果。
+
 ## 解释边界
 
 - 参考球M/R是Blender输入真值；Mailbox输出的SuperMat估计不是目标M/R真值，也不能保证三档单调响应。
@@ -91,9 +111,10 @@ ZeST将参考外观编码为隐式特征，不提供“只改变M/R且严格锁�
 - `analysis/analysisNNN/`：原始背景局部差异、近似M/R响应矩阵、覆盖率和初始化对照差异。
 - `reviews/`：Original／实际Reference／Generated／估计质量指标，以及MARBLE对照。
 - `diagnostics/reference_focus001/`：4张裁切诊断、独立SuperMat／Depth评估及对照图。
+- `diagnostics/edge_condition001/`：内部边缘修正、输入可视化、4张Identity及独立质量评估。
 - `repro_outputs/`：生成状态、命令、实现适配与可比性说明。
 
-命令见README。34项CPU检查已在服务器通过；四组真实推理、独立评估和原始输出可视化均实际执行。源码、权重、配置及结果有hash收据。
+命令见README。36项CPU检查已在服务器通过；四组真实推理、独立评估和原始输出可视化均实际执行。源码、权重、配置及结果有hash收据。
 
 旧SuperMat目录只读复用权重，另建同提交的干净源码副本进行QC。先前因Blender PNG时间戳导致的错误掩码判定已改为比较解码像素；失败尝试原样保留在独立旧目录，不覆盖或删除。
 
