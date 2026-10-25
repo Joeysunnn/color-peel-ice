@@ -42,7 +42,7 @@ def load_mask(path, size=(512, 512)):
         return np.asarray(image.convert("L").resize(size, Image.Resampling.NEAREST)) >= 128
 
 
-def inspect(run, plan, receipt):
+def inspect(run, plan, receipt, supermat_root=None):
     assets.verify(receipt)
     prepared = read(run / "prepare_receipt.json")
     for path, digest in plan["input_hashes"].items():
@@ -51,7 +51,9 @@ def inspect(run, plan, receipt):
     for relative, digest in prepared["output_hashes"].items():
         if sha256(local(run, relative)) != digest:
             raise ValueError(f"Prepared run input changed: {relative}")
-    config = plan["supermat"]
+    config = dict(plan["supermat"])
+    if supermat_root is not None:
+        config["root"] = str(Path(supermat_root).resolve())
     assets.source_state(config["root"], config["official_commit"])
     if sha256(config["checkpoint"]) != config["checkpoint_sha256"]:
         raise ValueError("SuperMat checkpoint changed")
@@ -193,11 +195,11 @@ def rgb512(path):
         return np.asarray(image.convert("RGB").resize((512, 512), Image.Resampling.LANCZOS)).copy()
 
 
-def run_assessment(run, asset_root, gpu=2, stage="all", resume=False, manual_review=None):
+def run_assessment(run, asset_root, gpu=2, stage="all", resume=False, manual_review=None, supermat_root=None):
     run = Path(run).resolve()
     plan, manifest = read(run / "plan.json"), read(run / "generation_manifest.json")
     receipt = assets.read(asset_root)
-    protocol = inspect(run, plan, receipt)
+    protocol = inspect(run, plan, receipt, supermat_root)
     cache_path = run / "estimates_manifest.json"
     if cache_path.exists() and not resume:
         raise FileExistsError("Estimation cache exists; use --resume to validate and reuse it")
@@ -232,7 +234,7 @@ def run_assessment(run, asset_root, gpu=2, stage="all", resume=False, manual_rev
     env = os.environ.copy()
     env.update(CUDA_VISIBLE_DEVICES=str(gpu), PYTHONDONTWRITEBYTECODE="1", HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-    estimate_materials(run, jobs, cache, plan["supermat"], env)
+    estimate_materials(run, jobs, cache, protocol["supermat"], env)
     estimate_depths(run, jobs, cache, receipt)
     validate_cache(run, cache, jobs)
     records = []
@@ -270,7 +272,7 @@ def run_assessment(run, asset_root, gpu=2, stage="all", resume=False, manual_rev
         eligible = bool(assessed and assessed["training_eligible"] and gates[row["subject_id"]] == "accepted")
         dataset.append({**row, "quality_status": assessed["status"] if assessed else "not_assessed",
                         "identity_gate": gates[row["subject_id"]], "training_eligible": eligible})
-    if inspect(run, plan, receipt) != protocol:
+    if inspect(run, plan, receipt, supermat_root) != protocol:
         raise ValueError("Assessment scripts or extraction protocol changed during execution")
     validate_cache(run, cache, jobs)
     output = fresh(run / "quality", "assessment")
@@ -297,8 +299,9 @@ def main():
     parser.add_argument("--stage", choices=("identity", "grid", "all"), default="all")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--manual-review", type=Path, help="User-authored JSON: case ID -> boolean approval; thresholds still apply")
+    parser.add_argument("--supermat-root", type=Path, help="Independent clean checkout at the same pinned commit; recorded in the immutable QC protocol")
     args = parser.parse_args()
-    result = run_assessment(args.run, args.assets, args.gpu, args.stage, args.resume, args.manual_review)
+    result = run_assessment(args.run, args.assets, args.gpu, args.stage, args.resume, args.manual_review, args.supermat_root)
     print(json.dumps({"records": len(result["records"]), "identity_gate": result["identity_gate"]}))
 
 

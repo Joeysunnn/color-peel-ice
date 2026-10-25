@@ -57,6 +57,9 @@ export PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp
 export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
 PROJECT_PY=/var/tmp/colorpeel-r12user5/assets/marble_c_v1/env/bin/python
 ZEST_ASSETS=/var/tmp/colorpeel-r12user5/assets/zest_material_v1
+# 独立源码副本，不把旧SuperMat目录中的权重／缓存纳入源码；权重路径仍只读共享。
+git clone --no-hardlinks /home/r12user5/Documents/Jiawei/colorpeel-runs/natural_material_supermat_v1/deps/SuperMat "$ZEST_ASSETS/SuperMat"
+git -C "$ZEST_ASSETS/SuperMat" checkout --detach 4fe25bc6cb8cb7a3ed81ce74512f760dd33f80f4
 # FRESH_ZEST_RUN 必须是新结果目录；后续续跑使用同一个已准备目录。
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assets \
   --output "$ZEST_ASSETS" --shared-marble-assets /var/tmp/colorpeel-r12user5/assets/marble_c_v1 --with-canny
@@ -68,13 +71,13 @@ CUDA_VISIBLE_DEVICES=3 /home/r12user5/Documents/Jiawei/tools/blender-4.2.11-linu
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.run --run "$FRESH_ZEST_RUN" \
   --assets "$ZEST_ASSETS" --stage identity --gpu 2 --variants baseline
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$FRESH_ZEST_RUN" \
-  --assets "$ZEST_ASSETS" --stage identity --gpu 2 --resume
+  --assets "$ZEST_ASSETS" --stage identity --gpu 2 --resume --supermat-root "$ZEST_ASSETS/SuperMat"
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.review --run "$FRESH_ZEST_RUN"
 # 查看Identity误差之后继续诊断，训练资格仍关闭：
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.run --run "$FRESH_ZEST_RUN" \
   --assets "$ZEST_ASSETS" --stage all --gpu 2 --resume
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$FRESH_ZEST_RUN" \
-  --assets "$ZEST_ASSETS" --stage all --gpu 2 --resume
+  --assets "$ZEST_ASSETS" --stage all --gpu 2 --resume --supermat-root "$ZEST_ASSETS/SuperMat"
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.review --run "$FRESH_ZEST_RUN"
 ```
 
