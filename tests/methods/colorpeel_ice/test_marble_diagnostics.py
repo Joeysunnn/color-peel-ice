@@ -16,6 +16,36 @@ from experiments.subject_marble_diagnostics_v1 import identity, run, strength
 
 class InputRegression(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("MARBLE_OFFICIAL_ROOT"), "set pinned official source path")
+    def test_rgb_mr_grid_passes_both_networks_with_rgb_init_and_quarter_strength(self):
+        source = Path(os.environ["MARBLE_OFFICIAL_ROOT"]) / "marble.py"
+        module = ast.parse(source.read_text(encoding="utf8"))
+        function = next(node for node in module.body if isinstance(node, ast.FunctionDef)
+                        and node.name == "run_parametric_control")
+        target = Image.new("RGB", (1024, 1024), (210, 91, 32))
+        mask, depth, gray = [Image.new("RGB", target.size, color) for color in (255, 80, 120)]
+        namespace = {"prepare_init_image": Mock(return_value=gray)}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), str(source), "exec",
+                     flags=__future__.annotations.compiler_flag), namespace)
+        rows = run.rgb_mr_rows()
+        self.assertEqual([(r["controls"]["metallic"], r["controls"]["roughness"]) for r in rows],
+                         [(m, r) for m in (-20, 0, 20) for r in (-1, 0, 1)])
+        self.assertEqual(len({r["id"] for r in rows}), 9)
+        networks = {name: object() for name in ("metallic", "roughness")}
+        for row in rows:
+            self.assertEqual((row["strength"], row["seed"], row["reference"], row["initialization"]), (.25, 42, "self", "rgb"))
+            adapter = Mock()
+            adapter.generate_parametric_edits.return_value = [target]
+            edits = {networks[name]: value for name, value in row["controls"].items()}
+            namespace["run_parametric_control"](strength.StrengthOverride(adapter, row["strength"], target),
+                target, edits, texture_image=None, depth_map=depth, mask=mask, num_inference_steps=30, seed=42)
+            args, kwargs = adapter.generate_parametric_edits.call_args
+            self.assertEqual(args, (target,))
+            self.assertEqual(kwargs["image"].tobytes(), target.tobytes())
+            self.assertEqual(kwargs["edit_mlps"], edits)
+            self.assertEqual(set(kwargs["edit_mlps"]), set(networks.values()))
+            self.assertEqual((kwargs["strength"], kwargs["num_inference_steps"], kwargs["seed"]), (.25, 30, 42))
+
+    @unittest.skipUnless(os.environ.get("MARBLE_OFFICIAL_ROOT"), "set pinned official source path")
     def test_rgb_initialization_changes_only_image_and_strength_in_official_caller(self):
         source = Path(os.environ["MARBLE_OFFICIAL_ROOT"]) / "marble.py"
         module = ast.parse(source.read_text(encoding="utf8"))

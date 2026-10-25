@@ -21,7 +21,7 @@ from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
-STAGES = ("official", "mailbox", "mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init")
+STAGES = ("official", "mailbox", "mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init", "mailbox_rgb_mr")
 OLD_RUN = Path("/var/tmp/colorpeel-r12user5/runs/subject_marble_c_v1/"
                "20261021-125714__phase1_six__86fb6a2__42")
 
@@ -52,6 +52,12 @@ def joint_mailbox_rows(stage):
         raise ValueError("select a mailbox joint-grid stage")
     reference = "bowl" if stage == "mailbox_bowl" else "self"
     return [{**row, "reference": reference, "target_size": 1024} for row in official_rows()]
+
+
+def rgb_mr_rows():
+    return [{**row, "reference": "self", "target_size": 1024, "seed": 42, "strength": .25,
+             "initialization": "rgb", "initialization_image": "source/initialization_rgb.png"}
+            for row in official_rows()]
 
 
 def aligned_inputs(image, mask):
@@ -155,6 +161,8 @@ def run(asset_root, output, gpu, stage="official"):
         rows = strength.rows()
     elif stage == "mailbox_rgb_init":
         rows = strength.rgb_rows()
+    elif stage == "mailbox_rgb_mr":
+        rows = rgb_mr_rows()
     if stage != "official":
         protocol = read_json(ROOT / "experiments/subject_marble_c_v1/protocol.json")
         source_path = ROOT / protocol["source"]
@@ -196,7 +204,7 @@ def run(asset_root, output, gpu, stage="official"):
                 references = {"bowl": image.copy()}
         else:
             references = {"self": target.copy()}
-        if stage in ("mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init"):
+        if stage in ("mailbox_bowl", "mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init", "mailbox_rgb_mr"):
             # A common review ROI only; bowl generation later uses official rembg.
             mask.save(output / "source/review_mask.png")
         for name, image in references.items():
@@ -263,6 +271,16 @@ def run(asset_root, output, gpu, stage="official"):
             "All remaining models, prompts, nominal30 steps, guidance5, ControlNet1, IPAdapter1 unchanged; no background compositing.",
             "Init and strength recorded per image; actual denoising counts read after generation. No RGB-based albedo verdict.",
         ]
+    elif stage == "mailbox_rgb_mr":
+        deviations[0] = "Authorized full M/R joint grid with RGB initialization and strength.25, nine independent outputs."
+        deviations[2] = "Fresh1024 DPT, frozen mailbox Mask, same1024 self reference and original RGB initialization."
+        deviations += [
+            "Rows M[-20,0,20], columns R[-1,0,1]; BOTH MLPs called even for zero values. Center0/0 is not empty-MLP identity.",
+            "Same StrengthOverride adapter boundary; official source/weights unchanged. No background compositing.",
+            "Seed42, nominal30 steps, guidance5, ControlNet1, IPAdapter1 and prompts unchanged; actual denoising count recorded.",
+            "Judge reflectance/highlight response separately from visible text/pattern/part preservation. No physical M/R or albedo ground truth.",
+            "Relative controls are not absolute PBR values. No expansion to30 or training.",
+        ]
     write(output / "plan.json", {"git": revision, "official_commit": assets.OFFICIAL_COMMIT,
         "stage": stage, "rows": rows, "command": command, "source_hashes": source_hashes,
         "seed": 42, "seeds": sorted({row.get("seed", 42) for row in rows}),
@@ -297,7 +315,7 @@ def run(asset_root, output, gpu, stage="official"):
         depth.save(output / "source/depth.png")
         mask.save(output / "source/mask.png")
         init.save(output / "source/initialization.png")
-        if stage == "mailbox_rgb_init":
+        if stage in ("mailbox_rgb_init", "mailbox_rgb_mr"):
             target.save(output / "source/initialization_rgb.png")
         if stage == "mailbox":
             marble.prepare_init_image(original, mask).save(output / "source/legacy_initialization.png")
@@ -324,7 +342,7 @@ def run(asset_root, output, gpu, stage="official"):
             "scheduler": type(adapter.pipe.scheduler).__name__, "scheduler_config": dict(adapter.pipe.scheduler.config),
             "guidance_scale": inspect.signature(adapter.pipe.__call__).parameters["guidance_scale"].default,
             "unet_in_channels": adapter.pipe.unet.config.in_channels,
-            "device": torch.cuda.get_device_name(0), "strength": [row["strength"] for row in rows] if stage in ("mailbox_strength", "mailbox_rgb_init") else 1,
+            "device": torch.cuda.get_device_name(0), "strength": [row["strength"] for row in rows] if stage in ("mailbox_strength", "mailbox_rgb_init", "mailbox_rgb_mr") else 1,
             "controlnet_scale": 1, "ip_adapter_scale": 1,
             "seed": 42, "seeds": sorted({row.get("seed", 42) for row in rows}), "num_inference_steps": 30,
             "prompt": "best quality, high quality", "negative_prompt": "monochrome, lowres, bad anatomy, worst quality, low quality",
@@ -338,12 +356,12 @@ def run(asset_root, output, gpu, stage="official"):
             with torch.inference_mode():
                 row_target = original if row.get("target_size") == 512 else target
                 row_adapter = adapter
-                if stage in ("mailbox_strength", "mailbox_rgb_init"):
+                if stage in ("mailbox_strength", "mailbox_rgb_init", "mailbox_rgb_mr"):
                     row_adapter = strength.StrengthOverride(adapter, row["strength"],
                         init_image=target if row.get("initialization") == "rgb" else None)
                 result = marble.run_parametric_control(row_adapter, row_target.copy(),
                     {mlps[name]: value for name, value in row["controls"].items()},
-                    texture_image=None if stage in ("mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init") else references[row.get("reference", "official")].copy(),
+                    texture_image=None if stage in ("mailbox_self", "mailbox_identity", "mailbox_strength", "mailbox_rgb_init", "mailbox_rgb_mr") else references[row.get("reference", "official")].copy(),
                     num_inference_steps=30, seed=row.get("seed", 42), depth_map=depth.copy(), mask=mask.copy())
             if result.size != (1024, 1024) or result.mode != "RGB":
                 raise ValueError("unexpected official RGB output")
@@ -351,11 +369,11 @@ def run(asset_root, output, gpu, stage="official"):
             result.save(path)
             generated.append({**row, "raw_image": str(path.relative_to(output)), "sha256": sha256(path),
                 "seconds": time.monotonic() - start, "training_eligible": False,
-                "qc": identity.evaluate(target, result, binary_mask) if stage in ("mailbox_identity", "mailbox_strength", "mailbox_rgb_init") else
+                "qc": identity.evaluate(target, result, binary_mask) if stage in ("mailbox_identity", "mailbox_strength", "mailbox_rgb_init", "mailbox_rgb_mr") else
                       quality.evaluate(np.asarray(target), np.asarray(result), np.asarray(result), binary_mask)})
-            if stage in ("mailbox_strength", "mailbox_rgb_init"):
+            if stage in ("mailbox_strength", "mailbox_rgb_init", "mailbox_rgb_mr"):
                 generated[-1]["actual_denoising_steps"] = adapter.pipe.num_timesteps
-            if stage == "mailbox_rgb_init":
+            if stage in ("mailbox_rgb_init", "mailbox_rgb_mr"):
                 generated[-1]["initialization_sha256"] = sha256(output / row["initialization_image"])
             with (output / "manifest.jsonl").open("a", encoding="utf8") as stream:
                 stream.write(json.dumps(generated[-1]) + "\n")
@@ -371,6 +389,8 @@ def run(asset_root, output, gpu, stage="official"):
             strength.write_review(output, generated, sheet)
         elif stage == "mailbox_rgb_init":
             strength.write_rgb_review(output, generated, sheet)
+        elif stage == "mailbox_rgb_mr":
+            strength.write_rgb_mr_review(output, generated, sheet)
         elif stage in ("mailbox_bowl", "mailbox_self"):
             reference = "bowl" if stage == "mailbox_bowl" else "self"
             sources = [("Mailbox1024 target", "source/target.png"), (reference + " material reference", f"source/reference_{reference}.png"),

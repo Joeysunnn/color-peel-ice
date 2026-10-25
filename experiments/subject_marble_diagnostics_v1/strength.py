@@ -68,3 +68,18 @@ def write_rgb_review(output, generated, sheet):
                   {"raw_image": selected[0]["initialization_image"], "label": mode.upper() + " actual initialization"}] + selected
         sheet(output, panels, sources, f"{mode}_init_subject.png", crop=crop,
               title=f"{mode.upper()} init | original / actual init / 1/.75/.5/.25 | Albedo unverified")
+
+
+def write_rgb_mr_review(output, generated, sheet):
+    from PIL import Image
+
+    with Image.open(output / "source/review_mask.png") as image:
+        x0, y0, x1, y1 = image.convert("L").getbbox()
+    crop = (max(0, x0 - 24), max(0, y0 - 24), min(1024, x1 + 24), min(1024, y1 + 24))
+    sources = [("Mailbox original RGB", "source/target.png"),
+               ("Actual RGB init = self ref", "source/initialization_rgb.png"),
+               ("Frozen mailbox Mask", "source/mask.png"), ("Fresh1024 DPT", "source/depth.png")]
+    sheet(output, generated, sources, "rgb_mr_full.png",
+          title="RGB init / strength.25 / seed42 | rows M=-20,0,+20 | columns R=-1,0,+1 | relative controls")
+    sheet(output, generated, sources, "rgb_mr_subject.png", crop=crop,
+          title="RGB init / strength.25 | M rows / R columns | visible content + reflectance | Albedo unverified")
