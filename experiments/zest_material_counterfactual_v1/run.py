@@ -107,6 +107,7 @@ def run(output, asset_root, stage, gpu, variants=None, resume=False):
     completed = {row["id"] for row in state["records"]}
     pending = [row for row in selected if row["id"] not in completed]
     if not pending:
+        assets.verify(receipt)
         print("All requested outputs verified", flush=True)
         return state
     state.update(status="generating")
