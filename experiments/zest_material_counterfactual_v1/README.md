@@ -72,9 +72,7 @@ $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$FRE
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.review --run "$FRESH_ZEST_RUN"
 # 查看Identity误差之后继续诊断，训练资格仍关闭：
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.run --run "$FRESH_ZEST_RUN" \
-  --assets "$ZEST_ASSETS" --stage identity --gpu 2 --variants color texture combined --resume
-$PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.run --run "$FRESH_ZEST_RUN" \
-  --assets "$ZEST_ASSETS" --stage grid --gpu 2 --resume
+  --assets "$ZEST_ASSETS" --stage all --gpu 2 --resume
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.assess --run "$FRESH_ZEST_RUN" \
   --assets "$ZEST_ASSETS" --stage all --gpu 2 --resume
 $PROJECT_PY -B -m experiments.zest_material_counterfactual_v1.review --run "$FRESH_ZEST_RUN"

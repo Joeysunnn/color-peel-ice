@@ -79,7 +79,7 @@ def run(output, asset_root, stage, gpu, variants=None, resume=False):
     plan = load_plan(output)
     if any("control_depth" not in subject["source_files"] for subject in plan["subjects"]):
         raise ValueError("provide a frozen1024 Depth condition for each prepared carrier")
-    if stage == "grid":
+    if stage in ("grid", "all"):
         latest = read(output / "quality/latest.json")
         reviewed = read(output / latest["report"])
         controls = {(row["subject_id"], row["variant"], row["reference_id"]) for row in reviewed["records"] if row["stage"] == "identity"}
@@ -89,7 +89,8 @@ def run(output, asset_root, stage, gpu, variants=None, resume=False):
     for row in bank["records"]:
         if sha256(row["image"]) != row["image_sha256"]:
             raise ValueError("reference changed")
-    selected = jobs(plan, bank, stage, variants or plan["variants"])
+    selected = [row for part in (("identity", "grid") if stage == "all" else (stage,))
+                for row in jobs(plan, bank, part, variants or plan["variants"])]
     receipt = assets.read(asset_root)
     locks = {str(p): sha256(p) for p in (Path(__file__), Path(official.__file__), output / "plan.json", output / "bank/manifest.json")}
     locks[str(Path(asset_root).resolve() / "assets.json")] = sha256(Path(asset_root) / "assets.json")
@@ -182,7 +183,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--assets", type=Path, required=True)
-    parser.add_argument("--stage", choices=("identity", "grid"), required=True)
+    parser.add_argument("--stage", choices=("identity", "grid", "all"), required=True)
     parser.add_argument("--gpu", type=int, required=True)
     parser.add_argument("--variants", nargs="+")
     parser.add_argument("--resume", action="store_true")
