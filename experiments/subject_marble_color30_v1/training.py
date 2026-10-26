@@ -15,6 +15,10 @@ def build_config(method, dataset):
     config = baseline.build_config(method, dataset)
     config["status"] = "subject_marble35_prepared"
     config["run"]["study"] = STUDY
+    audit_path = Path(dataset) / "dataset_audit.json"
+    if audit_path.is_file() and read_json(audit_path).get("source_mode") == "foreground_only":
+        config["status"] = "subject_marble_foreground35_prepared"
+        config["run"]["study"] = "subject_marble_foreground_training_v1"
     return config
 
 

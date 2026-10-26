@@ -25,7 +25,7 @@ def run(candidates, output, gpu, execute=False):
         raise ValueError("select a GPU and fresh external output outside the original candidate run")
     git = git_info()
     dataset = output / "training_dataset"
-    stage_training.stage(candidates, dataset)
+    dataset_audit = stage_training.stage(candidates, dataset)
     training.build_configuration_bundle(dataset, output / "training_plan")
     jobs = commands(dataset, output, gpu)
     report = output / "train_outputs"
@@ -42,6 +42,11 @@ def run(candidates, output, gpu, execute=False):
         "Replace B/C data with user-approved30 MARBLE outputs plus five byte-identical original recolors. "
         "Keep SD1.5, mailbox initializer, S embedding, original full-rank or rank64/alpha64 token-local K/V, "
         "optimizer, seed42,1000 updates,500/750/1000 saves and original losses. No MARBLE inference is rerun.\n", encoding="utf8")
+    if dataset_audit["source_mode"] == "foreground_only":
+        with (report / "SCIENTIFIC_CHANGELOG.md").open("a", encoding="utf8") as document:
+            document.write("This run uses the newly authorized foreground-only30 MARBLE candidates plus five neutral recolors. "
+                "All35 approved candidate PNGs/masks are copied byte-for-byte; no scene-background data are mixed in. "
+                "Five no-attribute diagnostic outputs are excluded from training. No new extraction or generation is performed.\n")
     (report / "COMPARABILITY_REPORT.md").write_text(
         "build_config reuses B verbatim except study/status and data paths. CONFIG_COMPARISON.json records exact arguments. "
         "Same five prompts (metallic/matte/glossy plastic/ceramic/wood),seeds42/43,PNDM100,CFG3.5,512px,fp16,safety checker. "
@@ -50,6 +55,7 @@ def run(candidates, output, gpu, execute=False):
         "for pink/green/cyan/blue/purple. Extra original recolors are glossy metal, so full35 do not balance M/R. "
         "Control labels are relative MARBLE supervision, not verified physical BRDF. Old artifacts stay untouched.\n", encoding="utf8")
     state = {"status": "planned", "git": git, "dataset": str(dataset), "candidates": str(candidates), "gpu": gpu,
+        "source_mode": dataset_audit["source_mode"],
         "execute": execute, "resume": False, "max_steps_per_method": 1000,
         "completed_steps": {method: 0 for method in training.METHODS}, "checkpoint_steps": list(inference.STEPS),
         "inference_steps": [], "best_metric": None, "best_checkpoint": None, "stop_reason": None}

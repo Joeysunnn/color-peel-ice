@@ -25,18 +25,30 @@ def stage(candidates, output):
     plan = data.verify_prepared(candidates.parent)
     generation = read_json(candidates.parent / "generation_manifest.json")
     manifest = read_json(candidates / "manifest.json")
+    foreground = plan["config"].get("schema") == "marble_foreground_only/v1"
+    expected_status = ("generated35_candidates_and5_diagnostics_pending_review" if foreground
+                       else "generated35_pending_user_review")
     rows = manifest["records"]
     expected = {row["id"]: row for row in plan["rows"]}
     originals = {f"{color}__original" for color in plan["sources"]}
-    if (generation.get("status") != "generated35_pending_user_review"
+    if (generation.get("status") != expected_status
             or len(rows) != 35 or len({row["id"] for row in rows}) != 35
             or {row["id"] for row in rows} != set(expected) | originals
             or len(generation["records"]) != 30
             or {row["id"] for row in generation["records"]} != set(expected)):
         raise ValueError("require the complete generated thirty-plus-five candidate dataset")
+    if foreground:
+        diagnostics = generation.get("identity_records", [])
+        if (len(diagnostics) != 5 or {row["color"] for row in diagnostics} != set(plan["sources"])
+                or any(row["controls"] or row["id"] in set(expected) | originals for row in diagnostics)
+                or plan["config"].get("neutral_rgb") != [127, 127, 127]):
+            raise ValueError("foreground data must retain five separate no-attribute diagnostics and neutral padding")
     locks = {str(path): sha256(path) for path in (candidates / "manifest.json",
         candidates / "concepts.json", candidates.parent / "generation_manifest.json",
         candidates.parent / "prepare_receipt.json", candidates.parent / "plan.json")}
+    if foreground:
+        original_mask = candidates.parent / "source/object_mask512.png"
+        locks[str(original_mask)] = sha256(original_mask)
     for row in generation["records"]:
         if any(row.get(key) != value for key, value in expected[row["id"]].items()):
             raise ValueError("generated controls or caption differ from the frozen plan")
@@ -48,7 +60,8 @@ def stage(candidates, output):
         else:
             color = row["color"]
             original = candidates.parent / plan["sources"][color]["original"]
-            if (row["kind"] != "original_recolor" or row["image_sha256"] != sha256(original)
+            expected_kind = "original_recolor_cutout" if foreground else "original_recolor"
+            if (row["kind"] != expected_kind or row["image_sha256"] != sha256(original)
                     or row["caption"] != f"a photo of <S*> mailbox in {color} color made of glossy painted metal"):
                 raise ValueError("the five additional original recolors must remain byte-identical")
         for key in ("image", "mask"):
@@ -82,6 +95,7 @@ def stage(candidates, output):
     names = ("concepts.json", "training_assets_manifest.jsonl", "source_locks.json", "approval.json")
     _write(output / "dataset_audit.json", {"schema": "marble_subject35_training/v1", "status": "verified",
         "rows": 35, "training_eligible_images": 35, "candidates": str(candidates),
+        "source_mode": "foreground_only" if foreground else "original_scene",
         "files": {name: sha256(output / name) for name in names},
         "sampling": "unchanged sequential DataLoader; seven images per color; 28 complete cycles plus first20 at1000 updates",
         "limitations": "Requested relative M/R and color captions are supervision labels, not measured physical properties."})
@@ -98,6 +112,11 @@ def verify_dataset(dataset):
         raise ValueError("approved training dataset receipt changed")
     locks = read_json(dataset / "source_locks.json")
     _locks(locks)
+    candidate_root = Path(audit["candidates"])
+    source_plan = read_json(candidate_root.parent / "plan.json")
+    foreground = source_plan["config"].get("schema") == "marble_foreground_only/v1"
+    if audit.get("source_mode", "original_scene") != ("foreground_only" if foreground else "original_scene"):
+        raise ValueError("training source mode differs from the frozen generation plan")
     source_rows = {row["id"]: row for row in read_json(Path(audit["candidates"]) / "manifest.json")["records"]}
     rows = [json.loads(line) for line in (dataset / "training_assets_manifest.jsonl").read_text(encoding="utf8").splitlines()]
     if len(rows) != 35 or len({row["id"] for row in rows}) != 35 or {row["id"] for row in rows} != set(source_rows):
@@ -119,6 +138,13 @@ def verify_dataset(dataset):
                     raise ValueError("training image/mask must be aligned 512px RGB/L")
                 if key == "mask" and {value for _, value in image.getcolors(256)} != {0, 255}:
                     raise ValueError("require a nonempty binary Subject mask")
+        if foreground:
+            if row["mask_sha256"] != locks[str(candidate_root.parent / "source/object_mask512.png")]:
+                raise ValueError("foreground-only training must retain its frozen Subject mask")
+            with Image.open(row["image"]) as rgb, Image.open(row["mask"]) as mask:
+                isolated = Image.composite(rgb, Image.new("RGB", rgb.size, (127, 127, 127)), mask)
+                if isolated.tobytes() != rgb.tobytes():
+                    raise ValueError("foreground-only training cannot contain original-scene pixels outside its mask")
         concepts.append({"instance_prompt": [row["caption"]], "instance_data_dir": str(Path(row["image"]).parent),
                          "instance_mask_dir": str(Path(row["mask"]).parent)})
     if read_json(dataset / "concepts.json") != concepts:

@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from PIL import Image
 
 from experiments.subject_marble_color30_v1 import data, inference, run, stage_training, training, train_pipeline
 from experiments.subject_multicolor_multimaterial_b import training as baseline
+from experiments.subject_marble_foreground_v1 import run as foreground_run
 
 
 class Marble35TrainingTest(unittest.TestCase):
@@ -41,6 +43,63 @@ class Marble35TrainingTest(unittest.TestCase):
         run.package(prepared, plan, records)
         data.write(prepared / "generation_manifest.json", {"status": "generated35_pending_user_review", "records": records})
         self.candidates, self.dataset = prepared / "dataset", self.root / "approved"
+
+    def foreground_candidates(self):
+        generated = self.root / "foreground_generated"
+        shutil.copytree(self.candidates.parent, generated, ignore=shutil.ignore_patterns("dataset"))
+        self.candidates = generated / "dataset"
+        prepared = self.candidates.parent
+        plan = data.read(prepared / "plan.json")
+        plan["config"].update(schema="marble_foreground_only/v1", neutral_rgb=[127, 127, 127])
+        with Image.open(prepared / "source/object_mask512.png") as mask:
+            for source in plan["sources"].values():
+                location = prepared / source["original"]
+                with Image.open(location) as image:
+                    neutral = Image.composite(image, Image.new("RGB", image.size, (127, 127, 127)), mask)
+                neutral.save(location)
+        data.write(prepared / "config.json", plan["config"])
+        data.write(prepared / "plan.json", plan)
+        receipt = data.read(prepared / "prepare_receipt.json")
+        receipt["output_hashes"] = {relative: data.sha256(prepared / relative) for relative in receipt["output_hashes"]}
+        data.write(prepared / "prepare_receipt.json", receipt)
+        generation = data.read(prepared / "generation_manifest.json")
+        generation.update(status="generated35_candidates_and5_diagnostics_pending_review",
+            identity_records=[{"id": color + "__no_attribute", "color": color, "controls": {}} for color in plan["sources"]])
+        data.write(prepared / "generation_manifest.json", generation)
+        # Fixture package into a new directory, preserving the old scene candidates.
+        foreground_run.package(prepared, plan, generation["records"])
+
+    def test_foreground_staging_excludes_diagnostics_and_keeps_previous_training_arguments(self):
+        self.foreground_candidates()
+        before = data.sha256(self.candidates / "manifest.json")
+        audit = stage_training.stage(self.candidates, self.dataset)
+        self.assertEqual(audit["source_mode"], "foreground_only")
+        concepts = data.read(self.dataset / "concepts.json")
+        self.assertEqual(len(concepts), 35)
+        self.assertFalse(any("no_attribute" in row["instance_data_dir"] for row in concepts))
+        for method in training.METHODS:
+            config = training.build_config(method, self.dataset)
+            self.assertEqual(config["args"], baseline.build_config(method, self.dataset)["args"])
+            self.assertEqual(config["run"]["study"], "subject_marble_foreground_training_v1")
+        self.assertEqual(before, data.sha256(self.candidates / "manifest.json"))
+        audit["source_mode"] = "original_scene"
+        data.write(self.dataset / "dataset_audit.json", audit)
+        with self.assertRaisesRegex(ValueError, "source mode"):
+            stage_training.verify_dataset(self.dataset)
+
+    def test_foreground_staging_rejects_scene_pixels_even_when_candidate_hash_is_consistent(self):
+        self.foreground_candidates()
+        manifest = data.read(self.candidates / "manifest.json")
+        row = manifest["records"][5]
+        path = self.candidates / row["image"]
+        with Image.open(path) as handle:
+            altered = handle.copy()
+        altered.putpixel((0, 0), (20, 80, 200))
+        altered.save(path)
+        row["image_sha256"] = data.sha256(path)
+        data.write(self.candidates / "manifest.json", manifest)
+        with self.assertRaisesRegex(ValueError, "outside its mask"):
+            stage_training.stage(self.candidates, self.dataset)
 
     def test_staging_preserves_all_bytes_and_does_not_rewrite_candidates(self):
         before = data.sha256(self.candidates / "manifest.json")

@@ -51,7 +51,7 @@ $MPY -B -m experiments.subject_marble_foreground_v1.run \
 Use a new clean checkout pulled from the local commit. Output must be new and external;
 an existing directory is rejected. Source/model/code hashes are checked before and
 after execution. Failed partial outputs remain preserved; select a new run if needed.
-No training switch is provided. Do not automatically train on pending candidates.
+The generator has no training switch. Train only after the user's explicit approval.
 
 ## Artifacts
 
@@ -76,3 +76,31 @@ Every candidate remains in pending-review state regardless of visual plausibilit
 CPU checks: `python -B -m unittest discover -s tests -p 'test_marble_foreground*.py' -v`.
 They include extreme-background invariance before resizing, explicit foreground-only
 caller inputs, depth suppression and generated-foreground preservation in packaging.
+
+## Training after user approval
+
+The user subsequently authorized training on the completed foreground-only data.
+Reuse the existing MARBLE35 training pipeline; staging recognizes this generation
+schema, verifies all35 image/mask hashes and exact neutral exteriors, and copies
+the approved candidates into a new independent training directory. The five
+no-attribute diagnostic outputs are never included. The original pending-review
+generation artifacts remain unchanged; approval is recorded in the new staging.
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp
+export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
+TPY=/home/r12user5/miniforge3/envs/colorpeel017/bin/python
+$TPY -B -u -m experiments.subject_marble_color30_v1.train_pipeline \
+  --candidates /var/tmp/colorpeel-r12user5/runs/subject_marble_foreground_v1/20261026-131331__foreground30_plus5__7bc1a86__42/dataset \
+  --output "$NEW_TRAIN_RUN" --gpu 2 --execute
+```
+
+Original fullrank and rank64/alpha64 train serially from the same frozen SD1.5
+base with the previous B/C/MARBLE35 recipes: S token, mailbox initializer,
+seed42,1000 updates and500/750/1000 paired checkpoints. Data paths and study/status
+metadata change; optimizer, learning rates, masks, precision, losses and sampling
+remain unchanged. After both completed audits, infer the same five material
+prompts with seeds42/43,PNDM100,CFG3.5,512px,fp16 and the existing safety checker.
+Outputs use separate step500/750/1000 folders; every contact sheet shows all35
+actual neutral-background training images and captions. Exact commands/configs,
+source hashes, logs and status are written into the new run.

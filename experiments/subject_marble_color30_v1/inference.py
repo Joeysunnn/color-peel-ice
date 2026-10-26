@@ -110,6 +110,7 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
                   "source_hashes": locks, "training_index": str(training_index) if training_index else None,
                   "sampling": SAMPLING, "expected_images": 20, "generated_images": 0,
                   "training_images": len(references), "training": selections,
+                  "source_mode": read_json(dataset / "dataset_audit.json").get("source_mode", "original_scene"),
                   "baseline": "Experiment B prompts and sampling reused; no baseline images copied or regenerated."}
     write_json(output / "provenance.json", provenance)
     write_json(output / "training_references.json", {"images": references})
