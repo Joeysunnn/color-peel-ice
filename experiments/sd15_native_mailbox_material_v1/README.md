@@ -29,3 +29,21 @@ prompts, seeds, safety flags, contact_sheet.png, index.html and repro_outputs/.
 No training data are used. This tests the base model's material response; each
 prompt can change generic mailbox shape and composition. It does not test
 reconstruction of the photographed mailbox or establish disentanglement.
+
+## Wood wording comparison, seeds42-46
+
+Add `--wood-wording` to generate15 images with three complete prompts:
+
+- `a photo of a wooden mailbox`
+- `a photo of a mailbox made entirely of wood`
+- `a photo of a mailbox with a wood surface`
+
+The photographic prefix is fixed to match the previous test. Columns follow that
+order; rows are seeds42,43,44,45,46. All other weights, pipeline, precision,
+sampler parameters, generator policy and safety handling remain unchanged.
+Choose a new result directory; old results are not overwritten. The five-material,
+ten-image mode remains the default when this flag is absent.
+
+For the original surface wording at seeds42/43, `baseline_reproduction.json`
+records whether newly generated PNG hashes equal the previous native10 results.
+Hash disagreement is recorded rather than treated as a cross-environment guarantee.
