@@ -1,0 +1,13 @@
+{
+  "schema": "marble_foreground_only/v1",
+  "source_protocol": "experiments/subject_marble_color30_v1/protocol.json",
+  "comparison_run": "/var/tmp/colorpeel-r12user5/runs/subject_marble_color30_v1/20261025-224336__color30_plus5__5a75bce__42",
+  "neutral_rgb": [127, 127, 127],
+  "target": "Mask original512 before any resize; retain canvas and subject coordinates;1024 outside mask remains neutral",
+  "reference": "Crop only the already isolated target to mask bbox plus10percent margin; aspect-preserving neutral padding to1024",
+  "depth": "Fresh official DPT from isolated target; zero depth outside the aligned binary mask",
+  "initialization": "Official foreground grayscale applied to the isolated target; no source-scene pixels reach VAE or latent blending",
+  "sampling": "Unchanged historical Euler,seed42,30steps,CFG5,strength1,IPAdapter1,ControlNet1 and prompts",
+  "scope": "30 M/R outputs plus five no-attribute diagnostics;35 dataset candidates including five neutral original recolors; no training",
+  "limitations": "Foreground reflections and mask errors remain; neutral padding and model priors remain context; cropped reference also changes CLIP subject scale"
+}

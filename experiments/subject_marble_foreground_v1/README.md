@@ -1,0 +1,78 @@
+# MARBLE: foreground-only material generation
+
+This independent experiment removes the original scene before every image-conditioned
+branch. It preserves the existing five RGB-LCh colors, Subject mask, official models,
+prompts, Euler scheduler, seed42,30steps,CFG5,strength1,ControlNet1 and IPAdapter1.
+It does not train a token or modify any previous experiment.
+
+## Background paths and interventions
+
+| Path | Previous five-color experiment | New intervention |
+| --- | --- | --- |
+| CLIP / IP-Adapter / both control MLPs | Entire1024 target was the reference | Explicit subject-only reference; masked before resizing; bbox+10percent margin; aspect-preserving neutral padding |
+| DPT | Entire original scene | Fresh DPT from isolated target; output depth outside Subject mask set to0 |
+| Initialization / VAE | Only subject converted to gray; original scene retained | Source background already replaced byRGB127 before official gray initialization |
+| Inpaint context | Scene retained outside edit mask | Whole target uses neutral padding; mask is still the existing Subject region |
+| Resizing | Scene could interpolate into boundary | Mask at512 before any resize; enforce neutral exterior again at1024 |
+| Future35 training candidates | Original five recolors retained scene | All35 have neutral exterior; RGBA cutouts saved separately |
+
+The existing mask excludes the upper blue/gold floral `135` sign. Original photographs
+are copied for provenance and displayed in the input sheet; they are never passed to
+CLIP, DPT, the MLPs or VAE. Original-scene depth and initialization caches are not reused.
+Current official pipeline has a4-channel UNet; diffusers0.30 blends init-image latents
+outside the edit mask every denoising step. Masking only the material reference did
+not eliminate this source-scene path.
+
+Target canvas, object location and scale remain fixed. The material reference is
+separately cropped to increase foreground coverage in CLIP; thus this tests a joint
+foreground/reference adaptation, not a pure background-only causal ablation.
+Mask uses NEAREST rather than the old BICUBIC resize to avoid gray boundary masks.
+
+Neutral padding still gives the model spatial context. Reflections, dirt, texture
+already inside the object, mask errors and the generative prior remain. Removing
+the scene does not guarantee identity, color, albedo or texture preservation.
+RGB/highlight changes are not used as an albedo leakage verdict.
+
+## Scope and execution
+
+Generate five no-attribute diagnostics (empty MLP dict, still strength1 regeneration),
+then the full five-color M[-20,+20] × R[-1,0,+1] matrix. Controls are relative learned
+edit strengths, not physical PBR values. Each edit starts independently.
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp
+export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
+MPY=/var/tmp/colorpeel-r12user5/assets/marble_c_v1/env/bin/python
+$MPY -B -m experiments.subject_marble_foreground_v1.run \
+  --assets /var/tmp/colorpeel-r12user5/assets/marble_c_v1 \
+  --output "$NEW_RUN" --gpu 2
+```
+
+Use a new clean checkout pulled from the local commit. Output must be new and external;
+an existing directory is rejected. Source/model/code hashes are checked before and
+after execution. Failed partial outputs remain preserved; select a new run if needed.
+No training switch is provided. Do not automatically train on pending candidates.
+
+## Artifacts
+
+- `source/{color}/`: original photograph (provenance only), transparent cutout,
+  neutral512 original, clean1024 target, cropped reference, fresh depth before/after
+  exterior suppression, actual official gray initialization.
+- `plan.json`, `source/conditions.json`, `runtime.json`: source and model-input hashes,
+  reference crop boxes, exact sampling and environment.
+- `raw/`: untouched35 model outputs (30 M/R +5 no-attribute diagnostics).
+- `dataset/`:35 candidate images (30 generated +5 neutral original recolors), masks,
+  proposed captions and one-image-per-directory concepts. No-attribute outputs excluded.
+- `cutouts/`:35 RGBA candidates, transparent hidden RGB zeroed.
+- `review/inputs.png`: original/provenance vs actual clean Target, cropped Reference, Mask.
+- `review/overview35.png`, per-color old/new comparisons, no-attribute identity sheet,
+  `review/index.html` and caption CSV: all visible source/result evidence.
+- `repro_outputs/`: reproducibility notes and execution status.
+
+Raw outputs remain untouched. Candidate postprocessing only replaces the generated
+mask exterior with neutral padding; it never pastes original foreground RGB back.
+Every candidate remains in pending-review state regardless of visual plausibility.
+
+CPU checks: `python -B -m unittest discover -s tests -p 'test_marble_foreground*.py' -v`.
+They include extreme-background invariance before resizing, explicit foreground-only
+caller inputs, depth suppression and generated-foreground preservation in packaging.
