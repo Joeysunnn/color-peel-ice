@@ -57,3 +57,28 @@ $MPY -B -u -m experiments.subject_marble_color30_v1.run \
 RGB差异仅作外观描述，不能直接判定Albedo泄漏；反光与高光允许变化。新增文字、原纹样丢失、结构变化需逐图审阅。
 
 CPU检查：`python -B -m unittest discover -s tests -p 'test_marble_color30_*.py' -v`。
+
+## 用户批准后的35图Subject训练
+
+生成阶段与训练阶段分开；用户“生成完成了，开始训练”批准本轮35张数据用于Subject学习。
+`stage_training.py`将30张MARBLE输出和5张原改色图逐字节复制到新的训练目录，保留原候选目录的待审标记与所有文件。
+沿用已保存Caption：生成图标请求的颜色／相对M/R外观，额外原图标glossy painted metal；这些词不代表真实BRDF测量。
+
+`training.py`只包装Experiment B既有训练器：SD1.5、`<S*>`、`mailbox`初始化、seed42、1000更新，
+original fullrank和rank64 alpha64各一项，保存500／750／1000。学习率、优化器、精度、Mask与损失均沿用B/C。
+DataLoader仍按原有固定顺序循环：1000步=28个完整35图周期＋前20张，逐图28或29次；不增加shuffle或采样权重。
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp
+export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
+PYTHON=/home/r12user5/miniforge3/envs/colorpeel017/bin/python
+$PYTHON -B -u -m experiments.subject_marble_color30_v1.train_pipeline \
+  --candidates /var/tmp/colorpeel-r12user5/runs/subject_marble_color30_v1/20261025-224336__color30_plus5__5a75bce__42/dataset \
+  --output "$NEW_TRAIN_RUN" --gpu 2 --execute
+```
+
+省略`--execute`仅构建独立训练数据和两种配置，不运行模型。训练执行使用新的干净服务器checkout，代码由本地提交推送后拉取。
+串行完成original、rank64及既有训练审计后，自动生成`step500/`、`step750/`、`step1000/`。
+五种提示仍为metallic、matte、glossy plastic、ceramic、wood；seeds42／43、PNDM100、CFG3.5、512px、fp16及safety checker不变。
+每step20张结果，每份contact sheet显示全部35张实际训练图片、ID及完整Caption。
+精确命令、配置差异、来源哈希和运行状态保存在新目录`train_outputs/`及`training_plan/`；不修改任何旧结果。

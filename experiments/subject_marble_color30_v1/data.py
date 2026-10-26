@@ -1,21 +1,17 @@
 """Freeze the existing five mailbox colors and selected historical MARBLE mask."""
 
-import hashlib
 import json
 from pathlib import Path
 import shutil
 
 from PIL import Image
 
+from experiments.sd15_token_local_kv_v1.contract import sha256
+
 
 ROOT = Path(__file__).resolve().parents[2]
 COLOR_MAPPING = (("pink", "red"), ("green", "green"), ("cyan", "cyan"),
                  ("blue", "blue"), ("purple", "magenta"))
-
-
-def sha256(path):
-    with Path(path).open("rb") as handle:
-        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def read(path):
