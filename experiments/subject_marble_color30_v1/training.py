@@ -1,4 +1,4 @@
-"""Use unchanged Experiment B recipes for the newly approved MARBLE35 dataset."""
+"""Use unchanged Experiment B recipes for approved MARBLE Subject datasets."""
 
 import argparse
 from pathlib import Path
@@ -19,6 +19,9 @@ def build_config(method, dataset):
     if audit_path.is_file() and read_json(audit_path).get("source_mode") == "foreground_only":
         config["status"] = "subject_marble_foreground35_prepared"
         config["run"]["study"] = "subject_marble_foreground_training_v1"
+        if read_json(audit_path).get("schema") == "marble_subject14_training/v1":
+            config["status"] = "subject_marble_foreground_pink_cyan14_prepared"
+            config["run"]["study"] = "subject_marble_foreground_pink_cyan_training_v1"
     return config
 
 

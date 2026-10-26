@@ -1,4 +1,4 @@
-"""Apply the unchanged Experiment B material prompts to audited MARBLE35 Subject snapshots."""
+"""Apply unchanged Experiment B material prompts to audited MARBLE Subject snapshots."""
 
 import argparse
 import html
@@ -26,7 +26,7 @@ def _selections(index_path, dataset):
     runs = index.get("runs", [])
     if (len(runs) != 2 or {run.get("method") for run in runs} != set(METHODS)
             or index.get("git") != git_info()):
-        raise ValueError("expected two completed MARBLE35 methods at the current clean revision")
+        raise ValueError("expected two completed MARBLE Subject methods at the current clean revision")
     result = []
     for selection in runs:
         method, run = selection["method"], Path(selection["run"]).resolve()
@@ -34,7 +34,7 @@ def _selections(index_path, dataset):
         if (selection.get("status") != "verified" or selection.get("token") != "<S*>"
                 or selection.get("steps") != 1000 or selection.get("branch") != "subject"
                 or read_config(run / "config.yaml") != expected):
-            raise ValueError("Subject selection is unverified or differs from MARBLE35")
+            raise ValueError("Subject selection is unverified or differs from the declared MARBLE recipe")
         _locks(selection.get("hashes", {}))
         recipe = {"method": method, "branch": "subject", "concept_id": "mailbox", "token": "<S*>"}
         audited = shared.audit_run(recipe, run, expected)
@@ -45,18 +45,19 @@ def _selections(index_path, dataset):
 
 
 def _contact_sheet(output, references, rows=(), method=None):
-    """Include every actual MARBLE35 training RGB with its full conditioned caption."""
+    """Include every actual training RGB with its full conditioned caption."""
     from experiments.natural_texture_material_v1.probe_review import _font
 
-    if len(references) != 35:
-        raise ValueError("MARBLE35 sheets require all thirty-five actual training images")
+    if len(references) not in (14, 35):
+        raise ValueError("sheets require all fourteen or thirty-five actual training images")
     font = _font()
     caption_lines = [textwrap.wrap(item["caption"], 33) for item in references]
     row_height = 235 + 17 * max(len(lines) for lines in caption_lines)
-    training_height = 35 + 7 * row_height
+    training_height = 35 + ((len(references) + 4) // 5) * row_height
     sheet = Image.new("RGB", (1280, training_height + (712 if rows else 0)), "white")
     draw = ImageDraw.Draw(sheet)
-    draw.text((10, 8), "MARBLE35: 35 ACTUAL training images (5 original recolors + 30 MARBLE) and full captions", font=font, fill="black")
+    originals = sum(item["kind"] in ("original_recolor", "original_recolor_cutout") for item in references)
+    draw.text((10, 8), f"MARBLE: {len(references)} ACTUAL training images ({originals} originals + {len(references) - originals} counterfactuals) and captions", font=font, fill="black")
     for number, reference in enumerate(references):
         x, y = (number % 5) * 256 + 5, (number // 5) * row_height + 35
         with Image.open(reference["image"]) as image:
@@ -111,6 +112,7 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
                   "sampling": SAMPLING, "expected_images": 20, "generated_images": 0,
                   "training_images": len(references), "training": selections,
                   "source_mode": read_json(dataset / "dataset_audit.json").get("source_mode", "original_scene"),
+                  "selected_colors": read_json(dataset / "dataset_audit.json").get("selected_colors"),
                   "baseline": "Experiment B prompts and sampling reused; no baseline images copied or regenerated."}
     write_json(output / "provenance.json", provenance)
     write_json(output / "training_references.json", {"images": references})
@@ -152,8 +154,8 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
     finally:
         provenance["contact_sheets"] = sheets
         write_json(output / "provenance.json", provenance)
-        (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>MARBLE35 Subject material prompts</title>'
-            + f'<p>Status: {html.escape(provenance["status"])}; checkpoint {step}; 35 actual training images (5 original recolors + 30 MARBLE).</p>'
+        (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>MARBLE Subject material prompts</title>'
+            + f'<p>Status: {html.escape(provenance["status"])}; checkpoint {step}; {len(references)} actual training images.</p>'
             + ''.join(f'<p><a href="{sheet}"><img width="1000" src="{sheet}"></a></p>' for sheet in sheets), encoding="utf-8")
     return provenance
 

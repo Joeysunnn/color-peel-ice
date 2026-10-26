@@ -101,6 +101,43 @@ class Marble35TrainingTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "outside its mask"):
             stage_training.stage(self.candidates, self.dataset)
 
+    def test_pink_cyan_subset_keeps_exact_fourteen_images_and_frozen_recipes(self):
+        self.foreground_candidates()
+        before = data.sha256(self.candidates / "manifest.json")
+        audit = stage_training.stage(self.candidates, self.dataset, pink_cyan_only=True)
+        self.assertEqual((audit["rows"], audit["selected_colors"]), (14, ["pink", "cyan"]))
+        source = data.read(self.candidates / "manifest.json")["records"]
+        expected = {row["id"] for row in source if row["color"] in ("pink", "cyan")}
+        rows = [json.loads(line) for line in (self.dataset / "training_assets_manifest.jsonl").read_text().splitlines()]
+        self.assertEqual({row["id"] for row in rows}, expected)
+        self.assertEqual(len(rows), 14)
+        self.assertEqual(sum(row["kind"] == "original_recolor_cutout" for row in rows), 2)
+        self.assertEqual({color: sum(rows[i % 14]["color"] == color for i in range(1000)) for color in ("pink", "cyan")},
+                         {"pink": 502, "cyan": 498})
+        for row in rows:
+            for key in ("image", "mask"):
+                self.assertEqual(Path(row[key]).read_bytes(), Path(row["source_" + key]).read_bytes())
+        for method in training.METHODS:
+            config = training.build_config(method, self.dataset)
+            self.assertEqual(config["args"], baseline.build_config(method, self.dataset)["args"])
+            self.assertEqual(config["run"]["study"], "subject_marble_foreground_pink_cyan_training_v1")
+        output = self.root / "inference14"
+        with patch.object(inference, "git_info", return_value={"commit": "test"}):
+            result = inference.run(self.dataset, output, 500)
+        self.assertEqual((result["training_images"], result["expected_images"], result["generated_images"]), (14, 20, 0))
+        self.assertEqual(result["selected_colors"], ["pink", "cyan"])
+        self.assertEqual(before, data.sha256(self.candidates / "manifest.json"))
+        self.assertIn("14 ACTUAL", (output / "index.html").read_text().upper())
+        audit["selected_colors"] = ["pink", "green"]
+        data.write(self.dataset / "dataset_audit.json", audit)
+        with self.assertRaisesRegex(ValueError, "color selection"):
+            stage_training.verify_dataset(self.dataset)
+
+    def test_pink_cyan_selection_rejects_scene_conditioned_source(self):
+        with self.assertRaisesRegex(ValueError, "foreground-only"):
+            stage_training.stage(self.candidates, self.dataset, pink_cyan_only=True)
+        self.assertFalse(self.dataset.exists())
+
     def test_staging_preserves_all_bytes_and_does_not_rewrite_candidates(self):
         before = data.sha256(self.candidates / "manifest.json")
         self.assertEqual(stage_training.stage(self.candidates, self.dataset)["rows"], 35)

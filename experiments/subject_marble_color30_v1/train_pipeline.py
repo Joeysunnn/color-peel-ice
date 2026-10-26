@@ -1,6 +1,7 @@
-"""Train original/rank64 on approved MARBLE35, then infer the three saved steps."""
+"""Train original/rank64 on approved MARBLE data, then infer the three saved steps."""
 
 import argparse
+import json
 import os
 from pathlib import Path
 import shlex
@@ -18,14 +19,17 @@ def commands(dataset, output, gpu):
     return jobs
 
 
-def run(candidates, output, gpu, execute=False):
+def run(candidates, output, gpu, execute=False, pink_cyan_only=False):
     candidates, output = Path(candidates).resolve(), resolve_run_dir(Path(output))
     if (type(gpu) is not int or gpu < 0 or output.exists() or output.is_relative_to(training.ROOT)
             or output.is_relative_to(candidates.parent) or candidates.is_relative_to(output)):
         raise ValueError("select a GPU and fresh external output outside the original candidate run")
     git = git_info()
     dataset = output / "training_dataset"
-    dataset_audit = stage_training.stage(candidates, dataset)
+    dataset_audit = stage_training.stage(candidates, dataset, pink_cyan_only)
+    count = dataset_audit["rows"]
+    colors = dataset_audit["selected_colors"]
+    originals = len(colors)
     training.build_configuration_bundle(dataset, output / "training_plan")
     jobs = commands(dataset, output, gpu)
     report = output / "train_outputs"
@@ -39,23 +43,26 @@ def run(candidates, output, gpu, execute=False):
         "Serial isolated-GPU jobs: fullrank.log, lora_r64.log, step500.log, step750.log, step1000.log. "
         "Each method performs the existing shared-launcher preflight and writes its training audit.\n", encoding="utf8")
     (report / "SCIENTIFIC_CHANGELOG.md").write_text(
-        "Replace B/C data with user-approved30 MARBLE outputs plus five byte-identical original recolors. "
+        f"Use {count - originals} approved MARBLE outputs plus {originals} byte-identical original recolors from colors {colors}. "
         "Keep SD1.5, mailbox initializer, S embedding, original full-rank or rank64/alpha64 token-local K/V, "
         "optimizer, seed42,1000 updates,500/750/1000 saves and original losses. No MARBLE inference is rerun.\n", encoding="utf8")
     if dataset_audit["source_mode"] == "foreground_only":
         with (report / "SCIENTIFIC_CHANGELOG.md").open("a", encoding="utf8") as document:
-            document.write("This run uses the newly authorized foreground-only30 MARBLE candidates plus five neutral recolors. "
-                "All35 approved candidate PNGs/masks are copied byte-for-byte; no scene-background data are mixed in. "
+            document.write(f"This run uses {count} foreground-only candidates. "
+                "All selected candidate PNGs/masks are copied byte-for-byte; no scene-background data are mixed in. "
                 "Five no-attribute diagnostic outputs are excluded from training. No new extraction or generation is performed.\n")
+    references = [json.loads(line) for line in (dataset / "training_assets_manifest.jsonl").read_text(encoding="utf8").splitlines()]
+    exposures = {color: sum(references[i % count]["color"] == color for i in range(1000)) for color in colors}
     (report / "COMPARABILITY_REPORT.md").write_text(
         "build_config reuses B verbatim except study/status and data paths. CONFIG_COMPARISON.json records exact arguments. "
         "Same five prompts (metallic/matte/glossy plastic/ceramic/wood),seeds42/43,PNDM100,CFG3.5,512px,fp16,safety checker. "
-        "Sheets show every one of35 actual training images and captions. Sequential DataLoader remains unchanged: "
-        "1000 updates=28 full35-image cycles+first20; each image28 or29 exposures. Color counts203/203/200/197/197 "
-        "for pink/green/cyan/blue/purple. Extra original recolors are glossy metal, so full35 do not balance M/R. "
+        f"Sheets show all {count} actual training images and captions. Sequential DataLoader remains unchanged: "
+        f"1000 updates={1000 // count} full {count}-image cycles+first{1000 % count}. Color exposures: {exposures}. "
+        "Fewer unique images at fixed updates increases exposure per image. Extra originals are glossy metal, so M/R are not exactly balanced. "
         "Control labels are relative MARBLE supervision, not verified physical BRDF. Old artifacts stay untouched.\n", encoding="utf8")
     state = {"status": "planned", "git": git, "dataset": str(dataset), "candidates": str(candidates), "gpu": gpu,
         "source_mode": dataset_audit["source_mode"],
+        "selected_colors": colors, "training_images": count,
         "execute": execute, "resume": False, "max_steps_per_method": 1000,
         "completed_steps": {method: 0 for method in training.METHODS}, "checkpoint_steps": list(inference.STEPS),
         "inference_steps": [], "best_metric": None, "best_checkpoint": None, "stop_reason": None}
@@ -118,5 +125,6 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--gpu", required=True, type=int)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--pink-cyan-only", action="store_true")
     args = parser.parse_args()
-    run(args.candidates, args.output, args.gpu, args.execute)
+    run(args.candidates, args.output, args.gpu, args.execute, args.pink_cyan_only)

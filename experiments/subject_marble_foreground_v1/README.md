@@ -104,3 +104,20 @@ prompts with seeds42/43,PNDM100,CFG3.5,512px,fp16 and the existing safety checke
 Outputs use separate step500/750/1000 folders; every contact sheet shows all35
 actual neutral-background training images and captions. Exact commands/configs,
 source hashes, logs and status are written into the new run.
+
+## Pink/cyan-only training ablation
+
+The user's later two-color request selects exactly14 images from the same completed
+foreground-only candidates: pink and cyan each contribute one neutral original and
+all six M/R counterfactuals. Neither other colors nor no-attribute diagnostics are
+copied into the training dataset. Source pixels, masks and captions remain byte-identical.
+Use a new output and the same command above with `--pink-cyan-only --execute`.
+
+Both methods restart from the frozen SD1.5 base with the previous initializer,
+learning rates,seed42,1000 updates and500/750/1000 saves. The existing sequential
+loader now cycles14 images:71 complete cycles plus the first6, giving pink502 and
+cyan498 exposures. Each image receives71 or72 exposures; the increase from35-image
+training is documented rather than changing the requested update count.
+The new study is `subject_marble_foreground_pink_cyan_training_v1`.
+Inference prompts,seeds42/43,PNDM100,CFG3.5,512px,fp16 and safety checker remain fixed;
+each step's sheets show exactly the14 actual training images and their captions.

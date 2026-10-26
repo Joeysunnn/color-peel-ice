@@ -1,4 +1,4 @@
-"""Freeze the user-approved thirty MARBLE images plus five recolors for training."""
+"""Freeze approved MARBLE candidates or their pink/cyan subset for training."""
 
 import argparse
 import json
@@ -17,7 +17,7 @@ def _locks(hashes):
         raise ValueError("approved candidate or training source changed")
 
 
-def stage(candidates, output):
+def stage(candidates, output, pink_cyan_only=False):
     candidates, output = Path(candidates).resolve(), Path(output).resolve()
     if (output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(candidates.parent)
             or candidates.is_relative_to(output)):
@@ -26,6 +26,8 @@ def stage(candidates, output):
     generation = read_json(candidates.parent / "generation_manifest.json")
     manifest = read_json(candidates / "manifest.json")
     foreground = plan["config"].get("schema") == "marble_foreground_only/v1"
+    if pink_cyan_only and not foreground:
+        raise ValueError("pink/cyan selection requires the foreground-only candidate dataset")
     expected_status = ("generated35_candidates_and5_diagnostics_pending_review" if foreground
                        else "generated35_pending_user_review")
     rows = manifest["records"]
@@ -70,6 +72,11 @@ def stage(candidates, output):
                 raise ValueError("candidate path escapes its dataset")
             locks[str(source)] = row[key + "_sha256"]
     _locks(locks)
+    selected_colors = ["pink", "cyan"] if pink_cyan_only else [color["name"] for color in plan["config"]["colors"]]
+    rows = [row for row in rows if row["color"] in selected_colors]
+    count = 14 if pink_cyan_only else 35
+    if len(rows) != count:
+        raise ValueError("selected colors must each retain one original plus all six M/R variants")
     output.mkdir(parents=True)
     training_rows, concepts = [], []
     for row in rows:
@@ -90,14 +97,16 @@ def stage(candidates, output):
     (output / "training_assets_manifest.jsonl").write_text(
         "".join(json.dumps(row) + "\n" for row in training_rows), encoding="utf8")
     _write(output / "source_locks.json", locks)
-    _write(output / "approval.json", {"request": "生成完成了，开始训练", "scope": "all thirty generated plus five original recolors",
+    _write(output / "approval.json", {"request": "只使用pink和cyan两种颜色对应的去背景原图以及反事实数据进行训练推理" if pink_cyan_only else "生成完成了，开始训练",
+        "scope": "pink/cyan: twelve generated plus two neutral originals" if pink_cyan_only else "all thirty generated plus five original recolors",
+        "selected_colors": selected_colors,
         "not_claimed": "No per-image physical-material or disentanglement validation is implied."})
     names = ("concepts.json", "training_assets_manifest.jsonl", "source_locks.json", "approval.json")
-    _write(output / "dataset_audit.json", {"schema": "marble_subject35_training/v1", "status": "verified",
-        "rows": 35, "training_eligible_images": 35, "candidates": str(candidates),
+    _write(output / "dataset_audit.json", {"schema": "marble_subject14_training/v1" if pink_cyan_only else "marble_subject35_training/v1", "status": "verified",
+        "rows": count, "training_eligible_images": count, "candidates": str(candidates), "selected_colors": selected_colors,
         "source_mode": "foreground_only" if foreground else "original_scene",
         "files": {name: sha256(output / name) for name in names},
-        "sampling": "unchanged sequential DataLoader; seven images per color; 28 complete cycles plus first20 at1000 updates",
+        "sampling": f"unchanged sequential DataLoader; seven images per color; {1000 // count} complete cycles plus first{1000 % count} at1000 updates",
         "limitations": "Requested relative M/R and color captions are supervision labels, not measured physical properties."})
     return verify_dataset(output)
 
@@ -106,8 +115,10 @@ def verify_dataset(dataset):
     dataset = Path(dataset).resolve()
     audit = read_json(dataset / "dataset_audit.json")
     names = ("concepts.json", "training_assets_manifest.jsonl", "source_locks.json", "approval.json")
-    if (audit.get("schema") != "marble_subject35_training/v1" or audit.get("status") != "verified"
-            or audit.get("rows") != 35 or audit.get("training_eligible_images") != 35
+    subset = audit.get("schema") == "marble_subject14_training/v1"
+    count = 14 if subset else 35
+    if (audit.get("schema") not in ("marble_subject35_training/v1", "marble_subject14_training/v1") or audit.get("status") != "verified"
+            or audit.get("rows") != count or audit.get("training_eligible_images") != count
             or audit.get("files") != {name: sha256(dataset / name) for name in names}):
         raise ValueError("approved training dataset receipt changed")
     locks = read_json(dataset / "source_locks.json")
@@ -117,9 +128,18 @@ def verify_dataset(dataset):
     foreground = source_plan["config"].get("schema") == "marble_foreground_only/v1"
     if audit.get("source_mode", "original_scene") != ("foreground_only" if foreground else "original_scene"):
         raise ValueError("training source mode differs from the frozen generation plan")
+    selected_colors = ["pink", "cyan"] if subset else [color["name"] for color in source_plan["config"]["colors"]]
+    approval = read_json(dataset / "approval.json")
+    if ((subset and not foreground) or audit.get("selected_colors", selected_colors) != selected_colors
+            or (subset and approval.get("selected_colors") != selected_colors)):
+        raise ValueError("training color selection differs from the approved pink/cyan subset")
     source_rows = {row["id"]: row for row in read_json(Path(audit["candidates"]) / "manifest.json")["records"]}
+    source_rows = {identity: row for identity, row in source_rows.items() if row["color"] in selected_colors}
+    expected_ids = {row["id"] for row in source_plan["rows"] if row["color"] in selected_colors} | {
+        color + "__original" for color in selected_colors}
     rows = [json.loads(line) for line in (dataset / "training_assets_manifest.jsonl").read_text(encoding="utf8").splitlines()]
-    if len(rows) != 35 or len({row["id"] for row in rows}) != 35 or {row["id"] for row in rows} != set(source_rows):
+    if (len(rows) != count or len({row["id"] for row in rows}) != count
+            or {row["id"] for row in rows} != expected_ids or set(source_rows) != expected_ids):
         raise ValueError("training must retain every approved candidate once")
     concepts = []
     for row in rows:
@@ -156,5 +176,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidates", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--pink-cyan-only", action="store_true")
     args = parser.parse_args()
-    print(stage(args.candidates, args.output))
+    print(stage(args.candidates, args.output, args.pink_cyan_only))
