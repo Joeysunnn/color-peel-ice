@@ -5,7 +5,12 @@
     "repo": "ZhengPeng7/BiRefNet",
     "revision": "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4",
     "endpoint": "https://hf-mirror.com",
-    "allow_patterns": ["*.py", "config.json", "model.safetensors"]
+    "files": {
+      "BiRefNet_config.py": {"size": 298, "git_blob_sha1": "37c8ac58bec2f52dac34204978a7b61b69e3da76"},
+      "birefnet.py": {"size": 91896, "git_blob_sha1": "8dea801e2b56facb8486ba351e6f91c3e664eb6d"},
+      "config.json": {"size": 405, "git_blob_sha1": "06d8fa9d7f2f4c6f1cf0dc6e7bfd194153176a42"},
+      "model.safetensors": {"size": 444473596, "sha256": "9ab37426bf4de05667af6b5d21b16151357149139362e6e8992021b8ce356a154"}
+    }
   },
   "subjects": [
     {

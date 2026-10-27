@@ -26,6 +26,37 @@ def write(path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n', encoding='utf8')
 
 
+def download_bundle(segmentation):
+    """GET only pinned files; never overwrite an existing complete or partial file."""
+    import requests
+    bundle = ASSETS / 'models/birefnet' / segmentation['revision']
+    bundle.mkdir(parents=True, exist_ok=True)
+    hashes = {}
+    for name, expected in segmentation['files'].items():
+        path = bundle / name
+        if not path.exists():
+            url = f"{segmentation['endpoint']}/{segmentation['repo']}/resolve/{segmentation['revision']}/{name}"
+            with requests.get(url, stream=True, timeout=(15, 120)) as response:
+                response.raise_for_status()
+                with path.open('xb') as stream:
+                    for chunk in response.iter_content(chunk_size=1024 * 1024):
+                        if chunk:
+                            stream.write(chunk)
+        if path.stat().st_size != expected['size']:
+            raise ValueError(f'pinned model file size mismatch: {name}')
+        digest = sha256(path)
+        if 'sha256' in expected:
+            matched = digest == expected['sha256']
+        else:
+            data = path.read_bytes()  # Git blob metadata is used only for small code/config files.
+            blob = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+            matched = blob == expected['git_blob_sha1']
+        if not matched:
+            raise ValueError(f'pinned model file hash mismatch: {name}')
+        hashes[name] = digest
+    return bundle, hashes
+
+
 def square_cutout(image):
     """Resize the entire canvas without a subject crop; preserve straight RGBA."""
     import numpy as np
@@ -93,10 +124,8 @@ def main(argv=None):
     segmenter = None
     try:
         write(output / 'prepare_receipt.json', state)
-        from huggingface_hub import snapshot_download
-        snapshot = Path(snapshot_download(segmentation['repo'], revision=segmentation['revision'],
-            allow_patterns=segmentation['allow_patterns'], cache_dir=cache / 'huggingface', token=False))
-        state['model_files_sha256'] = {path.name: sha256(path) for path in sorted(snapshot.iterdir()) if path.is_file()}
+        snapshot, state['model_files_sha256'] = download_bundle(segmentation)
+        state['model_bundle_path'] = str(snapshot)
         state['stage'] = 'segment_complete_originals'
         write(output / 'prepare_receipt.json', state)
         sys.path.insert(0, str(official))
