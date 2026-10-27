@@ -89,6 +89,9 @@ def run(output, encoder):
         from trellis2.pipelines import Trellis2ImageTo3DPipeline
         from trellis2.pipelines import samplers
         from trellis2.modules.image_feature_extractor import DinoV3FeatureExtractor
+        from trellis2.modules.sparse.conv import config as conv_config
+        conv_config.FLEX_GEMM_ALGO = 'explicit_gemm'
+        state['sparse_algorithm'] = 'explicit_gemm'
         state['stage'] = 'prepare_pinned_model_files'
         write(report / 'status.json', state)
         args, state['models'] = model_bundle(output)
@@ -158,7 +161,7 @@ def run(output, encoder):
         (report / 'SUMMARY.md').write_text(f"Status: {state['status']}; native assets: {state['generated_assets']}. Pending identity/material review.\n")
         (report / 'COMMANDS.md').write_text(' '.join(sys.argv) + '\n')
         (report / 'LOG.md').write_text('See status.json and the captured run log. Failed outputs are retained; no automatic retry.\n')
-        (report / 'SCIENTIFIC_CHANGELOG.md').write_text('Public same-model timm weights converted with feature parity, official flow torso converted BF16 to FP16 through convert_to, xformers attention, unchanged official sampler settings. Existing alpha supplies segmentation; unused rembg is not loaded. No Albedo substitution, data expansion or training.\n')
+        (report / 'SCIENTIFIC_CHANGELOG.md').write_text('Public same-model timm weights converted with feature parity, official flow torso converted BF16 to FP16 through convert_to, xformers attention, FlexGEMM explicit_gemm implementation of the same sparse convolution with unchanged weights, unchanged official sampler settings. Existing alpha supplies segmentation; unused rembg is not loaded. No Albedo substitution, data expansion or training.\n')
         (report / 'COMPARABILITY_REPORT.md').write_text('This is adapted V100 inference, not an exact default BF16 reproduction. Camera is estimated from one view. Native Base Color/R/M are generated estimates, not intrinsic or BRDF truth. No gated-original checkpoint byte comparison was possible.\n')
 
 

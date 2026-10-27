@@ -96,6 +96,14 @@ Generation requires verified isolated runtime and converted encoder first.
 All raw native PBR output must be retained. No Albedo replacement, material
 grid, or training is part of this first asset review.
 
+The default masked-implicit Triton sparse GEMM aborted on this V100 with
+`LLVM ERROR: Unsupported layout`. The documented `explicit_gemm` variant
+passed the same sparse-convolution numeric check, xformers attention,
+nvdiffrast rasterization and CuMesh normals. Generation selects it through
+the official runtime configuration. It uses the same weights/operator with
+CUDA neighbor maps and PyTorch im2col/GEMM, at greater memory cost; full
+model compatibility is still established only by actual execution.
+
 Install the memory-efficient attention backend into the new venv only:
 
 ```bash
