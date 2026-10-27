@@ -87,3 +87,53 @@ manifest's `training_eligible=False`; it must not be launched merely because
 not be reused for these180. No random image split would establish independent
 geometry generalization: all views share one generated object, and pairs share
 nuisance factors. A later evaluation must document grouping and dependencies.
+
+## Authorized Subject training and material transfer
+
+The user subsequently authorized training on all180 candidates with the previous
+original/fullrank and rank64 recipes:1000 updates each, paired snapshots at
+500/750/1000, then the same material-transfer tests. `train_pipeline` stages a
+new byte-identical copy of all RGB/mask/caption triples in source order. Approval
+is recorded only in that new staging; original pending-review receipts are not
+edited. No original photographs, extra images or subset are added.
+
+The two methods reuse Experiment B configuration builders and trainer, changing
+only dataset paths and study/status metadata. Both use the frozen SD1.5 base,
+`<S*>`, mailbox initializer,seed42,512px,batch1,accumulation1,constant learning
+rate,embedding LR1e-5,mixed_precision=no,hflip=false,cos_weight0 and the same
+object-mask loss. Fullrank token-local K/V LR is1e-5. Rank64/alpha64 token-local
+K/V LR is5e-5. No new attention loss, optimizer change, shuffle or resume.
+
+The original sequential loader performs five180-image cycles plus the first100
+images at1000 updates. Each image receives five or six exposures; exact color,
+view, light and material counts are written to `train_outputs/EXPOSURES.json`.
+This changes exposure per image relative to the previous35/14-image datasets.
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp
+export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
+TPY=/home/r12user5/miniforge3/envs/colorpeel017/bin/python
+$TPY -B -u -m experiments.subject_trellis_dataset_v1.train_pipeline \
+  --candidates /var/tmp/colorpeel-r12user5/runs/subject_trellis_dataset_v1/20261027-192223__material180__0d7fce4__42/dataset \
+  --output "$NEW_TRAIN_RUN" --gpu 1 --execute
+```
+
+Select the physical GPU after checking occupancy. Omit `--execute` for a separate
+fresh dry-run staging/configuration plan. Existing directories are rejected.
+Deploy code through local commit/push then a dedicated clean server checkout.
+Keep that checkout's HEAD fixed until all scheduled work finishes.
+
+The single job queue runs fullrank, rank64, then step500/750/1000 inference.
+Each checkpoint tests metallic/matte/glossy plastic/ceramic/wood with seeds42/43,
+PNDM100,CFG3.5,512px,fp16 and the existing safety checker:20 images per step,
+60 total. Each adapter is exported with its same-step Subject embedding. Contact
+sheets include all180 actual training RGB images and their complete captions.
+Existing MARBLE inference defaults remain unchanged; explicit injected dataset
+verification/configuration and reference-count hooks support this new study.
+
+`training_plan/CONFIG_COMPARISON.json`, `training_dataset/dataset_audit.json`,
+`approval.json`, `train_outputs/COMMANDS.*`, logs/status and each method's audit
+record evidence. A failed stage stops the queue without automatic retry. Verify
+the detached process and first finite training losses at startup, then stop
+checking as requested. The scheduled inference belongs to the same job; no
+monitor, periodic polling task or automatic notification is created.

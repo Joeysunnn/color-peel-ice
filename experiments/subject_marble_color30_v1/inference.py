@@ -21,7 +21,7 @@ from scripts.launch.colorpeel_run import git_info, read_config
 ROOT = training.ROOT
 
 
-def _selections(index_path, dataset):
+def _selections(index_path, dataset, *, training_module=training):
     index = read_json(index_path)
     runs = index.get("runs", [])
     if (len(runs) != 2 or {run.get("method") for run in runs} != set(METHODS)
@@ -30,7 +30,7 @@ def _selections(index_path, dataset):
     result = []
     for selection in runs:
         method, run = selection["method"], Path(selection["run"]).resolve()
-        expected = training.build_config(method, dataset)
+        expected = training_module.build_config(method, dataset)
         if (selection.get("status") != "verified" or selection.get("token") != "<S*>"
                 or selection.get("steps") != 1000 or selection.get("branch") != "subject"
                 or read_config(run / "config.yaml") != expected):
@@ -44,12 +44,14 @@ def _selections(index_path, dataset):
     return result
 
 
-def _contact_sheet(output, references, rows=(), method=None):
+def _contact_sheet(output, references, rows=(), method=None, *, expected_count=None, label="MARBLE"):
     """Include every actual training RGB with its full conditioned caption."""
     from experiments.natural_texture_material_v1.probe_review import _font
 
-    if len(references) not in (14, 35):
+    if expected_count is None and len(references) not in (14, 35):
         raise ValueError("sheets require all fourteen or thirty-five actual training images")
+    if expected_count is not None and len(references) != expected_count:
+        raise ValueError(f"sheets require all {expected_count} actual training images")
     font = _font()
     caption_lines = [textwrap.wrap(item["caption"], 33) for item in references]
     row_height = 235 + 17 * max(len(lines) for lines in caption_lines)
@@ -57,7 +59,7 @@ def _contact_sheet(output, references, rows=(), method=None):
     sheet = Image.new("RGB", (1280, training_height + (712 if rows else 0)), "white")
     draw = ImageDraw.Draw(sheet)
     originals = sum(item["kind"] in ("original_recolor", "original_recolor_cutout") for item in references)
-    draw.text((10, 8), f"MARBLE: {len(references)} ACTUAL training images ({originals} originals + {len(references) - originals} counterfactuals) and captions", font=font, fill="black")
+    draw.text((10, 8), f"{label}: {len(references)} ACTUAL training images ({originals} originals + {len(references) - originals} counterfactuals) and captions", font=font, fill="black")
     for number, reference in enumerate(references):
         x, y = (number % 5) * 256 + 5, (number // 5) * row_height + 35
         with Image.open(reference["image"]) as image:
@@ -84,14 +86,16 @@ def _contact_sheet(output, references, rows=(), method=None):
     return name
 
 
-def run(dataset, output, step, training_index=None, execute_inference=False, device="cuda:0"):
+def run(dataset, output, step, training_index=None, execute_inference=False, device="cuda:0", *,
+        training_module=training, reference_count=None, experiment="subject_marble_color30_v1",
+        reference_label="MARBLE"):
     dataset, output = Path(dataset).resolve(), Path(output).resolve()
-    if (output.exists() or output.is_relative_to(ROOT) or dataset.is_relative_to(output)
+    if (output.exists() or output.is_relative_to(training_module.ROOT) or dataset.is_relative_to(output)
             or output.is_relative_to(dataset)):
         raise ValueError("inference output must be new and outside the repository and dataset")
     if execute_inference and training_index is None:
         raise ValueError("explicit inference requires a completed training index")
-    training.verify_dataset(dataset)
+    training_module.verify_dataset(dataset)
     rows = prompt_rows(step)
     references = [json.loads(line) for line in (dataset / "training_assets_manifest.jsonl").read_text(encoding="utf-8").splitlines()]
     locks = {str(dataset / name): sha256(dataset / name) for name in
@@ -100,14 +104,14 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
     if training_index is not None:
         training_index = Path(training_index).resolve()
         locks[str(training_index)] = sha256(training_index)
-    selections = _selections(training_index, dataset) if execute_inference else []
+    selections = _selections(training_index, dataset, training_module=training_module) if execute_inference else []
     if any(output.is_relative_to(Path(selection["run"]).resolve())
            or Path(selection["run"]).resolve().is_relative_to(output) for selection in selections):
         raise ValueError("inference output must be outside training runs")
     _locks(locks)
     output.mkdir(parents=True)
     provenance = {"status": "running" if execute_inference else "dry_run", "step": step,
-                  "experiment": "subject_marble_color30_v1", "git": git_info(), "dataset": str(dataset),
+                  "experiment": experiment, "git": git_info(), "dataset": str(dataset),
                   "source_hashes": locks, "training_index": str(training_index) if training_index else None,
                   "sampling": SAMPLING, "expected_images": 20, "generated_images": 0,
                   "training_images": len(references), "training": selections,
@@ -117,7 +121,7 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
     write_json(output / "provenance.json", provenance)
     write_json(output / "training_references.json", {"images": references})
     (output / "generation_manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
-    sheets = [_contact_sheet(output, references)]
+    sheets = [_contact_sheet(output, references, expected_count=reference_count, label=reference_label)]
     try:
         if execute_inference:
             import torch
@@ -141,20 +145,20 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
                 _locks(derived["hashes"])
                 del pipe
                 torch.cuda.empty_cache()
-                sheets.append(_contact_sheet(output, references, [row for row in generated if row["method"] == selection["method"]], selection["method"]))
+                sheets.append(_contact_sheet(output, references, [row for row in generated if row["method"] == selection["method"]], selection["method"], expected_count=reference_count, label=reference_label))
             if len(generated) != 20 or len({row["id"] for row in generated}) != 20:
                 raise ValueError("incomplete Subject inference matrix")
             provenance.update(status="succeeded", generated_images=20,
                               safety_filtered=sum(row["status"] == "safety_filtered" for row in generated))
         _locks(locks)
-        training.verify_dataset(dataset)
+        training_module.verify_dataset(dataset)
     except BaseException as error:
         provenance.update(status="failed", error=f"{type(error).__name__}: {error}")
         raise
     finally:
         provenance["contact_sheets"] = sheets
         write_json(output / "provenance.json", provenance)
-        (output / "index.html").write_text('<!doctype html><meta charset="utf-8"><title>MARBLE Subject material prompts</title>'
+        (output / "index.html").write_text(f'<!doctype html><meta charset="utf-8"><title>{html.escape(reference_label)} Subject material prompts</title>'
             + f'<p>Status: {html.escape(provenance["status"])}; checkpoint {step}; {len(references)} actual training images.</p>'
             + ''.join(f'<p><a href="{sheet}"><img width="1000" src="{sheet}"></a></p>' for sheet in sheets), encoding="utf-8")
     return provenance
