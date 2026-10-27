@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import shutil
+import tempfile
 import unittest
 from unittest.mock import patch
 import uuid
@@ -16,7 +17,8 @@ from experiments.subject_trellis_dataset_v1.build import rows, sha256, write
 
 class TrellisStageTrainingTest(unittest.TestCase):
     def setUp(self):
-        self.root = Path(__file__).resolve().parents[1] / ('test-trellis-stage-' + uuid.uuid4().hex)
+        self.temporary_root = Path(tempfile.gettempdir()).resolve()
+        self.root = self.temporary_root / ('test-trellis-stage-' + uuid.uuid4().hex)
         self.root.mkdir()
         self.addCleanup(self.cleanup)
         self.source, self.destination = self.root / 'source', self.root / 'staged'
@@ -68,8 +70,8 @@ class TrellisStageTrainingTest(unittest.TestCase):
         self.addCleanup(self.patches.stop)
 
     def cleanup(self):
-        if not self.root.resolve().is_relative_to(Path(__file__).resolve().parents[1]):
-            raise ValueError('cleanup must stay inside test workspace')
+        if not self.root.resolve().is_relative_to(self.temporary_root):
+            raise ValueError('cleanup must stay inside test temporary root')
         shutil.rmtree(self.root)
 
     def source_hashes(self):
@@ -108,6 +110,38 @@ class TrellisStageTrainingTest(unittest.TestCase):
         path.write_text(''.join(json.dumps(row) + '\n' for row in records))
         with self.assertRaisesRegex(ValueError, 'pairing'):
             staging.verify_dataset(self.destination)
+
+    def test_blue_green72_keeps_all_selected_bytes_order_and_rejects_color_or_pair_changes(self):
+        before = self.source_hashes()
+        with patch('experiments.subject_trellis_dataset_v1.verify.verify', side_effect=AssertionError('old receipt must stay read-only')):
+            audit = staging.stage(self.candidates, self.destination, blue_green_only=True)
+        self.assertEqual(audit['schema'], 'trellis_subject_blue_green72_training/v1')
+        self.assertEqual((audit['rows'], audit['training_eligible_images']), (72, 72))
+        self.assertEqual(audit['selected_colors'], ['green', 'blue'])
+        self.assertEqual((audit['sampling']['complete_cycles'], audit['sampling']['extra_prefix_images']), (13, 64))
+        self.assertFalse(audit['sampling']['shuffle'])
+        path = self.destination / 'training_assets_manifest.jsonl'
+        original = path.read_text()
+        actual = [json.loads(line) for line in original.splitlines()]
+        expected = [row for row in self.records if row['color'] in ('blue', 'green')]
+        self.assertEqual([(row['id'], row['caption']) for row in actual], [(row['id'], row['caption']) for row in expected])
+        self.assertEqual(len({(r['view'], r['color'], r['light'], r['material']) for r in actual}), 72)
+        for row, source in zip(actual, expected):
+            for key in ('image', 'mask'):
+                self.assertEqual(sha256(row[key]), source[key + '_sha256'])
+        self.assertEqual(staging.read(self.destination / 'approval.json')['request'], staging.BLUE_GREEN_REQUEST)
+        actual[0]['color'] = 'pink'
+        path.write_text(''.join(json.dumps(row) + '\n' for row in actual))
+        with self.assertRaisesRegex(ValueError, 'pairing'):
+            staging.verify_dataset(self.destination)
+        actual = [json.loads(line) for line in original.splitlines()]
+        actual[0]['mask'], actual[1]['mask'] = actual[1]['mask'], actual[0]['mask']
+        path.write_text(''.join(json.dumps(row) + '\n' for row in actual))
+        with self.assertRaisesRegex(ValueError, 'pairing'):
+            staging.verify_dataset(self.destination)
+        path.write_text(original)
+        self.assertEqual(staging.verify_dataset(self.destination), audit)
+        self.assertEqual(self.source_hashes(), before)
 
 
 if __name__ == '__main__':

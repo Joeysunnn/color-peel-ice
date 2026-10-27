@@ -1,4 +1,4 @@
-"""Byte-copy the authorized 180 candidates into new Subject training staging."""
+"""Byte-copy authorized Subject candidates into fresh training staging."""
 
 import argparse
 import json
@@ -17,6 +17,10 @@ CONCEPTS_SHA = 'd77f11b75ae4d3969ff9f943dcd9096db9ba9367db325fd081ec01af7abc3f6c
 REQUEST = ('现在用这180张数据训练subject token，沿用之前original和rank64两组设置，各1000步，'
            '保存500/750/1000步并做相同的材质迁移测试。严格本地修改提交推送、服务器拉取运行，'
            '旧结果不要动，启动后不用监控。')
+BLUE_GREEN_REQUEST = ('只使用blue green 两色× 6 种 M/R 状态 × 3 视角 × 2 灯光的反事实数据 '
+    '沿用之前original和rank64两组设置，各1000步，保存500/750/1000步并做相同的材质迁移测试， '
+    '同时测试这四种transfer 能力： in the snow; surrounded by flowers; in white color; in orange color。'
+    '严格本地修改提交推送、服务器拉取运行，旧结果不要动，启动后不用监控。')
 FILES = ('concepts.json', 'training_assets_manifest.jsonl', 'source_locks.json', 'approval.json')
 
 
@@ -104,22 +108,34 @@ def concepts_for(records):
              'instance_mask_dir': str(Path(row['mask']).parent)} for row in records]
 
 
-def audit_for(dataset, colors):
-    return {'schema': 'trellis_subject180_training/v1', 'status': 'verified', 'rows': 180,
-        'training_eligible_images': 180, 'candidates': str(CANDIDATES.resolve()),
+def select_sources(sources, colors, blue_green_only):
+    if blue_green_only:
+        sources = [row for row in sources if row['color'] in ('blue', 'green')]
+        colors = [color for color in colors if color in ('blue', 'green')]
+        if len(sources) != 72 or set(colors) != {'blue', 'green'}:
+            raise ValueError('require the complete blue/green72 factorial without added originals')
+    return sources, colors
+
+
+def audit_for(dataset, colors, blue_green_only=False):
+    count = 72 if blue_green_only else 180
+    return {'schema': 'trellis_subject_blue_green72_training/v1' if blue_green_only else 'trellis_subject180_training/v1',
+        'status': 'verified', 'rows': count, 'training_eligible_images': count, 'candidates': str(CANDIDATES.resolve()),
         'source_mode': 'synthetic_native_geometry', 'selected_colors': colors,
         'files': {name: sha256(dataset / name) for name in FILES},
-        'sampling': {'shuffle': False, 'updates': 1000, 'complete_cycles': 5, 'extra_prefix_images': 100,
-                     'exposures': 'first100 rows six times; remaining80 rows five times; source order unchanged'},
+        'sampling': {'shuffle': False, 'updates': 1000, 'complete_cycles': 1000 // count, 'extra_prefix_images': 1000 % count,
+            'exposures': ('first64 rows fourteen times; remaining8 rows thirteen times; source color/image order retained (green before blue)'
+                if blue_green_only else 'first100 rows six times; remaining80 rows five times; source order unchanged')},
         'limitations': 'Synthetic single-geometry supervision; training authorization is not proof of material accuracy or disentanglement.'}
 
 
-def stage(candidates, output):
+def stage(candidates, output, blue_green_only=False):
     candidates, output = Path(candidates).resolve(), Path(output).resolve()
     if (output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(candidates.parent)
             or candidates.is_relative_to(output)):
         raise ValueError('stage only into a new external directory, preserving all source results')
     sources, locks, colors = source_snapshot(candidates)
+    sources, colors = select_sources(sources, colors, blue_green_only)
     output.mkdir(parents=True)
     records = [training_row(source, output) for source in sources]
     for row in records:
@@ -130,21 +146,28 @@ def stage(candidates, output):
     write(output / 'concepts.json', concepts_for(records))
     (output / 'training_assets_manifest.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in records), encoding='utf8')
     write(output / 'source_locks.json', locks)
-    write(output / 'approval.json', {'request': REQUEST, 'scope': 'all180 images, original/fullrank and rank64,1000 updates each',
+    write(output / 'approval.json', {'request': BLUE_GREEN_REQUEST if blue_green_only else REQUEST,
+        'scope': ('blue/green72 images only, same five-material tests plus four requested transfers, original/fullrank and rank64,1000 updates each'
+            if blue_green_only else 'all180 images, original/fullrank and rank64,1000 updates each'),
         'selected_colors': colors, 'checkpoint_steps': [500, 750, 1000], 'monitoring': False,
         'not_claimed': 'No per-image physical-material or learned-disentanglement validation is implied.'})
-    write(output / 'dataset_audit.json', audit_for(output, colors))
+    write(output / 'dataset_audit.json', audit_for(output, colors, blue_green_only))
     return verify_dataset(output)
 
 
 def verify_dataset(dataset):
     dataset = Path(dataset).resolve()
+    schema = read(dataset / 'dataset_audit.json').get('schema')
+    if schema not in ('trellis_subject180_training/v1', 'trellis_subject_blue_green72_training/v1'):
+        raise ValueError('unknown authorized training dataset schema')
+    blue_green_only = schema == 'trellis_subject_blue_green72_training/v1'
     sources, locks, colors = source_snapshot(CANDIDATES)
+    sources, colors = select_sources(sources, colors, blue_green_only)
     records = [json.loads(line) for line in (dataset / 'training_assets_manifest.jsonl').read_text(encoding='utf8').splitlines()]
     expected = [training_row(row, dataset) for row in sources]
     if (records != expected or read(dataset / 'source_locks.json') != locks
             or read(dataset / 'concepts.json') != concepts_for(expected)
-            or read(dataset / 'approval.json').get('request') != REQUEST):
+            or read(dataset / 'approval.json').get('request') != (BLUE_GREEN_REQUEST if blue_green_only else REQUEST)):
         raise ValueError('staged source order, image/mask pairing, caption or approval changed')
     for row in records:
         if row['caption'].count('<S*>') != 1:
@@ -154,7 +177,7 @@ def verify_dataset(dataset):
             if not path.is_relative_to(dataset) or sha256(path) != row[key + '_sha256']:
                 raise ValueError('training copy differs from its immutable source hash')
         pair_arrays(Path(row['image']), Path(row['mask']))
-    audit = audit_for(dataset, colors)
+    audit = audit_for(dataset, colors, blue_green_only)
     if read(dataset / 'dataset_audit.json') != audit:
         raise ValueError('training dataset audit changed')
     return audit
@@ -164,5 +187,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--candidates', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--blue-green-only', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(stage(args.candidates, args.output)))
+    print(json.dumps(stage(args.candidates, args.output, args.blue_green_only)))

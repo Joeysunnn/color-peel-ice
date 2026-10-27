@@ -44,7 +44,8 @@ def _selections(index_path, dataset, *, training_module=training):
     return result
 
 
-def _contact_sheet(output, references, rows=(), method=None, *, expected_count=None, label="MARBLE"):
+def _contact_sheet(output, references, rows=(), method=None, *, expected_count=None, label="MARBLE",
+                   probe_labels=None):
     """Include every actual training RGB with its full conditioned caption."""
     from experiments.natural_texture_material_v1.probe_review import _font
 
@@ -53,15 +54,17 @@ def _contact_sheet(output, references, rows=(), method=None, *, expected_count=N
     if expected_count is not None and len(references) != expected_count:
         raise ValueError(f"sheets require all {expected_count} actual training images")
     font = _font()
+    labels = MATERIALS if probe_labels is None else probe_labels
+    columns = max(5, len(labels))
     caption_lines = [textwrap.wrap(item["caption"], 33) for item in references]
     row_height = 235 + 17 * max(len(lines) for lines in caption_lines)
-    training_height = 35 + ((len(references) + 4) // 5) * row_height
-    sheet = Image.new("RGB", (1280, training_height + (712 if rows else 0)), "white")
+    training_height = 35 + ((len(references) + columns - 1) // columns) * row_height
+    sheet = Image.new("RGB", (256 * columns, training_height + (712 if rows else 0)), "white")
     draw = ImageDraw.Draw(sheet)
     originals = sum(item["kind"] in ("original_recolor", "original_recolor_cutout") for item in references)
     draw.text((10, 8), f"{label}: {len(references)} ACTUAL training images ({originals} originals + {len(references) - originals} counterfactuals) and captions", font=font, fill="black")
     for number, reference in enumerate(references):
-        x, y = (number % 5) * 256 + 5, (number // 5) * row_height + 35
+        x, y = (number % columns) * 256 + 5, (number // columns) * row_height + 35
         with Image.open(reference["image"]) as image:
             image = image.copy()
             image.thumbnail((200, 200))
@@ -71,11 +74,11 @@ def _contact_sheet(output, references, rows=(), method=None, *, expected_count=N
             draw.text((x, y + 222 + line * 17), text, font=font, fill="black")
     if rows:
         draw.text((10, training_height + 8), f"{method}; checkpoint {rows[0]['step']}; PNDM100 / CFG3.5 / 512 / fp16 / safety checker", font=font, fill="black")
-        by_key = {(row["material"], row["seed"]): row for row in rows}
-        for column, material in enumerate(MATERIALS):
-            draw.text((column * 256 + 5, training_height + 34), material, font=font, fill="black")
+        by_key = {(row.get("condition", row.get("material")), row["seed"]): row for row in rows}
+        for column, condition in enumerate(labels):
+            draw.text((column * 256 + 5, training_height + 34), condition, font=font, fill="black")
             for line, seed in enumerate(SAMPLING["seeds"]):
-                row = by_key[material, seed]
+                row = by_key[condition, seed]
                 x, y = column * 256 + 5, training_height + 60 + line * 315
                 with Image.open(output / row["image_path"]) as image:
                     sheet.paste(image.convert("RGB").resize((246, 246)), (x, y))
@@ -88,7 +91,7 @@ def _contact_sheet(output, references, rows=(), method=None, *, expected_count=N
 
 def run(dataset, output, step, training_index=None, execute_inference=False, device="cuda:0", *,
         training_module=training, reference_count=None, experiment="subject_marble_color30_v1",
-        reference_label="MARBLE"):
+        reference_label="MARBLE", probe_rows=None, probe_labels=None):
     dataset, output = Path(dataset).resolve(), Path(output).resolve()
     if (output.exists() or output.is_relative_to(training_module.ROOT) or dataset.is_relative_to(output)
             or output.is_relative_to(dataset)):
@@ -96,7 +99,8 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
     if execute_inference and training_index is None:
         raise ValueError("explicit inference requires a completed training index")
     training_module.verify_dataset(dataset)
-    rows = prompt_rows(step)
+    rows = prompt_rows(step) if probe_rows is None else probe_rows(step)
+    expected_images = len(rows)
     references = [json.loads(line) for line in (dataset / "training_assets_manifest.jsonl").read_text(encoding="utf-8").splitlines()]
     locks = {str(dataset / name): sha256(dataset / name) for name in
              ("concepts.json", "training_assets_manifest.jsonl", "source_locks.json", "dataset_audit.json")}
@@ -113,15 +117,18 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
     provenance = {"status": "running" if execute_inference else "dry_run", "step": step,
                   "experiment": experiment, "git": git_info(), "dataset": str(dataset),
                   "source_hashes": locks, "training_index": str(training_index) if training_index else None,
-                  "sampling": SAMPLING, "expected_images": 20, "generated_images": 0,
+                  "sampling": SAMPLING, "expected_images": expected_images, "generated_images": 0,
                   "training_images": len(references), "training": selections,
                   "source_mode": read_json(dataset / "dataset_audit.json").get("source_mode", "original_scene"),
                   "selected_colors": read_json(dataset / "dataset_audit.json").get("selected_colors"),
-                  "baseline": "Experiment B prompts and sampling reused; no baseline images copied or regenerated."}
+                  "baseline": ("Experiment B prompts and sampling reused; no baseline images copied or regenerated."
+                               if probe_rows is None else
+                               "Original Experiment B material prompts and sampling reused, plus four declared independent context/color probes; no baseline images copied or regenerated.")}
     write_json(output / "provenance.json", provenance)
     write_json(output / "training_references.json", {"images": references})
     (output / "generation_manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
-    sheets = [_contact_sheet(output, references, expected_count=reference_count, label=reference_label)]
+    sheets = [_contact_sheet(output, references, expected_count=reference_count, label=reference_label,
+                             probe_labels=probe_labels)]
     try:
         if execute_inference:
             import torch
@@ -145,10 +152,10 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
                 _locks(derived["hashes"])
                 del pipe
                 torch.cuda.empty_cache()
-                sheets.append(_contact_sheet(output, references, [row for row in generated if row["method"] == selection["method"]], selection["method"], expected_count=reference_count, label=reference_label))
-            if len(generated) != 20 or len({row["id"] for row in generated}) != 20:
+                sheets.append(_contact_sheet(output, references, [row for row in generated if row["method"] == selection["method"]], selection["method"], expected_count=reference_count, label=reference_label, probe_labels=probe_labels))
+            if len(generated) != expected_images or len({row["id"] for row in generated}) != expected_images:
                 raise ValueError("incomplete Subject inference matrix")
-            provenance.update(status="succeeded", generated_images=20,
+            provenance.update(status="succeeded", generated_images=expected_images,
                               safety_filtered=sum(row["status"] == "safety_filtered" for row in generated))
         _locks(locks)
         training_module.verify_dataset(dataset)

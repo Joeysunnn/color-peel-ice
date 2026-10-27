@@ -15,6 +15,10 @@ def build_config(method, dataset):
     config = baseline.build_config(method, dataset)
     config["status"] = "subject_trellis180_prepared"
     config["run"]["study"] = STUDY
+    audit_path = Path(dataset) / "dataset_audit.json"
+    if audit_path.is_file() and read_json(audit_path).get("schema") == "trellis_subject_blue_green72_training/v1":
+        config["status"] = "subject_trellis_blue_green72_prepared"
+        config["run"]["study"] = "subject_trellis_blue_green72_training_v1"
     return config
 
 

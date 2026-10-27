@@ -137,3 +137,42 @@ record evidence. A failed stage stops the queue without automatic retry. Verify
 the detached process and first finite training losses at startup, then stop
 checking as requested. The scheduled inference belongs to the same job; no
 monitor, periodic polling task or automatic notification is created.
+
+### Blue/green72 plus context and color transfer
+
+The subsequent user request selects only blue and green from the same frozen180
+source:2 colors ×6 M/R ×3 views ×2 lights =72 counterfactual images. Add
+`--blue-green-only` to `train_pipeline`; a new independent run copies exactly
+those72 RGB/mask/caption triples, preserves their source order, and records the
+new approval separately. Pink/cyan/purple and original photographs are excluded.
+The existing180-image experiment and its dedicated checkout/results stay untouched.
+
+Both methods restart from the same frozen SD1.5 base, with the unchanged1000-step
+recipes and500/750/1000 snapshots. The study is
+`subject_trellis_blue_green72_training_v1`. The sequential loader performs
+13 complete72-image cycles plus the first64 images; each image receives13 or14
+exposures. Source order places green before blue, producing504 green and496 blue
+exposures per method at1000 updates. No shuffle or rebalancing is introduced.
+
+At each saved step, retain all20 original five-material outputs and add16
+outputs for these four independent prompts, each run with both methods/seeds42/43:
+
+```text
+a photo of <S*> mailbox in the snow
+a photo of <S*> mailbox surrounded by flowers
+a photo of <S*> mailbox in white color
+a photo of <S*> mailbox in orange color
+```
+
+These are separate context/color probes, not a cross product with material.
+All36 outputs per step use the same PNDM100,CFG3.5,512px,fp16,safety checker and
+paired step-specific adapter/embedding as before:108 total across three steps.
+The manifests distinguish context/color probes from material labels. Each
+method's contact sheet shows all72 actual training images/captions and its18
+test outputs in nine columns. The default180 and historical MARBLE runs retain
+their original20-output tests and sheet layout.
+
+Use a newly pulled dedicated clean checkout and a fresh external run directory;
+pass `--blue-green-only --execute` with a currently free physical GPU. Verify
+the detached process and first finite loss, then stop checking. No monitor or
+post-startup code update is scheduled.
