@@ -224,3 +224,39 @@ Following the user's previous instruction, verify inference startup and first
 written images, then stop checking; no monitor or automatic notification is
 created. Compared with earlier tests, both phrasing and removal of the noun/photo
 prefix change, so this is not a one-word-only material ablation.
+
+### Append seeds44–48 in the same experiment folder
+
+The user requested seeds44,45,46,47,48 for the same literal-prompt experiment.
+`append_prompt_seeds` fixes the original completed root to
+`/var/tmp/colorpeel-r12user5/runs/trellis_blue_green72_prompt_forms_v1/20261028-001330__literal180__9a6d618__42`.
+New PNGs are placed directly alongside42/43 under the original
+`step500/750/1000/images/{method}/`, with seed-specific filenames. The added grid
+is3 templates ×5 materials ×2 methods ×5 seeds ×3 checkpoints =450 images;
+the complete experiment then contains630 images across seeds42–48.
+
+New manifests, provenance, paired exports, five-seed-row contact sheets and
+reports are written into a fresh `extensions/TIMESTAMP__seeds44_48__COMMIT__44`
+subdirectory. `index_seed44_48.html` is added at the original root and links
+old/new results. The original180 PNGs, indexes, sheets, checkpoints and status
+receipts are explicitly hash-locked; the old expected_images=180 is not edited.
+Each new step provenance records `image_root` pointing at the original step
+directory and sampling.seeds=[44,45,46,47,48]. A sampling copy is used; no shared
+SAMPLING object is modified. The current protocol, weights, prompts, PNDM100,
+CFG3.5,512px,fp16 and safety checker are otherwise unchanged.
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp
+export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.subject_trellis_dataset_v1.append_prompt_seeds \
+  --output "$ORIGINAL_PROMPT_RUN/extensions/$NEW_EXTENSION_ID" --gpu 2 --execute-inference
+```
+
+The original run must have completed before appending. Use a new independent
+Git checkout; neither old code checkout is updated. A fresh dry-run extension
+can be created by omitting `--execute-inference`. Existing target PNGs are
+rejected; actual writes use exclusive creation rather than overwrite. A range
+claim prevents concurrent duplicate44–48 jobs. Failed outputs are retained;
+there is no automatic resume/retry, cleanup, training or monitor. Verify first
+new images at startup, then stop checking as previously requested.
