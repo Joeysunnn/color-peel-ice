@@ -9,7 +9,7 @@ import sys
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
 
 
-def main(output):
+def main(output, algorithm):
     output = resolve_run_dir(output)
     git = git_info()
     output.mkdir(parents=True, exist_ok=False)
@@ -18,20 +18,28 @@ def main(output):
         TRITON_CACHE_DIR=str(output / 'triton_cache'),
         TORCH_EXTENSIONS_DIR=str(assets / 'cache/torch_extensions'))
     sys.path.insert(0, str(assets / 'sources/TRELLIS.2'))
-    state = {'status': 'started', 'git': git, 'generation_verified': False}
+    state = {'status': 'started', 'git': git, 'generation_verified': False, 'sparse_algorithm': algorithm}
+    def save(stage):
+        state['stage'] = stage
+        (output / 'runtime_smoke.json').write_text(json.dumps(state, indent=2) + '\n')
+    save('imports')
     try:
         import torch
         import torch.nn.functional as functional
         import xformers.ops
         from trellis2.modules.sparse import SparseTensor, SparseConv3d
+        from trellis2.modules.sparse.conv import config as conv_config
+        conv_config.FLEX_GEMM_ALGO = algorithm
         import nvdiffrast.torch as dr
         import cumesh
         torch.manual_seed(42)
         with torch.inference_mode():
+            save('xformers_attention')
             q, k, v = [torch.randn(1, 64, 12, 128, device='cuda', dtype=torch.float16) for _ in range(3)]
             actual = xformers.ops.memory_efficient_attention(q, k, v)
             expected = functional.scaled_dot_product_attention(*[x.transpose(1, 2).float() for x in (q, k, v)]).transpose(1, 2)
             state['xformers'] = bool(torch.allclose(actual.float(), expected, atol=.01, rtol=.01))
+            save('sparse_convolution')
             coords = torch.tensor([[0, x, y, z] for x in range(2) for y in range(2) for z in range(2)],
                                   dtype=torch.int32, device='cuda')
             sparse = SparseTensor(feats=torch.full((8, 32), .125, device='cuda', dtype=torch.float16), coords=coords)
@@ -41,10 +49,12 @@ def main(output):
             values = conv(sparse).feats
             state['sparse_convolution'] = bool(torch.isfinite(values).all() and
                 torch.allclose(values.float(), torch.full_like(values.float(), 8), atol=.01, rtol=.01))
+            save('rasterizer')
             vertices = torch.tensor([[-.5, -.5, 0, 1], [.5, -.5, 0, 1], [0, .5, 0, 1]], device='cuda')
             faces = torch.tensor([[0, 1, 2]], device='cuda', dtype=torch.int32)
             raster, _ = dr.rasterize(dr.RasterizeCudaContext(), vertices[None], faces, (32, 32))
             state['rasterizer'] = bool(torch.isfinite(raster).all() and (raster[..., 3] > 0).any())
+            save('cumesh')
             mesh = cumesh.CuMesh()
             mesh.init(vertices[:, :3].contiguous(), faces)
             mesh.compute_vertex_normals()
@@ -62,4 +72,7 @@ def main(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
-    raise SystemExit(main(parser.parse_args().output))
+    parser.add_argument('--sparse-algorithm', choices=('masked_implicit_gemm_splitk', 'explicit_gemm'),
+                        default='masked_implicit_gemm_splitk')
+    args = parser.parse_args()
+    raise SystemExit(main(args.output, args.sparse_algorithm))
