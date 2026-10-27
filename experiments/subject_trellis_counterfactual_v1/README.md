@@ -103,6 +103,15 @@ Install the memory-efficient attention backend into the new venv only:
   --no-deps xformers==0.0.29.post3 --index-url https://download.pytorch.org/whl/cu124
 ```
 
+The first setup completed all CUDA wheel builds but its final import found
+missing `trimesh` in the inherited environment. Preserve that setup log and
+install the documented basic packages into the new venv before kernel checks:
+
+```bash
+/var/tmp/colorpeel-r12user5/assets/trellis2_v1/env/bin/python -B -m pip install \
+  trimesh scipy imageio einops opencv-python-headless==4.11.0.86
+```
+
 `convert_dino` takes a fresh `--output` below the asset root. It maps the
 pinned public timm tensors without changing their values, synthesizes only
 zero Q/V biases and an unused zero mask token, and compares FP32 pre-norm and
