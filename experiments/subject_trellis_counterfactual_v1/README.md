@@ -141,3 +141,9 @@ must say estimated view; mask IoU does not establish identity or Albedo truth.
 `mailbox.glb` is a secondary official postprocessed export; native review
 images refer to the retained pre-export mesh, not a claim of identical GLB
 topology. No automatic scientific acceptance is made.
+
+If the secondary export is interrupted, preserve its output and status rather
+than rerunning generation. `export_saved --asset <native_asset.pt> --output
+<new_external_run>` exports only the fixed task asset as a100k-face-target,
+2048-texture preview LOD. It uses the official exporter with remesh disabled;
+the native asset and native review images remain the primary evidence.
