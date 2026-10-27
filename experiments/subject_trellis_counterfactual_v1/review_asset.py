@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -38,8 +39,11 @@ def review(mesh, source_cutout_path, output, trellis_root):
     evaluations = []
 
     def camera(parameters):
-        yaw, pitch, radius, cx, cy = map(float, parameters)
+        yaw, pitch, roll, radius, cx, cy = map(float, parameters)
         extr, intr = yaw_pitch_r_fov_to_extrinsics_intrinsics(yaw, pitch, radius, 40)
+        rotation = extr.new_tensor([[math.cos(roll), -math.sin(roll), 0],
+                                   [math.sin(roll), math.cos(roll), 0], [0, 0, 1]])
+        extr[:3] = rotation @ extr[:3]
         intr[0, 2], intr[1, 2] = cx, cy
         return extr, intr
 
@@ -62,12 +66,13 @@ def review(mesh, source_cutout_path, output, trellis_root):
     # These are camera candidates for the same generated asset, never new assets.
     for yaw in np.linspace(-np.pi, np.pi, 8, endpoint=False):
         for pitch in (-0.3, 0.2, 0.7):
-            objective([yaw, pitch, 2.8, *principal])
+            for roll in (-.35, 0, .35):
+                objective([yaw, pitch, roll, 2.8, *principal])
     initial = min(evaluations)[1]
     fit = minimize(objective, initial, method='Powell',
-                   bounds=[(-2 * np.pi, 2 * np.pi), (-0.8, 1.1), (1.2, 5.5),
+                   bounds=[(-2 * np.pi, 2 * np.pi), (-0.8, 1.1), (-.8, .8), (1.2, 5.5),
                            (0.05, 0.95), (0.05, 0.95)],
-                   options={'maxfev': 90, 'maxiter': 3, 'xtol': 0.005, 'ftol': 0.001})
+                   options={'maxfev': 350, 'maxiter': 6, 'xtol': 0.005, 'ftol': 0.001})
     loss, parameters = min(evaluations)
     extr, intr = camera(parameters)
     environment = Path(trellis_root) / 'assets/hdri/forest.exr'
@@ -123,7 +128,7 @@ def review(mesh, source_cutout_path, output, trellis_root):
     artifacts['contact_sheet'] = str(output / 'contact_sheet.png')
     record = {'status': 'pending_user_review', 'camera': {
         'status': 'estimated_from_original512_mask_and_weak_RGB_correspondence',
-        'parameters': dict(zip(['yaw_radians', 'pitch_radians', 'radius', 'cx', 'cy'], parameters)),
+        'parameters': dict(zip(['yaw_radians', 'pitch_radians', 'roll_radians', 'radius', 'cx', 'cy'], parameters)),
         'fov_degrees': 40, 'extrinsics': extr.detach().cpu().tolist(),
         'intrinsics': intr.detach().cpu().tolist(), 'fit_resolution': 128,
         'output_resolution': 512, 'objective': '1-soft_mask_IoU + 0.05*RGB_BaseColor_MAE',
@@ -143,3 +148,33 @@ def review(mesh, source_cutout_path, output, trellis_root):
                        'One fixed generated asset; no material-counterfactual dataset or training.']}
     (output / 'review.json').write_text(json.dumps(record, indent=2) + '\n', encoding='utf8')
     return record
+
+
+if __name__ == '__main__':
+    import argparse
+    import os
+    import sys
+    from scripts.launch.colorpeel_run import git_info, resolve_run_dir
+    parser = argparse.ArgumentParser(description='Re-render a saved native asset; no model sampling.')
+    parser.add_argument('--asset', required=True, type=Path)
+    parser.add_argument('--source', required=True, type=Path)
+    parser.add_argument('--output', required=True, type=Path)
+    args = parser.parse_args()
+    git = git_info()
+    output = resolve_run_dir(args.output)
+    assets = Path('/var/tmp/colorpeel-r12user5/assets/trellis2_v1')
+    os.environ.update(OPENCV_IO_ENABLE_OPENEXR='1',
+        TORCH_EXTENSIONS_DIR=str(assets / 'cache/torch_extensions'),
+        TRITON_CACHE_DIR=str(output.parent / (output.name + '_triton_cache')))
+    sys.path.insert(0, str(assets / 'sources/TRELLIS.2'))
+    import torch
+    from trellis2.representations import MeshWithVoxel
+    saved = torch.load(args.asset, map_location='cuda', weights_only=False)
+    saved['origin'] = saved['origin'].tolist()
+    mesh = MeshWithVoxel(**saved)
+    record = review(mesh, args.source, output, assets / 'sources/TRELLIS.2')
+    (output / 'saved_asset_source.json').write_text(json.dumps({'git': git,
+        'asset': str(args.asset), 'asset_sha256': hashlib.sha256(args.asset.read_bytes()).hexdigest(),
+        'source': str(args.source), 'source_sha256': hashlib.sha256(args.source.read_bytes()).hexdigest(),
+        'new_model_samples': 0, 'metrics': record['metrics']}, indent=2) + '\n')
+    print(json.dumps(record['metrics']))
