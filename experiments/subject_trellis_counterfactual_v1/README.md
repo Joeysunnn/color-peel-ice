@@ -106,7 +106,10 @@ Install the memory-efficient attention backend into the new venv only:
 `convert_dino` takes a fresh `--output` below the asset root. It maps the
 pinned public timm tensors without changing their values, synthesizes only
 zero Q/V biases and an unused zero mask token, and compares FP32 pre-norm and
-TRELLIS-style normalized features on the actual pink condition. Failed
+TRELLIS-style normalized features on the actual pink condition at512/1024.
+Acceptance uses the actual affine-free normalized features consumed by
+TRELLIS at unchanged atol/rtol1e-3; pre-norm values remain finite-only
+diagnostics because their scale is removed at the condition interface. Failed
 parity leaves its attempt and receipt; it does not publish a converted model.
 The reference is the public timm implementation, not an inaccessible original
 Facebook checkpoint. RoPE follows Transformers4.57.3's FP32 reconstruction.

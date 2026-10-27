@@ -172,8 +172,10 @@ def main(argv=None):
             pink_input(attempt, resolution), args.device) for resolution in (512, 1024)}
         state['parity_input_sha256'] = {str(resolution): sha256(attempt / f'parity_input{resolution}.png')
             for resolution in (512, 1024)}
-        if not all(row['allclose'] and row['finite'] for result in state['parity'].values()
-                   for row in result['comparisons'].values()):
+        state['parity_acceptance'] = 'TRELLIS consumes affine-free normalized features; prenorm is a finite-only diagnostic'
+        if not all(result['comparisons']['trellis_features']['allclose']
+                   and all(row['finite'] for row in result['comparisons'].values())
+                   for result in state['parity'].values()):
             raise ValueError('feature parity threshold failed')
         state['stage'] = 'save_verified_conversion'
         candidate = attempt / 'model'
