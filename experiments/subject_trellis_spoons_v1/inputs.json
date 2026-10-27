@@ -1,0 +1,22 @@
+{
+  "schema": "trellis_spoons_full_source_inputs/v1",
+  "official_commit": "75fbf0183001ed9876c8dbb35de6b68552ee08bd",
+  "segmentation": {
+    "repo": "ZhengPeng7/BiRefNet",
+    "revision": "e2bf8e4460fc8fa32bba5ea4d94b3233d367b0e4",
+    "endpoint": "https://hf-mirror.com",
+    "allow_patterns": ["*.py", "config.json", "model.safetensors"]
+  },
+  "subjects": [
+    {
+      "subject_id": "metal_spoon",
+      "source": "experiments/natural_material_supermat_v1/positive_control/assets/stainless_steel_soup_spoon_original.jpg",
+      "source_sha256": "e6df6f1550a2e7770aa8f2dc5259d6d0bf54b909d964b5eced7fd8aeb1e4cbf3"
+    },
+    {
+      "subject_id": "wood_spoon",
+      "source": "experiments/natural_material_threeway_v1/assets/wood_spoon_source.png",
+      "source_sha256": "b17fb667be977d2ed879f3c216011e6dde8324951a6f331136a7c52ab2bc4f9d"
+    }
+  ]
+}

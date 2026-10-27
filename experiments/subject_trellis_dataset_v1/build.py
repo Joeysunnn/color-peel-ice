@@ -51,9 +51,11 @@ def rows(config):
             'light': light, 'material': material, 'pair_group': f'{view}__{color}__{light}',
             'controls': {'metallic': metallic, 'roughness': roughness,
                          'base_color': config['colors'][color], 'alpha': 1.0},
-            'caption': f'a photo of <S*> mailbox in {color} color with a {adjective} {label} surface',
+            'caption': f'a photo of <S*> {config.get("subject_noun", "mailbox")} in {color} color with a {adjective} {label} surface',
             'caption_status': 'parameter-derived proposed label; rendered appearance pending review',
             'training_eligible': False, 'review_status': 'pending_user_review'})
+        if 'subject_id' in config:
+            result[-1]['subject_id'] = config['subject_id']
     return result
 
 
@@ -131,7 +133,8 @@ def review(output, records, config):
         for row in records:
             writer.writerow([row[key] for key in ('id', 'pair_group', 'caption', 'image')])
     cards = [f'<figure><img width="256" src="../dataset/{html.escape(r["image"])}"><figcaption>{html.escape(r["caption"])}</figcaption></figure>' for r in records]
-    (folder / 'index.html').write_text('<!doctype html><meta charset="utf-8"><title>Mailbox material counterfactuals</title>'
+    subject = html.escape(config.get('subject_id', config.get('subject_noun', 'Mailbox')))
+    (folder / 'index.html').write_text(f'<!doctype html><meta charset="utf-8"><title>{subject} material counterfactuals</title>'
         '<h1>180 synthetic candidates; pending review</h1><p>Fixed native geometry. Uniform colors and opaque M/R interventions. No training.</p>'
         + ''.join(links) + ''.join(cards), encoding='utf8')
 
@@ -142,7 +145,8 @@ def report(output, state):
     write(folder / 'status.json', state)
     documents = {
         'SUMMARY.md': f"Status: {state['status']}; images: {state['images_completed']}/180. Synthetic candidates, pending review. No training.\n",
-        'COMMANDS.md': shlex.join([sys.executable, '-B', '-m', 'experiments.subject_trellis_dataset_v1.build', '--output', str(output)]) + '\n',
+        'COMMANDS.md': shlex.join([sys.executable, '-B', '-m', 'experiments.subject_trellis_dataset_v1.build', '--output', str(output)]
+            + (['--protocol', state['protocol_path']] if 'protocol_path' in state else [])) + '\n',
         'LOG.md': 'See protocol.json, cameras.json, runtime.json, dataset/manifest.json, dataset/pairs.json, verification.json and captured sibling log.\n',
         'SCIENTIFIC_CHANGELOG.md': 'Same complete native vertices/faces in official MeshWithPbrMaterial, one texture-free opaque material. Uniform display-domain BC replaces all predicted appearance; exact scalar M/R. Three source-near camera orientations, centered/full-frame once each. Two official HDRIs, full factorial. SSAO seed42 reset each render. One opaque depth layer, official ACES/gamma once.\n',
         'COMPARABILITY_REPORT.md': 'Synthetic data from one generated geometry, not exact photographic counterfactuals. Appearance-only patterns discarded. Same mesh identity across samples does not establish match to real source or successful learned disentanglement. M/R approximated by official IBL renderer, no wood/cloth labels. Not a controlled comparison to MARBLE35: size, geometry, composition, materials and light differ.\n',
@@ -151,15 +155,16 @@ def report(output, state):
         (folder / name).write_text(value, encoding='utf8')
 
 
-def run(output):
+def run(output, protocol_path=PROTOCOL):
     output = resolve_run_dir(Path(output))
-    config, git = json.loads(PROTOCOL.read_text()), git_info()
+    protocol_path = Path(protocol_path).resolve()
+    config, git = json.loads(protocol_path.read_text()), git_info()
     official = ASSETS / 'sources/TRELLIS.2'
     if (output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(ASSETS)
             or output.is_relative_to(Path(config['asset']).parent)):
         raise ValueError('require new external output, separate from old artifacts and assets')
     locks = {config['asset']: config['asset_sha256'], config['camera_source']: config['camera_source_sha256'],
-             str(PROTOCOL): sha256(PROTOCOL)}
+             str(protocol_path): sha256(protocol_path)}
     locks.update({str(official / f'assets/hdri/{name}.exr'): digest for name, digest in config['lights'].items()})
 
     def check():
@@ -174,9 +179,11 @@ def run(output):
     output.mkdir(parents=True)
     for folder in ('raw', 'cutouts', 'dataset', 'geometry', 'maps'):
         (output / folder).mkdir()
-    shutil.copyfile(PROTOCOL, output / 'protocol.json')
+    shutil.copyfile(protocol_path, output / 'protocol.json')
     state = {'status': 'initializing', 'git': git, 'input_hashes': locks, 'images_completed': 0,
              'expected_images': 180, 'new_model_samples': 0, 'training_started': False, 'monitoring': False}
+    if protocol_path != PROTOCOL.resolve():
+        state['protocol_path'] = str(protocol_path)
     report(output, state)
     try:
         os.environ.update(OPENCV_IO_ENABLE_OPENEXR='1', PYTHONDONTWRITEBYTECODE='1',
@@ -262,7 +269,7 @@ def run(output):
         write(output / 'dataset/concepts.json', concepts)
         review(output, records, config)
         from experiments.subject_trellis_dataset_v1.verify import verify
-        state['verification'] = verify(output)
+        state['verification'] = verify(output, protocol_path=protocol_path)
         check()
         if any(array_hash(getattr(mesh, name).cpu().numpy()) != geometry_hashes[name] for name in geometry_hashes):
             raise ValueError('native geometry changed')
@@ -279,4 +286,6 @@ def run(output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    print(run(parser.parse_args().output)['status'])
+    parser.add_argument('--protocol', type=Path, default=PROTOCOL)
+    args = parser.parse_args()
+    print(run(args.output, protocol_path=args.protocol)['status'])

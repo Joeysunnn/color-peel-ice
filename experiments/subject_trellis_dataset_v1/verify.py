@@ -72,6 +72,8 @@ def one_factor_pairs(group):
         raise ValueError('each matched group requires six M/R states')
     anchor = group[0]
     shared = ('view', 'color', 'light', 'pair_group', 'geometry_buffer_sha256')
+    if 'subject_id' in anchor:
+        shared += ('subject_id',)
     if any(any(row[key] != anchor[key] for key in shared) or any(
             row['controls'][key] != anchor['controls'][key] for key in ('base_color', 'alpha')) for row in group):
         raise ValueError('pair group changes a fixed control')
@@ -93,11 +95,11 @@ def one_factor_pairs(group):
     return result
 
 
-def verify(output):
+def verify(output, protocol_path=PROTOCOL):
     output = Path(output).resolve()
     if (output / 'dataset/pairs.json').exists() or (output / 'verification.json').exists():
         raise FileExistsError('verification outputs already exist; do not overwrite receipts')
-    protocol = checked_file(output, 'protocol.json', sha256(PROTOCOL))
+    protocol = checked_file(output, 'protocol.json', sha256(protocol_path))
     config = json.loads(protocol.read_text())
     manifest_path = checked_file(output, 'dataset/manifest.json')
     manifest = json.loads(manifest_path.read_text())

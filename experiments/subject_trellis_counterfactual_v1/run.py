@@ -1,4 +1,4 @@
-"""Generate exactly one native pink Mailbox asset for review, never train."""
+"""Generate exactly one native subject asset for review, never train."""
 
 import argparse
 import gc
@@ -21,11 +21,47 @@ def write(path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n', encoding='utf8')
 
 
-def model_bundle(output):
+def check_source_receipt(path):
+    from PIL import Image
+    path = Path(path).resolve()
+    record = json.loads(path.read_text())
+    paths = {name: Path(record[name + '_path']) for name in ('cutout', 'source', 'mask')}
+    if any(not value.is_absolute() for value in paths.values()):
+        raise ValueError('source receipt paths must be absolute')
+    hashes = {str(value): sha256(value) for value in paths.values()}
+    if any(hashes[str(value)] != record[name + '_sha256'] for name, value in paths.items()):
+        raise ValueError('source receipt input hash mismatch')
+    with Image.open(paths['cutout']) as image, Image.open(paths['mask']) as mask:
+        if image.mode != 'RGBA' or image.size != (512, 512) or mask.size != image.size:
+            raise ValueError('require aligned RGBA512 cutout and mask')
+        if image.getchannel('A').tobytes() != mask.convert('L').tobytes():
+            raise ValueError('cutout alpha differs from receipt mask')
+        if any(a == 0 and (r or g or b) for r, g, b, a in image.getdata()):
+            raise ValueError('transparent cutout RGB must be zero')
+    hashes[str(path)] = sha256(path)
+    return {'status': 'passed', 'sha256': hashes, 'alpha_matches_mask': True,
+            'transparent_rgb_zero': True, 'source_receipt': str(path),
+            **{name + '_path': str(value) for name, value in paths.items()}}
+
+
+def model_bundle(output, pinned_revisions=None):
     from huggingface_hub import HfApi, hf_hub_download
     api, revisions = HfApi(token=False), {}
+
+    def revision(source):
+        if source not in revisions:
+            if pinned_revisions is None:
+                revisions[source] = api.model_info(source).sha
+            else:
+                value = pinned_revisions.get(source)
+                if (not isinstance(value, str) or len(value) != 40
+                        or any(character not in '0123456789abcdef' for character in value.lower())):
+                    raise ValueError('explicit model revisions must pin every actual repository to a full commit')
+                revisions[source] = value
+        return revisions[source]
+
     repo = 'microsoft/TRELLIS.2-4B'
-    revisions[repo] = api.model_info(repo).sha
+    revision(repo)
     cache = ASSETS / 'cache/huggingface'
     path = hf_hub_download(repo, 'pipeline.json', revision=revisions[repo], cache_dir=cache, token=False)
     args = json.loads(Path(path).read_text())['args']
@@ -39,7 +75,7 @@ def model_bundle(output):
         else:
             source, stem = repo, value
         if source not in revisions:
-            revisions[source] = api.model_info(source).sha
+            revision(source)
         for suffix in ('.json', '.safetensors'):
             file = hf_hub_download(source, stem + suffix, revision=revisions[source], cache_dir=cache, token=False)
             hashes[str(file)] = sha256(file)
@@ -50,11 +86,21 @@ def model_bundle(output):
     return args, {'revisions': revisions, 'sha256': hashes}
 
 
-def run(output, encoder):
+def run(output, encoder, *, source_receipt=None, model_revisions=None, export_glb=True):
     output = resolve_run_dir(output)
+    encoder = Path(encoder).resolve()
+    source_receipt = Path(source_receipt).resolve() if source_receipt is not None else None
     if output.is_relative_to(Path(__file__).resolve().parents[2]) or output.is_relative_to(SOURCE):
         raise ValueError('require fresh external output')
-    git, inputs = git_info(), check_inputs()
+
+    def verify_inputs():
+        return check_inputs() if source_receipt is None else check_source_receipt(source_receipt)
+
+    git, inputs = git_info(), verify_inputs()
+    cutout = SOURCE / 'source/pink/cutout512.png' if source_receipt is None else Path(inputs['cutout_path'])
+    if source_receipt is not None and any(output.is_relative_to(path.parent) for path in
+            (source_receipt, *(Path(inputs[name + '_path']) for name in ('cutout', 'source', 'mask')))):
+        raise ValueError('new output must be outside the supplied source directories')
     receipt_path = encoder.parent / 'conversion_receipt.json'
     receipt = json.loads(receipt_path.read_text())
     if receipt['status'] != 'converted_parity_verified_not_original_hf_byte_verified':
@@ -68,7 +114,15 @@ def run(output, encoder):
     state = {'status': 'started', 'git': git, 'official_commit': OFFICIAL, 'seed': 42,
         'pipeline_type': '1024_cascade', 'input': inputs, 'encoder': str(encoder),
         'encoder_receipt_sha256': sha256(receipt_path), 'training': False,
-        'counterfactual_expansion': False, 'generated_assets': 0}
+        'counterfactual_expansion': False, 'generated_assets': 0, 'export_glb': export_glb}
+    if source_receipt is not None:
+        provenance = output / 'provenance'
+        provenance.mkdir()
+        copied = provenance / 'source_receipt.json'
+        shutil.copyfile(source_receipt, copied)
+        if sha256(copied) != inputs['sha256'][str(source_receipt)]:
+            raise ValueError('source receipt changed while copying provenance')
+        state['source_receipt'] = {'path': str(source_receipt), 'copied_path': str(copied), 'sha256': sha256(copied)}
     os.environ.update(ATTN_BACKEND='xformers', SPARSE_ATTN_BACKEND='xformers',
         PYTHONDONTWRITEBYTECODE='1', TORCH_EXTENSIONS_DIR=str(ASSETS / 'cache/torch_extensions'),
         TRITON_CACHE_DIR=str(output / 'triton_cache'), OPENCV_IO_ENABLE_OPENEXR='1',
@@ -94,7 +148,7 @@ def run(output, encoder):
         state['sparse_algorithm'] = 'explicit_gemm'
         state['stage'] = 'prepare_pinned_model_files'
         write(report / 'status.json', state)
-        args, state['models'] = model_bundle(output)
+        args, state['models'] = model_bundle(output, pinned_revisions=model_revisions)
         base = Pipeline.from_pretrained(str(output))
         flows = {}
         for name, model in base.models.items():
@@ -113,7 +167,7 @@ def run(output, encoder):
             image_cond_model=DinoV3FeatureExtractor(str(encoder)), rembg_model=None,
             low_vram=True, default_pipeline_type='1024_cascade')
         pipe.cuda()
-        shutil.copyfile(SOURCE / 'source/pink/cutout512.png', output / 'source_cutout512.png')
+        shutil.copyfile(cutout, output / 'source_cutout512.png')
         with Image.open(output / 'source_cutout512.png') as source:
             condition = pipe.preprocess_image(source)
         condition.save(output / 'actual_condition.png')
@@ -139,19 +193,22 @@ def run(output, encoder):
         torch.cuda.empty_cache()
         from experiments.subject_trellis_counterfactual_v1.review_asset import review
         state['review'] = review(mesh, output / 'source_cutout512.png', output / 'review', official)
-        import o_voxel
-        state['stage'] = 'glb_export'
-        write(report / 'status.json', state)
-        glb = o_voxel.postprocess.to_glb(vertices=mesh.vertices, faces=mesh.faces,
-            attr_volume=mesh.attrs, coords=mesh.coords, attr_layout=mesh.layout,
-            voxel_size=mesh.voxel_size, aabb=[[-.5, -.5, -.5], [.5, .5, .5]],
-            decimation_target=1000000, texture_size=2048, remesh=False, verbose=True)
-        glb.export(output / 'mailbox.glb')
-        state['export'] = {'path': str(output / 'mailbox.glb'),
-            'sha256': sha256(output / 'mailbox.glb'),
-            'policy': 'official cleanup/simplification and UV baking; native_asset.pt and review retain pre-export native mesh'}
+        if export_glb:
+            import o_voxel
+            state['stage'] = 'glb_export'
+            write(report / 'status.json', state)
+            glb = o_voxel.postprocess.to_glb(vertices=mesh.vertices, faces=mesh.faces,
+                attr_volume=mesh.attrs, coords=mesh.coords, attr_layout=mesh.layout,
+                voxel_size=mesh.voxel_size, aabb=[[-.5, -.5, -.5], [.5, .5, .5]],
+                decimation_target=1000000, texture_size=2048, remesh=False, verbose=True)
+            glb.export(output / 'mailbox.glb')
+            state['export'] = {'path': str(output / 'mailbox.glb'),
+                'sha256': sha256(output / 'mailbox.glb'),
+                'policy': 'official cleanup/simplification and UV baking; native_asset.pt and review retain pre-export native mesh'}
+        else:
+            state['export'] = {'status': 'skipped', 'reason': 'GLB export disabled; native asset and review retained'}
         state.update(status='generated_pending_user_review', stage='completed')
-        if git_info() != git or check_inputs() != inputs:
+        if git_info() != git or verify_inputs() != inputs:
             raise ValueError('code or immutable source changed')
     except BaseException as error:
         state.update(status='failed', error_type=type(error).__name__, error=str(error))
@@ -169,5 +226,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--encoder', required=True, type=Path)
+    parser.add_argument('--source-receipt', type=Path)
+    parser.add_argument('--model-revisions', type=Path)
+    parser.add_argument('--skip-glb', action='store_true')
     args = parser.parse_args()
-    run(args.output, args.encoder.resolve())
+    run(args.output, args.encoder.resolve(), source_receipt=args.source_receipt,
+        model_revisions=json.loads(args.model_revisions.read_text()) if args.model_revisions else None,
+        export_glb=not args.skip_glb)
