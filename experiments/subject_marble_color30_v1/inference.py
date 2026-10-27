@@ -91,7 +91,8 @@ def _contact_sheet(output, references, rows=(), method=None, *, expected_count=N
 
 def run(dataset, output, step, training_index=None, execute_inference=False, device="cuda:0", *,
         training_module=training, reference_count=None, experiment="subject_marble_color30_v1",
-        reference_label="MARBLE", probe_rows=None, probe_labels=None):
+        reference_label="MARBLE", probe_rows=None, probe_labels=None,
+        selection_loader=None, baseline_note=None):
     dataset, output = Path(dataset).resolve(), Path(output).resolve()
     if (output.exists() or output.is_relative_to(training_module.ROOT) or dataset.is_relative_to(output)
             or output.is_relative_to(dataset)):
@@ -108,7 +109,11 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
     if training_index is not None:
         training_index = Path(training_index).resolve()
         locks[str(training_index)] = sha256(training_index)
-    selections = _selections(training_index, dataset, training_module=training_module) if execute_inference else []
+    if execute_inference:
+        selections = (_selections(training_index, dataset, training_module=training_module)
+                      if selection_loader is None else selection_loader(training_index, dataset))
+    else:
+        selections = []
     if any(output.is_relative_to(Path(selection["run"]).resolve())
            or Path(selection["run"]).resolve().is_relative_to(output) for selection in selections):
         raise ValueError("inference output must be outside training runs")
@@ -121,7 +126,8 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
                   "training_images": len(references), "training": selections,
                   "source_mode": read_json(dataset / "dataset_audit.json").get("source_mode", "original_scene"),
                   "selected_colors": read_json(dataset / "dataset_audit.json").get("selected_colors"),
-                  "baseline": ("Experiment B prompts and sampling reused; no baseline images copied or regenerated."
+                  "baseline": baseline_note if baseline_note is not None else (
+                               "Experiment B prompts and sampling reused; no baseline images copied or regenerated."
                                if probe_rows is None else
                                "Original Experiment B material prompts and sampling reused, plus four declared independent context/color probes; no baseline images copied or regenerated.")}
     write_json(output / "provenance.json", provenance)

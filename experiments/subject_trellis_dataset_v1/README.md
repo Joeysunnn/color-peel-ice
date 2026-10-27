@@ -176,3 +176,51 @@ Use a newly pulled dedicated clean checkout and a fresh external run directory;
 pass `--blue-green-only --execute` with a currently free physical GPU. Verify
 the detached process and first finite loss, then stop checking. No monitor or
 post-startup code update is scheduled.
+
+### Literal material prompt forms on the completed blue/green72 run
+
+`run_prompt_forms` reuses the completed blue/green72 experiment's existing
+500/750/1000 snapshots; it does not train, modify the source run, or update its
+frozen checkout. `prompt_forms.py` defines15 literal conditions over wood,
+metal,matte,plastic,ceramic and three templates:
+
+```text
+a wooden <S*>
+a <S*> made entirely of wood
+a <S*> with a wood surface
+```
+
+Only wood takes `wooden` in the first form; other replacements are exactly
+metal/matte/plastic/ceramic. `matte` remains literal even in `made entirely of
+matte`. No `a photo of` prefix or `mailbox` noun is added. Both methods and
+seeds42/43 yield60 images per checkpoint,180 overall. Sampling remains
+PNDM100,CFG3.5,512px,fp16 with safety checker, using paired same-step embeddings
+and adapters. Every method sheet includes all72 actual training images/captions
+and the15 prompt conditions in two seed rows; CSV/JSON retain complete prompts.
+
+The training revision is `b3b850d9047f793b7d23e3a61d43d19e28972557` in its
+original dedicated checkout. A read-only subprocess invokes the strict original
+training audit from that clean revision, verifies actual module import paths,
+and returns the checked selections. Original step-export receipts supply the
+historical hashes for all six paired snapshots. The new inference revision,
+source receipts/index/status, data and snapshot locks are recorded separately;
+no original Git provenance is rewritten or default audit check relaxed.
+
+```bash
+export PYTHONDONTWRITEBYTECODE=1 TMPDIR=/var/tmp
+export COLORPEEL_OUTPUT_ROOT=/var/tmp/colorpeel-r12user5/runs
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.subject_trellis_dataset_v1.run_prompt_forms \
+  --output "$NEW_PROMPT_RUN" --gpu 2 --execute-inference
+```
+
+Use a new clean inference checkout deployed through local commit/push and
+server Git clone/pull. Check GPU occupancy first. Omit `--execute-inference`
+for a fresh dry-run audit/plan. Every output directory must be new and external.
+Results include `step*/provenance.json`, images, generation status, three
+contact sheets per step, `prompt_manifest.csv`, `source_training_audit.json`,
+`source_audit.log`, root status and the standard `repro_outputs/` bundle.
+Following the user's previous instruction, verify inference startup and first
+written images, then stop checking; no monitor or automatic notification is
+created. Compared with earlier tests, both phrasing and removal of the noun/photo
+prefix change, so this is not a one-word-only material ablation.
