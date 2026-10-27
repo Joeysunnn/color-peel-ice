@@ -4,6 +4,8 @@ The user authorized dataset construction after reviewing the single TRELLIS.2
 asset and explicitly removed color preservation as an acceptance requirement.
 This experiment renders the existing native asset; it neither samples another
 3D object nor trains a model. All historical inputs/results remain read-only.
+The180-image construction completed; see [RESULTS.md](RESULTS.md) for the
+executed commit, output directory, verification and material-response evidence.
 
 ## Fixed protocol
 
