@@ -13,7 +13,7 @@ export CUDA_HOME=/usr/local/cuda-12.4 TORCH_CUDA_ARCH_LIST=7.0 MAX_JOBS=4
 export PIP_CACHE_DIR="$ASSETS/cache/pip" TORCH_EXTENSIONS_DIR="$ASSETS/cache/torch_extensions"
 "$BASE" -m venv --system-site-packages "$ASSETS/env"
 PY="$ASSETS/env/bin/python"
-"$PY" -B -m pip install 'transformers==4.57.3' 'tokenizers==0.22.1' easydict ninja imageio-ffmpeg kornia zstandard trimesh scipy imageio einops 'opencv-python-headless==4.11.0.86'
+"$PY" -B -m pip install 'transformers==4.57.3' 'tokenizers==0.22.1' easydict ninja imageio-ffmpeg kornia zstandard trimesh scipy imageio einops plyfile 'opencv-python-headless==4.11.0.86'
 
 clone_pinned() {
     local name=$1 url=$2 revision=$3

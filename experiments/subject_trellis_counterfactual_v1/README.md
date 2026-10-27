@@ -109,7 +109,7 @@ install the documented basic packages into the new venv before kernel checks:
 
 ```bash
 /var/tmp/colorpeel-r12user5/assets/trellis2_v1/env/bin/python -B -m pip install \
-  trimesh scipy imageio einops opencv-python-headless==4.11.0.86
+  trimesh scipy imageio einops plyfile opencv-python-headless==4.11.0.86
 ```
 
 `convert_dino` takes a fresh `--output` below the asset root. It maps the
