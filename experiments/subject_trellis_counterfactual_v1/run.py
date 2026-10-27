@@ -71,7 +71,9 @@ def run(output, encoder):
         'counterfactual_expansion': False, 'generated_assets': 0}
     os.environ.update(ATTN_BACKEND='xformers', SPARSE_ATTN_BACKEND='xformers',
         PYTHONDONTWRITEBYTECODE='1', TORCH_EXTENSIONS_DIR=str(ASSETS / 'cache/torch_extensions'),
-        TRITON_CACHE_DIR=str(output / 'triton_cache'), OPENCV_IO_ENABLE_OPENEXR='1')
+        TRITON_CACHE_DIR=str(output / 'triton_cache'), OPENCV_IO_ENABLE_OPENEXR='1',
+        HF_HOME=str(ASSETS / 'cache/hf_home'), HF_XET_CACHE=str(ASSETS / 'cache/xet'),
+        TORCH_HOME=str(ASSETS / 'cache/torch'), XDG_CACHE_HOME=str(ASSETS / 'cache'))
     official = ASSETS / 'sources/TRELLIS.2'
     import subprocess
     if subprocess.check_output(['git', '-C', str(official), 'rev-parse', 'HEAD'], text=True).strip() != OFFICIAL:

@@ -146,6 +146,8 @@ def main(argv=None):
         if state['versions']['transformers'] != '4.57.3' or state['versions']['timm'] != '1.0.26':
             raise ValueError('require reviewed Transformers/timm versions')
         state['input'] = check_inputs()
+        os.environ.update(HF_HOME=str(ASSETS / 'cache/hf_home'),
+            HF_XET_CACHE=str(ASSETS / 'cache/xet'))
         import torch
         from huggingface_hub import hf_hub_download
         from safetensors.torch import load_file
