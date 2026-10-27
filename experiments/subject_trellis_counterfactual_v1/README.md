@@ -6,6 +6,10 @@ of an estimated source-view PBR render, clay render, Base Color, Metallic,
 and Roughness. No counterfactual expansion, Subject training, parameter
 sweep, or monitoring is authorized by this entrypoint.
 
+The single asset and native review completed on the V100 adaptation. A separate
+100k-face-target GLB export also completed. See [RESULTS.md](RESULTS.md) for
+receipts, the interrupted first export, and unresolved identity/material issues.
+
 ## Frozen sources and official implementation
 
 - Official repository: https://github.com/microsoft/TRELLIS.2
