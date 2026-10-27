@@ -76,7 +76,7 @@ def map_state_dict(source, model):
     return receipt, {name: tensor_sha(converted[name]) for name in generated}
 
 
-def pink_input(output):
+def pink_input(output, resolution):
     """Pinned TRELLIS.2 RGBA branch: alpha bbox, square crop, black composite."""
     import numpy as np
     import torch
@@ -89,8 +89,8 @@ def pink_input(output):
         crop = image.crop((cx - size // 2, cy - size // 2, cx + size // 2, cy + size // 2))
         rgba = np.array(crop).astype(np.float32) / 255
     rgb = Image.fromarray((rgba[:, :, :3] * rgba[:, :, 3:4] * 255).astype(np.uint8))
-    rgb = rgb.resize((512, 512), Image.Resampling.LANCZOS)
-    rgb.save(output / 'parity_input512.png')
+    rgb = rgb.resize((resolution, resolution), Image.Resampling.LANCZOS)
+    rgb.save(output / f'parity_input{resolution}.png')
     pixels = torch.from_numpy(np.array(rgb).astype(np.float32) / 255).permute(2, 0, 1)[None]
     return (pixels - torch.tensor([.485, .456, .406])[None, :, None, None]) / torch.tensor([.229, .224, .225])[None, :, None, None]
 
@@ -121,7 +121,7 @@ def feature_check(source, model, pixels, device):
             results[name] = {'max_error': difference.max().item(), 'mean_error': difference.mean().item(),
                 'allclose': bool(torch.allclose(a, b, atol=ATOL, rtol=RTOL)),
                 'finite': bool(torch.isfinite(a).all() and torch.isfinite(b).all()), 'shape': list(a.shape)}
-    return {'atol': ATOL, 'rtol': RTOL, 'dtype': 'float32', 'resolution': 512,
+    return {'atol': ATOL, 'rtol': RTOL, 'dtype': 'float32', 'resolution': pixels.shape[-1],
             'rope': 'both regenerated in float32; no BF16 period truncation', 'comparisons': results}
 
 
@@ -168,9 +168,12 @@ def main(argv=None):
         state['stage'] = 'strict_mapping'
         state['tensor_mapping'], state['synthesized_zero_tensors'] = map_state_dict(source, model)
         state['stage'] = 'fp32_feature_parity'
-        state['parity'] = feature_check(source, model, pink_input(attempt), args.device)
-        state['parity_input_sha256'] = sha256(attempt / 'parity_input512.png')
-        if not all(row['allclose'] and row['finite'] for row in state['parity']['comparisons'].values()):
+        state['parity'] = {str(resolution): feature_check(source, model,
+            pink_input(attempt, resolution), args.device) for resolution in (512, 1024)}
+        state['parity_input_sha256'] = {str(resolution): sha256(attempt / f'parity_input{resolution}.png')
+            for resolution in (512, 1024)}
+        if not all(row['allclose'] and row['finite'] for result in state['parity'].values()
+                   for row in result['comparisons'].values()):
             raise ValueError('feature parity threshold failed')
         state['stage'] = 'save_verified_conversion'
         candidate = attempt / 'model'

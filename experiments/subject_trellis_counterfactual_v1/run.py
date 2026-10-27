@@ -76,6 +76,8 @@ def run(output, encoder):
     import subprocess
     if subprocess.check_output(['git', '-C', str(official), 'rev-parse', 'HEAD'], text=True).strip() != OFFICIAL:
         raise ValueError('official checkout revision mismatch')
+    if subprocess.check_output(['git', '-C', str(official), 'status', '--porcelain'], text=True).strip():
+        raise ValueError('official checkout is dirty')
     sys.path.insert(0, str(official))
     write(report / 'status.json', state)
     try:
