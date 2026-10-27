@@ -30,8 +30,12 @@ def sha256(path):
 
 def failure(error):
     # Never serialize exception text, URLs, HTTP headers, or credential values.
-    response = getattr(error, 'response', None)
+    cause = error
+    while getattr(cause, '__cause__', None) is not None:
+        cause = cause.__cause__
+    response = getattr(cause, 'response', None)
     return {'status': 'failed', 'exception_type': type(error).__name__,
+            'cause_type': type(cause).__name__,
             'http_status': getattr(response, 'status_code', None)}
 
 
