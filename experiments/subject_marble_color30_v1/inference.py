@@ -32,7 +32,7 @@ def _selections(index_path, dataset, *, training_module=training):
         method, run = selection["method"], Path(selection["run"]).resolve()
         expected = training_module.build_config(method, dataset)
         if (selection.get("status") != "verified" or selection.get("token") != "<S*>"
-                or selection.get("steps") != 1000 or selection.get("branch") != "subject"
+                or selection.get("steps") != expected["args"]["max_train_steps"] or selection.get("branch") != "subject"
                 or read_config(run / "config.yaml") != expected):
             raise ValueError("Subject selection is unverified or differs from the declared MARBLE recipe")
         _locks(selection.get("hashes", {}))
@@ -94,7 +94,8 @@ def _contact_sheet(output, references, rows=(), method=None, *, expected_count=N
 def run(dataset, output, step, training_index=None, execute_inference=False, device="cuda:0", *,
         training_module=training, reference_count=None, experiment="subject_marble_color30_v1",
         reference_label="MARBLE", probe_rows=None, probe_labels=None,
-        selection_loader=None, baseline_note=None, sampling_seeds=None, image_root=None):
+        selection_loader=None, baseline_note=None, sampling_seeds=None, image_root=None,
+        snapshot_exporter=None):
     dataset, output = Path(dataset).resolve(), Path(output).resolve()
     if (output.exists() or output.is_relative_to(training_module.ROOT) or dataset.is_relative_to(output)
             or output.is_relative_to(dataset)):
@@ -171,8 +172,9 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
         if execute_inference:
             import torch
             generated = []
+            exporter = export_subject_step if snapshot_exporter is None else snapshot_exporter
             for selection in selections:
-                derived = export_subject_step(selection, step, output / "checkpoints" / selection["method"])
+                derived = exporter(selection, step, output / "checkpoints" / selection["method"])
                 pipe = evaluate.load_pipeline([derived], device)
                 for row in (row for row in rows if row["method"] == selection["method"]):
                     result = pipe(row["prompt"], num_inference_steps=100, guidance_scale=3.5,

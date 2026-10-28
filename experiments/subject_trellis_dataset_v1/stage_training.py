@@ -126,14 +126,17 @@ def select_sources(sources, colors, blue_green_only):
 
 def audit_for(dataset, colors, blue_green_only=False, source_spec=None):
     count = 72 if blue_green_only else 180
+    updates = 1000 if source_spec is None else source_spec.get('max_train_steps', 1000)
+    cycles, prefix = divmod(updates, count)
     candidates = CANDIDATES if source_spec is None else Path(source_spec['candidates'])
     audit = {'schema': 'trellis_subject_blue_green72_training/v1' if blue_green_only else 'trellis_subject180_training/v1',
         'status': 'verified', 'rows': count, 'training_eligible_images': count, 'candidates': str(candidates.resolve()),
         'source_mode': 'synthetic_native_geometry', 'selected_colors': colors,
         'files': {name: sha256(dataset / name) for name in FILES},
-        'sampling': {'shuffle': False, 'updates': 1000, 'complete_cycles': 1000 // count, 'extra_prefix_images': 1000 % count,
+        'sampling': {'shuffle': False, 'updates': updates, 'complete_cycles': cycles, 'extra_prefix_images': prefix,
             'exposures': ('first64 rows fourteen times; remaining8 rows thirteen times; source color/image order retained (green before blue)'
-                if blue_green_only else 'first100 rows six times; remaining80 rows five times; source order unchanged')},
+                if blue_green_only else 'first100 rows six times; remaining80 rows five times; source order unchanged')
+                if updates == 1000 else f'first{prefix} rows {cycles + 1} times; remaining{count - prefix} rows {cycles} times; source order unchanged'},
         'limitations': 'Synthetic single-geometry supervision; training authorization is not proof of material accuracy or disentanglement.'}
     if source_spec is not None:
         audit['subject_id'] = source_spec['subject_id']
@@ -164,8 +167,11 @@ def stage(candidates, output, blue_green_only=False, source_spec=None):
         'selected_colors': colors, 'checkpoint_steps': [500, 750, 1000], 'monitoring': False,
         'not_claimed': 'No per-image physical-material or learned-disentanglement validation is implied.'}
     if source_spec is not None:
+        updates = source_spec.get('max_train_steps', 1000)
         approval.update(subject_id=source_spec['subject_id'],
-            scope=f"{source_spec['subject_id']},{len(records)} images, original/fullrank and rank64,1000 updates each; requested checkpoint transfer tests")
+            scope=f"{source_spec['subject_id']},{len(records)} images, original/fullrank and rank64,{updates} updates each; requested checkpoint transfer tests")
+        if 'max_train_steps' in source_spec:
+            approval.update(max_train_steps=updates, checkpoint_steps=source_spec['checkpoint_steps'])
     write(output / 'approval.json', approval)
     write(output / 'dataset_audit.json', audit_for(output, colors, blue_green_only, source_spec))
     return verify_dataset(output, source_spec)

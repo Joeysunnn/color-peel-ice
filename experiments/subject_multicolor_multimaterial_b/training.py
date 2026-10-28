@@ -78,7 +78,7 @@ def build_configuration_bundle(dataset, output, *, verify_dataset=None, config_b
             raise ValueError("training configuration fails shared-launcher YAML roundtrip")
         paths[method] = str(path)
     record = {"study": configs[METHODS[0]]["run"]["study"], "comparison": comparison, "source_hashes": source_hashes,
-              "dataset_audit": audit, "checkpoint_steps": [500, 750, 1000]}
+              "dataset_audit": audit, "checkpoint_steps": configs[METHODS[0]]["args"]["checkpoint_steps"]}
     _write(output / "CONFIG_COMPARISON.json", record)
     return {"configs": configs, "paths": paths, "comparison": record}
 
@@ -96,16 +96,16 @@ def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=
     git = git_info()
     bundle = build_configuration_bundle(dataset, output, verify_dataset=verify_dataset, config_builder=config_builder,
                                         allowed_arg_changes=allowed_arg_changes)
+    config = bundle["configs"][method]
     state = {"status": "preflight", "git": git, "method": method, "gpu": gpu,
-             "execute_training": execute_training, "max_steps": 1000, "completed_steps": 0,
-             "checkpoint_steps": [500, 750, 1000], "resume": False,
+             "execute_training": execute_training, "max_steps": config["args"]["max_train_steps"], "completed_steps": 0,
+             "checkpoint_steps": config["args"]["checkpoint_steps"], "resume": False,
              "best_metric": None, "best_checkpoint": None, "stop_reason": None}
     _write(output / "status.json", state)
     report = output / "train_outputs"
     report.mkdir()
     try:
         state["model"] = shared.verify_model()
-        config = bundle["configs"][method]
         name = f"{datetime.now():%Y%m%d-%H%M%S}__{config['run']['study']}__{config['run']['variant']}__{git['commit'][:7]}__42"
         command = [sys.executable, "-B", str(ROOT / "scripts/launch/colorpeel_run.py"),
                    "--config", bundle["paths"][method], "--run-dir", str(output / "runs" / name)]
@@ -150,7 +150,7 @@ def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=
         _write(output / "status.json", state)
         _write(report / "status.json", state)
         (report / "SUMMARY.md").write_text(
-            f"Status: {state['status']}. Completed steps: {state['completed_steps']}/1000. "
+            f"Status: {state['status']}. Completed steps: {state['completed_steps']}/{state['max_steps']}. "
             f"Stop reason: {state['stop_reason']}. No inference was started.\n", encoding="utf-8")
 
 

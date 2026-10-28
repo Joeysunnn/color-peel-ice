@@ -63,7 +63,7 @@ def _selections(index_path, dataset):
     return result
 
 
-def export_subject_step(selection, step, output):
+def export_subject_step(selection, step, output, *, steps=STEPS, total_steps=1000):
     """Export the adapter and S embedding from the same audited Accelerator snapshot."""
     import torch
 
@@ -72,8 +72,8 @@ def export_subject_step(selection, step, output):
         raise ValueError("Subject-only paired export requires an audited S selection")
     _locks(selection["hashes"])
     config = read_config(Path(selection["run"]) / "config.yaml")
-    if (step not in STEPS or step not in snapshots.checkpoint_plan(config["args"])
-            or selection["steps"] != 1000):
+    if (step not in steps or step not in snapshots.checkpoint_plan(config["args"])
+            or selection["steps"] != total_steps or config["args"]["max_train_steps"] != total_steps):
         raise ValueError("requested Subject snapshot is outside the audited plan")
     output = snapshots._new_output(output, Path(selection["run"]).resolve())
     checkpoint = Path(selection["checkpoint"])
@@ -81,7 +81,7 @@ def export_subject_step(selection, step, output):
     if any(not (directory / name).is_file() or not (directory / name).stat().st_size
            for name in snapshots.STATE_FILES):
         raise ValueError("Subject snapshot has missing or empty training state")
-    token_id, _ = snapshots._embedding_audit(checkpoint / "embedding_update_audit.json", 1000, "<S*>")
+    token_id, _ = snapshots._embedding_audit(checkpoint / "embedding_update_audit.json", total_steps, "<S*>")
     shapes, empty = snapshots.adapter_schema(selection["method"])
     adapter_path = directory / "pytorch_model.bin"
     encoder_path = directory / "pytorch_model_1.bin"
@@ -97,7 +97,7 @@ def export_subject_step(selection, step, output):
     del encoder, table
     if not bool(torch.isfinite(embedding).all()):
         raise ValueError("Subject paired embedding is nonfinite")
-    if step == 1000:
+    if step == total_steps:
         final = torch.load(checkpoint / selection["weight"], map_location="cpu")
         snapshots._check_state(torch, final, shapes, empty, "final Subject")
         final_token = torch.load(checkpoint / "<S*>.bin", map_location="cpu")
@@ -109,7 +109,7 @@ def export_subject_step(selection, step, output):
     record = {"source_adapter_sha256": source_hashes[str(adapter_path.resolve())],
               "source_text_encoder_sha256": source_hashes[str(encoder_path.resolve())]}
     derived = snapshots._write_export(torch, adapter, embedding, empty, selection, step, record, output)
-    derived.update(steps=step, training_steps=1000, source_snapshot_hashes=source_hashes,
+    derived.update(steps=step, training_steps=total_steps, source_snapshot_hashes=source_hashes,
                    paired_embedding_finite=True)
     derived["hashes"] = {**selection["hashes"], **source_hashes, **derived["hashes"]}
     write_json(output / "receipt.json", derived)
