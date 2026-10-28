@@ -31,7 +31,10 @@ def report_state(output, state):
         f"Stop reason: {state['stop_reason']}. Best metric/checkpoint: not selected.\n", encoding='utf8')
 
 
-def run(candidates, output, gpu, execute=False, blue_green_only=False):
+def run(candidates, output, gpu, execute=False, blue_green_only=False, *,
+        stage_module=stage_training, training_module=training, inference_module=inference,
+        command_builder=commands, subject_noun='mailbox'):
+    stage_training, training, inference = stage_module, training_module, inference_module
     candidates, output = Path(candidates).resolve(), resolve_run_dir(Path(output))
     if (type(gpu) is not int or gpu < 0 or output.exists() or output.is_relative_to(training.ROOT)
             or output.is_relative_to(candidates.parent) or candidates.is_relative_to(output)):
@@ -42,7 +45,7 @@ def run(candidates, output, gpu, execute=False, blue_green_only=False):
     count = audit['rows']
     expected_images = inference.expected_images(dataset)
     training.build_configuration_bundle(dataset, output / 'training_plan')
-    jobs = commands(dataset, output, gpu)
+    jobs = command_builder(dataset, output, gpu)
     report = output / 'train_outputs'
     report.mkdir()
     training._write(report / 'COMMANDS.json', jobs)
@@ -61,10 +64,16 @@ def run(candidates, output, gpu, execute=False, blue_green_only=False):
         'then step500/750/1000 tests. See fullrank.log, lora_r64.log and step*.log; '
         'detailed launcher logs, finite-loss metrics, model locks and training audits are below training/{method}.\n', encoding='utf8')
     (report / 'SCIENTIFIC_CHANGELOG.md').write_text(
-        'Only data source, study/status metadata and paths change from the previous Subject recipes. '
+        ('Only data source, study/status metadata and paths change from the previous Subject recipes. '
+         if subject_noun == 'mailbox' else
+         f'Data source, subject metadata, paths and the initializer/class noun change from mailbox to {subject_noun}. ')
+        +
         f'All{count} approved synthetic RGB/mask/caption triples from colors{audit["selected_colors"]} '
         'are copied byte-for-byte, in source order. '
-        'No original photograph or extra candidate is added. SD1.5, mailbox initializer, S embedding, '
+        'No original photograph or extra candidate is added. '
+        + ('SD1.5, mailbox initializer, S embedding, ' if subject_noun == 'mailbox' else
+           f'The {subject_noun} initializer is used consistently; SD1.5, S embedding, ')
+        +
         'full-rank token-local K/V or rank64/alpha64 token-local K/V, seed42, optimizer, precision, losses, '
         '1000 updates and paired500/750/1000 snapshots stay unchanged. No data regeneration or resume.\n', encoding='utf8')
     (report / 'COMPARABILITY_REPORT.md').write_text(
@@ -93,6 +102,8 @@ def run(candidates, output, gpu, execute=False, blue_green_only=False):
         'completed_steps': {method: 0 for method in training.METHODS},
         'checkpoint_steps': list(inference.STEPS), 'inference_steps': [], 'monitoring': False,
         'best_metric': None, 'best_checkpoint': None, 'stop_reason': None}
+    if 'subject_id' in audit:
+        state['subject_id'] = audit['subject_id']
     report_state(output, state)
     try:
         if not execute:

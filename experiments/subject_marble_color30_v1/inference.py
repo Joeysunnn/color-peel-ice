@@ -36,7 +36,7 @@ def _selections(index_path, dataset, *, training_module=training):
                 or read_config(run / "config.yaml") != expected):
             raise ValueError("Subject selection is unverified or differs from the declared MARBLE recipe")
         _locks(selection.get("hashes", {}))
-        recipe = {"method": method, "branch": "subject", "concept_id": "mailbox", "token": "<S*>"}
+        recipe = {"method": method, "branch": "subject", "concept_id": expected.get("subject_id", "mailbox"), "token": "<S*>"}
         audited = shared.audit_run(recipe, run, expected)
         if audited != selection:
             raise ValueError("training index differs from the actual completed Subject audit")

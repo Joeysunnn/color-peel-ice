@@ -46,16 +46,22 @@ def pair_arrays(image, mask):
         raise ValueError('require a nonempty binary mask and exact neutral exterior')
 
 
-def source_snapshot(candidates):
+def source_snapshot(candidates, source_spec=None):
     candidates = Path(candidates).resolve()
-    if candidates != CANDIDATES.resolve():
+    authorized = CANDIDATES if source_spec is None else Path(source_spec['candidates'])
+    manifest_sha = MANIFEST_SHA if source_spec is None else source_spec['manifest_sha256']
+    concepts_sha = CONCEPTS_SHA if source_spec is None else source_spec['concepts_sha256']
+    protocol = PROTOCOL if source_spec is None else Path(source_spec['protocol'])
+    if candidates != authorized.resolve():
         raise ValueError('only the authorized complete material180 run is accepted')
     root = candidates.parent
-    locks = {str(candidates / 'manifest.json'): MANIFEST_SHA,
-             str(candidates / 'concepts.json'): CONCEPTS_SHA,
-             str(root / 'protocol.json'): sha256(PROTOCOL)}
+    locks = {str(candidates / 'manifest.json'): manifest_sha,
+             str(candidates / 'concepts.json'): concepts_sha,
+             str(root / 'protocol.json'): sha256(protocol)}
     check_locks(locks)
     config, manifest = read(root / 'protocol.json'), read(candidates / 'manifest.json')
+    if source_spec is not None and config.get('subject_id') != source_spec['subject_id']:
+        raise ValueError('authorized source subject differs from its protocol')
     records = manifest['records']
     expected = {row['id']: row for row in rows(config)}
     verification, status = read(root / 'verification.json'), read(root / 'repro_outputs/status.json')
@@ -64,7 +70,7 @@ def source_snapshot(candidates):
             or manifest.get('training_started') is not False or manifest.get('training_eligible_images') != 0
             or verification.get('status') != 'technical_checks_passed_scientific_review_pending'
             or [verification.get(key) for key in ('images', 'pair_groups', 'single_factor_pairs')] != [180, 30, 210]
-            or verification.get('manifest_sha256') != MANIFEST_SHA or verification.get('concepts_sha256') != CONCEPTS_SHA
+            or verification.get('manifest_sha256') != manifest_sha or verification.get('concepts_sha256') != concepts_sha
             or status.get('status') != 'dataset180_constructed_pending_user_review'
             or status.get('images_completed') != 180 or status.get('training_started') is not False
             or status.get('verification') != verification):
@@ -93,12 +99,13 @@ def source_snapshot(candidates):
     return records, locks, list(config['colors'])
 
 
-def training_row(source, dataset):
+def training_row(source, dataset, source_spec=None):
     row = {**source, 'training_eligible': True, 'review_status': 'user_authorized_training',
            'caption_status': 'user-approved parameter-derived supervision; physical accuracy unverified'}
     for key, folder in (('image', 'images'), ('mask', 'masks')):
         row[key] = str(dataset / 'assets' / source['id'] / folder / 'image.png')
-        row['source_' + key] = str((CANDIDATES / source[key]).resolve())
+        candidates = CANDIDATES if source_spec is None else Path(source_spec['candidates'])
+        row['source_' + key] = str((candidates / source[key]).resolve())
         row['source_' + key + '_sha256'] = source[key + '_sha256']
     return row
 
@@ -117,27 +124,31 @@ def select_sources(sources, colors, blue_green_only):
     return sources, colors
 
 
-def audit_for(dataset, colors, blue_green_only=False):
+def audit_for(dataset, colors, blue_green_only=False, source_spec=None):
     count = 72 if blue_green_only else 180
-    return {'schema': 'trellis_subject_blue_green72_training/v1' if blue_green_only else 'trellis_subject180_training/v1',
-        'status': 'verified', 'rows': count, 'training_eligible_images': count, 'candidates': str(CANDIDATES.resolve()),
+    candidates = CANDIDATES if source_spec is None else Path(source_spec['candidates'])
+    audit = {'schema': 'trellis_subject_blue_green72_training/v1' if blue_green_only else 'trellis_subject180_training/v1',
+        'status': 'verified', 'rows': count, 'training_eligible_images': count, 'candidates': str(candidates.resolve()),
         'source_mode': 'synthetic_native_geometry', 'selected_colors': colors,
         'files': {name: sha256(dataset / name) for name in FILES},
         'sampling': {'shuffle': False, 'updates': 1000, 'complete_cycles': 1000 // count, 'extra_prefix_images': 1000 % count,
             'exposures': ('first64 rows fourteen times; remaining8 rows thirteen times; source color/image order retained (green before blue)'
                 if blue_green_only else 'first100 rows six times; remaining80 rows five times; source order unchanged')},
         'limitations': 'Synthetic single-geometry supervision; training authorization is not proof of material accuracy or disentanglement.'}
+    if source_spec is not None:
+        audit['subject_id'] = source_spec['subject_id']
+    return audit
 
 
-def stage(candidates, output, blue_green_only=False):
+def stage(candidates, output, blue_green_only=False, source_spec=None):
     candidates, output = Path(candidates).resolve(), Path(output).resolve()
     if (output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(candidates.parent)
             or candidates.is_relative_to(output)):
         raise ValueError('stage only into a new external directory, preserving all source results')
-    sources, locks, colors = source_snapshot(candidates)
+    sources, locks, colors = source_snapshot(candidates, source_spec)
     sources, colors = select_sources(sources, colors, blue_green_only)
     output.mkdir(parents=True)
-    records = [training_row(source, output) for source in sources]
+    records = [training_row(source, output, source_spec) for source in sources]
     for row in records:
         for key in ('image', 'mask'):
             path = Path(row[key])
@@ -146,28 +157,35 @@ def stage(candidates, output, blue_green_only=False):
     write(output / 'concepts.json', concepts_for(records))
     (output / 'training_assets_manifest.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in records), encoding='utf8')
     write(output / 'source_locks.json', locks)
-    write(output / 'approval.json', {'request': BLUE_GREEN_REQUEST if blue_green_only else REQUEST,
+    approval = {'request': (source_spec['request'] if source_spec is not None
+                           else BLUE_GREEN_REQUEST if blue_green_only else REQUEST),
         'scope': ('blue/green72 images only, same five-material tests plus four requested transfers, original/fullrank and rank64,1000 updates each'
             if blue_green_only else 'all180 images, original/fullrank and rank64,1000 updates each'),
         'selected_colors': colors, 'checkpoint_steps': [500, 750, 1000], 'monitoring': False,
-        'not_claimed': 'No per-image physical-material or learned-disentanglement validation is implied.'})
-    write(output / 'dataset_audit.json', audit_for(output, colors, blue_green_only))
-    return verify_dataset(output)
+        'not_claimed': 'No per-image physical-material or learned-disentanglement validation is implied.'}
+    if source_spec is not None:
+        approval.update(subject_id=source_spec['subject_id'],
+            scope=f"{source_spec['subject_id']},{len(records)} images, original/fullrank and rank64,1000 updates each; requested checkpoint transfer tests")
+    write(output / 'approval.json', approval)
+    write(output / 'dataset_audit.json', audit_for(output, colors, blue_green_only, source_spec))
+    return verify_dataset(output, source_spec)
 
 
-def verify_dataset(dataset):
+def verify_dataset(dataset, source_spec=None):
     dataset = Path(dataset).resolve()
     schema = read(dataset / 'dataset_audit.json').get('schema')
     if schema not in ('trellis_subject180_training/v1', 'trellis_subject_blue_green72_training/v1'):
         raise ValueError('unknown authorized training dataset schema')
     blue_green_only = schema == 'trellis_subject_blue_green72_training/v1'
-    sources, locks, colors = source_snapshot(CANDIDATES)
+    candidates = CANDIDATES if source_spec is None else Path(source_spec['candidates'])
+    sources, locks, colors = source_snapshot(candidates, source_spec)
     sources, colors = select_sources(sources, colors, blue_green_only)
     records = [json.loads(line) for line in (dataset / 'training_assets_manifest.jsonl').read_text(encoding='utf8').splitlines()]
-    expected = [training_row(row, dataset) for row in sources]
+    expected = [training_row(row, dataset, source_spec) for row in sources]
     if (records != expected or read(dataset / 'source_locks.json') != locks
             or read(dataset / 'concepts.json') != concepts_for(expected)
-            or read(dataset / 'approval.json').get('request') != (BLUE_GREEN_REQUEST if blue_green_only else REQUEST)):
+            or read(dataset / 'approval.json').get('request') != (source_spec['request'] if source_spec is not None
+                else BLUE_GREEN_REQUEST if blue_green_only else REQUEST)):
         raise ValueError('staged source order, image/mask pairing, caption or approval changed')
     for row in records:
         if row['caption'].count('<S*>') != 1:
@@ -177,7 +195,7 @@ def verify_dataset(dataset):
             if not path.is_relative_to(dataset) or sha256(path) != row[key + '_sha256']:
                 raise ValueError('training copy differs from its immutable source hash')
         pair_arrays(Path(row['image']), Path(row['mask']))
-    audit = audit_for(dataset, colors, blue_green_only)
+    audit = audit_for(dataset, colors, blue_green_only, source_spec)
     if read(dataset / 'dataset_audit.json') != audit:
         raise ValueError('training dataset audit changed')
     return audit

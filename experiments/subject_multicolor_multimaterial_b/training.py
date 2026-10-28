@@ -44,10 +44,12 @@ def build_config(method, dataset):
     return config
 
 
-def build_configuration_bundle(dataset, output, *, verify_dataset=None, config_builder=None):
+def build_configuration_bundle(dataset, output, *, verify_dataset=None, config_builder=None,
+                               allowed_arg_changes=None):
     if verify_dataset is None:
         from experiments.subject_multicolor_multimaterial_b.data import verify_dataset
     config_builder = build_config if config_builder is None else config_builder
+    allowed_arg_changes = ARG_CHANGES if allowed_arg_changes is None else set(allowed_arg_changes)
 
     dataset, output = Path(dataset).resolve(), Path(output).resolve()
     audit = verify_dataset(dataset)
@@ -60,8 +62,8 @@ def build_configuration_bundle(dataset, output, *, verify_dataset=None, config_b
         differences = {key: {"old": baseline["args"].get(key), "new": config["args"].get(key)}
                        for key in set(baseline["args"]) | set(config["args"])
                        if baseline["args"].get(key) != config["args"].get(key)}
-        if set(differences) != ARG_CHANGES:
-            raise ValueError("Subject baseline arguments changed outside data and checkpoint dose")
+        if set(differences) != allowed_arg_changes:
+            raise ValueError("Subject baseline arguments changed outside the explicitly allowed arguments")
         configs[method] = config
         comparison[method] = {"baseline": str(BASELINES[method]),
                               "baseline_sha256": sha256(BASELINES[method]), "args_diff": differences}
@@ -81,7 +83,8 @@ def build_configuration_bundle(dataset, output, *, verify_dataset=None, config_b
     return {"configs": configs, "paths": paths, "comparison": record}
 
 
-def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=None, config_builder=None):
+def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=None, config_builder=None,
+        allowed_arg_changes=None):
     if verify_dataset is None:
         from experiments.subject_multicolor_multimaterial_b.data import verify_dataset
 
@@ -91,7 +94,8 @@ def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=
     if output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(dataset):
         raise ValueError("use a fresh external output outside the dataset")
     git = git_info()
-    bundle = build_configuration_bundle(dataset, output, verify_dataset=verify_dataset, config_builder=config_builder)
+    bundle = build_configuration_bundle(dataset, output, verify_dataset=verify_dataset, config_builder=config_builder,
+                                        allowed_arg_changes=allowed_arg_changes)
     state = {"status": "preflight", "git": git, "method": method, "gpu": gpu,
              "execute_training": execute_training, "max_steps": 1000, "completed_steps": 0,
              "checkpoint_steps": [500, 750, 1000], "resume": False,
@@ -129,7 +133,7 @@ def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=
                                     stdout=log, stderr=subprocess.STDOUT)
         if result.returncode:
             raise RuntimeError("shared trainer failed; see training.log")
-        recipe = {"method": method, "branch": "subject", "concept_id": "mailbox", "token": "<S*>"}
+        recipe = {"method": method, "branch": "subject", "concept_id": config.get("subject_id", "mailbox"), "token": "<S*>"}
         audit = shared.audit_run(recipe, Path(command[-1]), config)
         _write(report / "training_audit.json", audit)
         _write(output / "training_index.json", {"git": git, "runs": [audit]})
