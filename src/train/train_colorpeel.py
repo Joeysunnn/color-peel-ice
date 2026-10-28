@@ -1084,7 +1084,7 @@ def main(args):
     if args.subject_lora_mode:
         lora_token = args.modifier_token[0] if args.modifier_token and len(args.modifier_token) == 1 else None
         lora_initializer = args.initializer_token[0] if args.initializer_token and len(args.initializer_token) == 1 else None
-        valid_concept = ((lora_token, lora_initializer) == ("<S*>", "mailbox")
+        valid_concept = ((lora_token == "<S*>" and lora_initializer in ("mailbox", "spoon"))
                          or (lora_token == "<M*>" and lora_initializer in ("metal", "material", "wood")
                              and args.subject_lora_mode == "token_local_kv")
                          or ((lora_token, lora_initializer) == ("<T*>", "texture")

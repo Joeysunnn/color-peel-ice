@@ -28,7 +28,8 @@ def expected_images(dataset):
     return 36 if count == 72 else 20
 
 
-def run(dataset, output, step, training_index=None, execute_inference=False, device='cuda:0'):
+def run(dataset, output, step, training_index=None, execute_inference=False, device='cuda:0', *,
+        selection_loader=None):
     audit = training.read_json(Path(dataset) / 'dataset_audit.json')
     subset = audit['rows'] == 72
     expected_images(dataset)
@@ -36,7 +37,7 @@ def run(dataset, output, step, training_index=None, execute_inference=False, dev
         training_module=training, reference_count=audit['rows'], experiment=training.STUDY,
         reference_label=f"TRELLIS.2 {audit['subject_id']} " + ('blue/green72' if subset else 'all180'),
         probe_rows=blue_green_prompt_rows if subset else prompt_rows,
-        probe_labels=PROBE_LABELS if subset else MATERIALS,
+        probe_labels=PROBE_LABELS if subset else MATERIALS, selection_loader=selection_loader,
         baseline_note='Same material probes and sampling; subject noun changed from mailbox to spoon. '
             + ('Blue/green72 retains the four independent context/color probes.' if subset else 'No added probes.'))
 
@@ -50,7 +51,13 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--execute-inference', action='store_true')
+    parser.add_argument('--reuse-fullrank', action='store_true')
     args = parser.parse_args()
     if args.dry_run and args.execute_inference:
         parser.error('--dry-run and --execute-inference are mutually exclusive')
-    run(args.dataset, args.output, args.step, args.training_index, args.execute_inference, args.device)
+    loader = None
+    if args.reuse_fullrank:
+        from experiments.subject_trellis_spoons_v1.reuse import selection_loader
+        loader = selection_loader
+    run(args.dataset, args.output, args.step, args.training_index, args.execute_inference, args.device,
+        selection_loader=loader)

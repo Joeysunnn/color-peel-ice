@@ -65,3 +65,44 @@ all checkpoint inference dry-runs in a separate fresh preflight directory.
 After kickoff verify live processes and first finite losses, then stop checking.
 Keep the server checkout HEAD fixed until both queues end; subsequent audits
 and scheduled tests validate that same revision.
+
+## Continue after the spoon initializer rejection
+
+The first queues completed both180 fullrank models, then stopped at rank64 step0:
+the trainer's Subject LoRA validation still allowed only the `mailbox` initializer.
+The fix adds `spoon` to that exact whitelist; other adapter, rank, frozen-base and
+initializer restrictions remain intact. Tests execute the actual trainer guard.
+
+The user authorized reuse without retraining the completed fullrank. Run
+`experiments.subject_trellis_spoons_v1.continue_training --subject SUBJECT
+--output NEW_CONTINUATION --gpu GPU --execute`, where NEW_CONTINUATION is a new
+child of the original `SUBJECT/continuations/` directory. Old status/logs remain
+historical and unchanged; the new continuation's `status.json` is authoritative
+for the remaining jobs.
+
+```text
+ORIGINAL_ROOT/SUBJECT/
+  all180/training/fullrank/       completed source, read-only, old revision
+  all180/training/lora_r64/       original failed attempt, retained
+  continuations/NEW_ID/
+    all180/training/lora_r64/     fresh1000-step training, fixed revision
+    all180/training_index.json   both real source revisions and immutable hashes
+    all180/step500,step750,step1000/
+    blue_green72/                both fresh methods and all checkpoint tests
+    fullrank_reuse.json          old fullrank and15 snapshot-state file locks
+    train_outputs/               exact remaining commands, logs, current status
+```
+
+Each continuation audits the old1000-step fullrank and all500/750/1000 paired
+snapshots against the recorded original Git revision and source hashes. It then
+trains only180 rank64, runs all three180 inference steps with both methods,
+and performs the complete72 comparison using both methods. No180 fullrank job
+is scheduled. New rank64 and72 runs start afresh from the frozen SD1.5 model,
+not from partial failed checkpoints. Same subject, data, hyperparameters and
+material/context/color probes are retained.
+
+Before kickoff, the continuation preflight audits reuse, actually exports the
+three old fullrank snapshots without editing them, checks new rank64 launcher
+configuration, and plans the72 comparison. Startup verification must observe
+real rank64 training losses past the formerly failing initializer guard. Stop
+checking after startup; no monitor or automatic retry is installed.

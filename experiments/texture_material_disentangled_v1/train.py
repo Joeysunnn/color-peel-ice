@@ -83,13 +83,14 @@ def verify_model():
     return {"root": str(model), "receipt_sha256": sha256(model / "model_source.json")}
 
 
-def audit_run(recipe, run, expected_config):
+def audit_run(recipe, run, expected_config, *, expected_git=None):
     import torch
     run = Path(run)
     config = read_config(run / "config.yaml")
     manifest = read_json(run / "manifest.json")
     if (config != expected_config or manifest.get("status") != "succeeded"
-            or manifest.get("returncode") != 0 or manifest.get("git") != git_info()):
+            or manifest.get("returncode") != 0
+            or manifest.get("git") != (git_info() if expected_git is None else expected_git)):
         raise ValueError("training run failed, changed recipe or differs from this revision")
     checkpoint = run / "checkpoints"
     token, method = recipe["token"], recipe["method"]
