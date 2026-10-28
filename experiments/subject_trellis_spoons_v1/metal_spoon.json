@@ -1,0 +1,75 @@
+{
+  "schema": "trellis_subject_material_counterfactual/v1",
+  "asset": "/var/tmp/colorpeel-r12user5/runs/subject_trellis_spoons_v1/20261028-013740__assets__2943bf6__42/metal_spoon/native_asset.pt",
+  "asset_sha256": "a611733a761e743700422843a3d579fe67338c583857d5af2f494abc36178da7",
+  "camera_source": "/var/tmp/colorpeel-r12user5/runs/subject_trellis_spoons_v1/20261028-013740__assets__2943bf6__42/metal_spoon/review/review.json",
+  "camera_source_sha256": "c50d1257d7e915ca65ea4f32e83beebfd5f09049d2d17a0234fafcf5c075fb4b",
+  "official_commit": "75fbf0183001ed9876c8dbb35de6b68552ee08bd",
+  "seed": 42,
+  "resolution": 512,
+  "background_rgb": [
+    127,
+    127,
+    127
+  ],
+  "colors": {
+    "pink": [
+      0.8,
+      0.2,
+      0.45
+    ],
+    "green": [
+      0.25,
+      0.65,
+      0.3
+    ],
+    "cyan": [
+      0.2,
+      0.65,
+      0.7
+    ],
+    "blue": [
+      0.2,
+      0.35,
+      0.8
+    ],
+    "purple": [
+      0.65,
+      0.25,
+      0.75
+    ]
+  },
+  "metallic": [
+    0.0,
+    1.0
+  ],
+  "roughness": [
+    0.15,
+    0.5,
+    0.85
+  ],
+  "views_yaw_offset_radians": {
+    "left": -0.25,
+    "center": 0.0,
+    "right": 0.25
+  },
+  "lights": {
+    "studio": "c36c7fd390b2cdf8693360cf3662cb1d710c95fa799d9f822f42997167839b56",
+    "courtyard": "6690b47725965531559380121e6878373eb599655e35fefd109a4bd0911366f3"
+  },
+  "framing": "Fixed source-estimated orientation plus yaw offset; center native geometry bounding box, fit all vertices inside12percent margin once per view; no per-material fit.",
+  "material_intervention": "Same full native vertices/faces in official MeshWithPbrMaterial; one opaque texture-free material. Replace predicted Base Color/M/R/Alpha, retain geometry only; no normal/bump/displacement or native texture.",
+  "base_color_encoding": "Renderer display-domain RGB constants; official renderer internally applies pow2.2 before lighting, then ACES and gamma once.",
+  "renderer": {
+    "ssaa": 1,
+    "peel_layers": 1,
+    "near": 0.1,
+    "far": 100,
+    "fov_degrees": 40,
+    "alpha": 1.0
+  },
+  "scope": "180 candidates of this independent spoon geometry; 30 matched six-material blocks, 210 metallic-flip/adjacent-roughness pairs. Two spoon datasets contain 360 images total. This rendering stage samples no further geometry and starts no training or monitor.",
+  "limitations": "Synthetic counterfactuals of one generated geometry, not exact photographic counterfactuals. Original color and appearance-only patterns are discarded. M/R controls approximate IBL reflectance, not wood/cloth semantics or calibrated BRDF truth.",
+  "subject_id": "metal_spoon",
+  "subject_noun": "spoon"
+}
