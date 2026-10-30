@@ -176,5 +176,27 @@ class WoodCompositionSourceTest(unittest.TestCase):
             source._methods([parent, parent], 'texture', '<T*>', 1000)
 
 
+class WoodMaterialLegacyPlanTest(unittest.TestCase):
+    def plan(self):
+        return {'git': source.MATERIAL_GIT, 'recipes': [row for row in source.natural_config.recipes()
+                if row['concept_id'] == 'wood_spoon_material']}
+
+    def test_pinned_wood_only_legacy_plan_and_explicit_wood_identity_are_accepted(self):
+        legacy = self.plan()
+        self.assertNotIn('source_id', legacy)
+        self.assertTrue(source._wood_material_plan(legacy))
+        self.assertTrue(source._wood_material_plan({**legacy, 'source_id': 'wood_spoon'}))
+
+    def test_missing_identity_in_other_revision_or_conflicting_recipe_is_rejected(self):
+        legacy = self.plan()
+        for changes in ({'git': {'commit': 'another'}}, {'source_id': 'mailbox'}, {'source_id': None},
+                        {'recipes': legacy['recipes'][:1]}, {'recipes': []}):
+            with self.subTest(changes=changes):
+                self.assertFalse(source._wood_material_plan({**legacy, **changes}))
+        changed = copy.deepcopy(legacy)
+        changed['recipes'][1]['source_id'] = 'mailbox'
+        self.assertFalse(source._wood_material_plan(changed))
+
+
 if __name__ == '__main__':
     unittest.main()

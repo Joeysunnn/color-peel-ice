@@ -60,6 +60,15 @@ def _methods(rows, branch, token, steps):
     return {row['method']: row for row in selected}
 
 
+def _wood_material_plan(plan):
+    source_id = plan.get('source_id')
+    # The pinned wood-only9178429 plan predates the top-level source_id field.
+    if 'source_id' not in plan and plan.get('git') == MATERIAL_GIT:
+        source_id = 'wood_spoon'
+    recipes = [row for row in natural_config.recipes() if row['concept_id'] == 'wood_spoon_material']
+    return source_id == 'wood_spoon' and plan.get('recipes') == recipes
+
+
 def verify_pair(parent, derived, step, directory, locks):
     """Verify receipts/hashes and actual paired tensors, without exporting any files."""
     import torch
@@ -216,7 +225,7 @@ def prepare(output):
     if (natural_index.get('git') != NATURAL_GIT or texture_index.get('git') != NATURAL_GIT
             or texture_index.get('training_steps') != 1000 or texture_index.get('source_training_steps') != 1000
             or material_state.get('status') != 'execution_verified' or material_state.get('git') != MATERIAL_GIT
-            or plan.get('git') != MATERIAL_GIT or plan.get('source_id') != 'wood_spoon'
+            or plan.get('git') != MATERIAL_GIT or not _wood_material_plan(plan)
             or plan.get('initializer', {}).get('word') != 'material'
             or plan.get('source_training') != str(NATURAL_ROOT)
             or plan.get('protocol') != protocol
