@@ -20,6 +20,8 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         self.output = self.root / 'experiment'
         self.git = {'commit': 'cpu-test', 'branch': 'test'}
         self.preflights, self.calls, self.events = [], [], []
+        self.subject_steps = (600,)
+        self.source_subjects = []
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.dict(os.environ, {'TMP': str(self.root),
@@ -28,18 +30,21 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         self.stack.enter_context(patch.object(runner.source, 'prepare', side_effect=self.prepare))
         self.stack.enter_context(patch.object(runner.inference, 'run', side_effect=self.preflight))
 
-    def prepare(self, folder, *, texture_step=1000, include_material=True):
+    def prepare(self, folder, *, texture_step=1000, include_material=True, subject_step=600):
         self.source_options = (texture_step, include_material)
+        self.source_subjects.append(subject_step)
         folder.mkdir(parents=True)
         runner.write(folder / 'audit.json', {'inference_git': self.git})
         self.events.append('source_audit')
 
-    def preflight(self, audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000):
+    def preflight(self, audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000, subject_step=600):
         self.assertEqual(attribute_step, self.source_options[0] if branch == 'texture' else 1000)
         self.assertTrue(Path(audit_path).is_file())
         self.assertFalse(execute)
         self.assertEqual(device, 'cuda:0')
-        self.assertEqual(output, self.output / 'preflight' / branch / method)
+        self.assertIn(subject_step, self.subject_steps)
+        folder = branch if len(self.subject_steps) == 1 else f'step{subject_step}_{branch}'
+        self.assertEqual(output, self.output / 'preflight' / folder / method)
         output.mkdir(parents=True)
         state = {'status': 'dry_run', 'expected_images': 31, 'generated_images': 0}
         runner.write(output / 'provenance.json', state)
@@ -50,7 +55,7 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
     def process_factory(self, fail=False, parallel=False):
         owner = self
         lock = threading.Lock()
-        expected_jobs = 4 if self.source_options[1] else 2
+        expected_jobs = (4 if self.source_options[1] else 2) * len(self.subject_steps)
         barrier = threading.Barrier(min(3, expected_jobs)) if parallel else None
         active = set()
 
@@ -60,14 +65,19 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
                 self.output = Path(command[command.index('--output') + 1])
                 self.method = command[command.index('--method') + 1]
                 self.branch = command[command.index('--branch') + 1]
+                self.subject_step = int(command[command.index('--subject-step') + 1])
                 self.gpu = kwargs['env']['CUDA_VISIBLE_DEVICES']
                 owner.assertEqual(command[command.index('-m') + 1],
                     'experiments.wood_spoon_composition_v1.inference')
                 owner.assertIn('--execute-inference', command)
                 owner.assertNotIn('--execute-training', command)
                 owner.assertEqual(command[command.index('--device') + 1], 'cuda:0')
-                owner.assertEqual(self.output, owner.output / self.branch / self.method)
-                owner.assertEqual(Path(command[command.index('--audit') + 1]), owner.output / 'source_audit/audit.json')
+                folder = self.branch if len(owner.subject_steps) == 1 else f'step{self.subject_step}_{self.branch}'
+                owner.assertEqual(self.output, owner.output / folder / self.method)
+                audit = owner.output / 'source_audit'
+                if len(owner.subject_steps) > 1:
+                    audit /= f'step{self.subject_step}'
+                owner.assertEqual(Path(command[command.index('--audit') + 1]), audit / 'audit.json')
                 owner.assertEqual(kwargs['env']['PYTHONDONTWRITEBYTECODE'], '1')
                 state = json.loads((owner.output / 'status.json').read_text())
                 owner.assertEqual(state['status'], 'inference')
@@ -87,7 +97,7 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
                     self.output.mkdir(parents=True)
                     step = int(self.command[self.command.index('--attribute-step') + 1])
                     rows = [{**row, 'status': 'ok', 'image_sha256': 'fixture'}
-                            for row in inference.prompt_rows(self.method, self.branch, step)]
+                            for row in inference.prompt_rows(self.method, self.branch, step, subject_step=self.subject_step)]
                     (self.output / 'generation_status.jsonl').write_text(
                         ''.join(json.dumps(row) + '\n' for row in rows))
                     runner.write(self.output / 'provenance.json',
@@ -155,6 +165,30 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         self.assertNotIn('S+M', page)
         self.assertEqual(page.count('<tr><th>seed'), 31)
         self.assertEqual(page.count('<td><img'), 62)
+
+    def test_subject200_400_with_fixed_texture500_audit_all_then_dispatch_four(self):
+        self.source_options = (500, False)
+        self.subject_steps = (200, 400)
+        with patch.object(runner.subprocess, 'Popen', side_effect=self.process_factory(parallel=True)):
+            result = runner.run(self.output, [0, 2, 3], execute=True, texture_step=500,
+                                texture_only=True, subject_steps=self.subject_steps)
+        self.assertEqual(self.source_subjects, [200, 400])
+        self.assertEqual(self.events[:6], ['source_audit'] * 2 + ['preflight'] * 4)
+        self.assertEqual(result['generated_images'], 124)
+        self.assertEqual({(r['subject_step'], r['method']) for r in result['completed_jobs']},
+                         {(s, m) for s in (200, 400) for m in runner.METHODS})
+        commands = json.loads((self.output / 'repro_outputs/COMMANDS.json').read_text())
+        self.assertEqual(len({row['folder'] for row in commands}), 4)
+        self.assertTrue(all(row['branch'] == 'texture' and
+                            row['command'][row['command'].index('--attribute-step') + 1] == '500'
+                            for row in commands))
+        page = (self.output / 'index.html').read_text(encoding='utf8')
+        self.assertIn('S200/S400 + T500', page)
+        self.assertNotIn('S600', page)
+        self.assertEqual(page.count('<td><img'), 124)
+        for step in (200, 400):
+            for method in runner.METHODS:
+                self.assertIn(f'step{step}_texture/{method}/images/seed30.png', page)
 
 
 if __name__ == '__main__':

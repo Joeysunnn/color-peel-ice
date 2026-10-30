@@ -65,7 +65,7 @@ class WoodCompositionSourceTest(unittest.TestCase):
         if method == 'lora_r64':
             adaptation.update(rank=64, alpha=64, mode='token_local_kv')
         config = {'stage': 'train', 'run': {'study': 'cpu_pairing', 'variant': 'wood', 'seed': 42},
-            'args': {'max_train_steps': total, 'checkpoint_steps': [500, 750, 1000] if total == 1000 else [600]}}
+            'args': {'max_train_steps': total, 'checkpoint_steps': [500, 750, 1000] if total == 1000 else [200, 400, 600]}}
         audit = {'observed_optimization_steps': total, 'modifier_tokens': [{'token': token, 'token_id': 1,
             'exposure_steps': total, 'nonzero_gradient_steps': total, 'initial_final_l2_delta': 1.0}]}
         for path, data in ((run / 'config.yaml', config), (run / 'manifest.json', {}),
@@ -216,7 +216,24 @@ class WoodCompositionSourceTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'source/step'):
             self.verify(fixture)
 
-    def test_prepare_selects_texture500_without_reading_material_source(self):
+    def test_subject200_and400_use_actual_same_step_encoder_and_reject_final600_token(self):
+        original_root = self.root
+        for step in (200, 400):
+            for method in source.METHODS:
+                with self.subTest(step=step, method=method):
+                    self.root = original_root / f'{step}-{method}'
+                    self.root.mkdir()
+                    fixture = self.fixture('subject', method, step)
+                    parent, derived, directory, payloads, _ = fixture
+                    self.assertEqual(self.verify(fixture), derived)
+                    self.assertEqual(derived['steps'], step)
+                    self.assertEqual(derived['training_steps'], 600)
+                    payloads[directory / '<S*>.bin'] = payloads[Path(parent['checkpoint']) / '<S*>.bin']
+                    with self.assertRaisesRegex(ValueError, 'tensors differ'):
+                        self.verify(fixture)
+        self.root = original_root
+
+    def _prepare_texture500(self, subject_step=600):
         natural = self.root / 'natural'
         material = self.root / 'material-must-not-be-read'
         inference_git = {'commit': 'inference', 'branch': 'cpu'}
@@ -240,11 +257,12 @@ class WoodCompositionSourceTest(unittest.TestCase):
             self.assertFalse(path.is_relative_to(material))
             observed.append(path)
             return read(locks, path)
-        subject = {method: {'method': method, 'steps': 600} for method in source.METHODS}
+        subject = {method: {'method': method, 'steps': subject_step, 'training_steps': 600}
+                   for method in source.METHODS}
         with patch.object(source, 'NATURAL_ROOT', natural), patch.object(source, 'MATERIAL_ROOT', material), \
              patch.object(source, 'git_info', return_value=inference_git), \
              patch.object(source, 'resolve_run_dir', side_effect=Path), \
-             patch.object(source, '_subject', return_value=(subject, [{'id': i} for i in range(72)])), \
+             patch.object(source, '_subject', return_value=(subject, [{'id': i} for i in range(72)])) as subject_reader, \
              patch.object(source, 'verify_dataset', return_value=({}, {}, {})), \
              patch.object(source, '_read', side_effect=read_selected), \
              patch.object(source, '_references', return_value=[{'id': i} for i in range(16)]) as references, \
@@ -252,10 +270,13 @@ class WoodCompositionSourceTest(unittest.TestCase):
              patch.object(source.shared, 'audit_run', side_effect=lambda recipe, run, expected, **kw:
                  next(row for row in parents if row['run'] == str(run))) as audit, \
              patch.object(source, 'verify_pair', side_effect=lambda parent, item, *args: item) as pairs:
-            result = source.prepare(self.root / 'selected-audit', texture_step=500, include_material=False)
+            kwargs = {} if subject_step == 600 else {'subject_step': subject_step}
+            result = source.prepare(self.root / 'selected-audit', texture_step=500, include_material=False, **kwargs)
         self.assertEqual(set(result['sources']), {'subject', 'texture'})
         self.assertEqual(set(result['references']), {'subject', 'texture'})
         self.assertEqual(set(result['training_gits']), {'subject', 'texture'})
+        self.assertEqual(result['sources']['subject'], subject)
+        self.assertEqual(subject_reader.call_args.kwargs, {} if subject_step == 600 else {'step': subject_step})
         self.assertEqual(audit.call_count, 2)
         self.assertEqual(pairs.call_count, 2)
         self.assertEqual(references.call_count, 1)
@@ -264,6 +285,51 @@ class WoodCompositionSourceTest(unittest.TestCase):
         self.assertTrue(all('step500' in str(call.args[3]) for call in pairs.call_args_list))
         self.assertIn(natural / 'step500/training_index.json', observed)
         self.assertTrue((self.root / 'selected-audit/audit.json').is_file())
+
+    def test_prepare_selects_texture500_without_reading_material_source(self):
+        self._prepare_texture500()
+
+    def test_prepare_forwards_subject200_and400_with_texture500_only(self):
+        original_root = self.root
+        for step in (200, 400):
+            with self.subTest(step=step):
+                self.root = original_root / str(step)
+                self.root.mkdir()
+                self._prepare_texture500(step)
+        self.root = original_root
+
+    def test_subject_loader_reads_selected_step_but_retains600_step_parent_audit(self):
+        subject_root = self.root / 'frozen_subject'
+        output = self.root / 'audit'
+        output.mkdir()
+        parents = [{'method': method, 'branch': 'subject', 'concept_id': 'wood_spoon',
+                    'token': '<S*>', 'status': 'verified', 'steps': 600} for method in source.METHODS]
+        files = {'training_index.json': {'git': source.SUBJECT_GIT, 'runs': parents},
+            'step200/provenance.json': {'git': source.SUBJECT_GIT, 'training': parents, 'status': 'succeeded',
+                'step': 200, 'training_images': 72, 'generated_images': 36},
+            **{'training_dataset/' + name: {} for name in
+                ('dataset_audit.json', 'source_locks.json', 'approval.json', 'concepts.json')}}
+        for parent in parents:
+            files[f"step200/checkpoints/{parent['method']}/receipt.json"] = {
+                **parent, 'steps': 200, 'step': 200, 'training_steps': 600}
+        for name, data in files.items():
+            path = subject_root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data))
+        process = SimpleNamespace(returncode=0, stdout='WOOD_COMPOSITION_AUDIT=' +
+            json.dumps({'parents': parents, 'git': source.SUBJECT_GIT}) + '\n')
+        with patch.object(source, 'SUBJECT_ROOT', subject_root), \
+             patch.object(source.subprocess, 'run', return_value=process), \
+             patch.object(source, '_references', return_value=[{'id': i} for i in range(72)]), \
+             patch.object(source, 'verify_pair', side_effect=lambda parent, item, *args: item) as pairs:
+            selections, references = source._subject(output, {}, step=200)
+        self.assertEqual(len(references), 72)
+        self.assertEqual(len(selections), 2)
+        for call in pairs.call_args_list:
+            self.assertEqual(call.args[0]['steps'], 600)
+            self.assertEqual(call.args[1]['steps'], 200)
+            self.assertEqual(call.args[2], 200)
+            self.assertEqual(call.args[3], subject_root / 'step200/checkpoints' / call.args[0]['method'])
 
 
 class WoodMaterialLegacyPlanTest(unittest.TestCase):

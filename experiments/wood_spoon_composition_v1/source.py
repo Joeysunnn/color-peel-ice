@@ -1,4 +1,4 @@
-"""Read-only wood S600 and selected Texture/Material paired-snapshot audits."""
+"""Read-only selected checkpoints from the frozen wood Subject/Texture/Material runs."""
 
 import json
 import os
@@ -147,7 +147,9 @@ def _references(locks, ledger, count):
     return [{**row, 'caption': row.get('caption', row.get('prompt'))} for row in rows]
 
 
-def _subject(output, locks):
+def _subject(output, locks, step=600):
+    if type(step) is not int or step not in (200, 400, 600):
+        raise ValueError('Select a Subject200/400/600 snapshot from the fixed600-step run')
     # Execute the original strict Subject audit in its unchanged training checkout.
     program = '''import json,pathlib,sys
 from experiments.subject_trellis_spoons600_v1 import training
@@ -180,11 +182,11 @@ print('WOOD_COMPOSITION_AUDIT='+json.dumps({'parents':parents,'git':git_info()})
     if index.get('git') != SUBJECT_GIT or index.get('runs') != audit['parents']:
         raise ValueError('Subject index differs from original strict audit')
     parents = _methods(audit['parents'], 'subject', '<S*>', 600)
-    provenance = _read(locks, SUBJECT_ROOT / 'step600/provenance.json')
-    if (provenance.get('status') != 'succeeded' or provenance.get('step') != 600
+    provenance = _read(locks, SUBJECT_ROOT / f'step{step}/provenance.json')
+    if (provenance.get('status') != 'succeeded' or provenance.get('step') != step
             or provenance.get('git') != SUBJECT_GIT or provenance.get('training') != audit['parents']
             or provenance.get('training_images') != 72 or provenance.get('generated_images') != 36):
-        raise ValueError('Expected the completed original Subject600 inference')
+        raise ValueError(f'Expected the completed original Subject{step} inference')
     dataset = SUBJECT_ROOT / 'training_dataset'
     for name in ('dataset_audit.json', 'source_locks.json', 'approval.json', 'concepts.json'):
         _read(locks, dataset / name)
@@ -193,13 +195,15 @@ print('WOOD_COMPOSITION_AUDIT='+json.dumps({'parents':parents,'git':git_info()})
     references = _references(locks, dataset / 'training_assets_manifest.jsonl', 72)
     sources = {}
     for method, parent in parents.items():
-        directory = SUBJECT_ROOT / 'step600/checkpoints' / method
+        directory = SUBJECT_ROOT / f'step{step}/checkpoints' / method
         derived = _read(locks, directory / 'receipt.json')
-        sources[method] = verify_pair(parent, derived, 600, directory, locks)
+        sources[method] = verify_pair(parent, derived, step, directory, locks)
     return sources, references
 
 
-def prepare(output, *, texture_step=1000, include_material=True):
+def prepare(output, *, texture_step=1000, include_material=True, subject_step=600):
+    if type(subject_step) is not int or subject_step not in (200, 400, 600):
+        raise ValueError('Select a Subject200/400/600 snapshot from the fixed600-step run')
     if type(texture_step) is not int or texture_step not in (500, 1000) or type(include_material) is not bool:
         raise ValueError('Select Texture500/1000 and an explicit Material inclusion flag')
     output = resolve_run_dir(Path(output)).resolve()
@@ -210,7 +214,8 @@ def prepare(output, *, texture_step=1000, include_material=True):
     inference_git = git_info()
     output.mkdir(parents=True)
     locks = {}
-    subject, subject_refs = _subject(output, locks)
+    subject, subject_refs = (_subject(output, locks) if subject_step == 600
+                             else _subject(output, locks, step=subject_step))
     state = _read(locks, NATURAL_ROOT / 'status.json')
     if (state.get('status') != 'execution_verified' or state.get('git') != NATURAL_GIT
             or state.get('max_steps_per_run') != 1000):

@@ -82,3 +82,25 @@ This mode audits only the two S600 and two T500 pairs, dispatches only S+T,
 and keeps both methods together under a fresh experiment root. The previous
 S+M and S+T1000 outputs stay unchanged. `index.html` compares both methods per
 seed and links their actual S72/T16 training references. No training or monitor.
+
+## Subject200/400 with fixed Texture500 (2026-10-30)
+
+Test the other saved Subject snapshots from the **same600-update** wood spoon
+run:200 and400. Keep Texture500 and all prompts/sampling/seeds fixed. Use both
+methods, matching each Subject adapter and embedding at its selected step with
+the corresponding method's Texture500 adapter and embedding. No training.
+
+```sh
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.wood_spoon_composition_v1.run \
+  --output "$NEW_EXTERNAL_ROOT" --gpus 0 2 3 \
+  --texture-only --texture-step 500 --subject-steps 200 400 --execute
+```
+
+All four31-image conditions (124 images) share one fresh experiment directory:
+`step200_texture/{fullrank,lora_r64}` and `step400_texture/{fullrank,lora_r64}`.
+The root page compares four columns by seed. Both source audits and all four
+preflights complete before GPU dispatch. The Subject training total remains600;
+only the selected snapshot changes. Preserve previous S600+T500 and all other
+results. Choose GPUs from a fresh occupancy check, verify startup, then stop
+checking as requested. The defaults still select S600.

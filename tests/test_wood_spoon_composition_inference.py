@@ -220,22 +220,26 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
                     self.assertTrue((output / f'references_{branch}.html').is_file())
                     self.assertEqual(len(list(output.glob('images/*.png'))), 31)
 
-    def texture500_audit(self):
+    def snapshot_audit(self, branch, step):
         for method in inference.METHODS:
-            item = self.audit['sources']['texture'][method]
+            item = self.audit['sources'][branch][method]
             original = Path(item['checkpoint'])
-            checkpoint = original.with_name('step500_export')
+            checkpoint = original.with_name(f'step{step}_export')
             checkpoint.mkdir()
             inference.write(checkpoint / 'adaptation_config.json',
                             json.loads((original / 'adaptation_config.json').read_text()))
-            (checkpoint / item['weight']).write_text(method + ' actual Texture500 adapter')
-            self.safe_path(checkpoint / '<T*>.bin').write_text(method + ' actual Texture500 embedding')
-            item.update(checkpoint=str(checkpoint), step=500, steps=500)
+            (checkpoint / item['weight']).write_text(f'{method} actual {branch}{step} adapter')
+            token = inference.TOKENS[branch]
+            self.safe_path(checkpoint / (token + '.bin')).write_text(f'{method} actual {branch}{step} embedding')
+            item.update(checkpoint=str(checkpoint), step=step, steps=step)
             paths = [Path(item['run']) / 'config.yaml', checkpoint / 'adaptation_config.json',
-                     checkpoint / item['weight'], checkpoint / '<T*>.bin']
+                     checkpoint / item['weight'], checkpoint / (token + '.bin')]
             item['hashes'] = {str(path): inference.sha256(path) for path in paths}
             self.audit['source_locks'].update(item['hashes'])
         inference.write(self.audit_path, self.audit)
+
+    def texture500_audit(self):
+        self.snapshot_audit('texture', 500)
 
     def test_texture500_uses_its_actual_adapter_and_embedding_with_subject600_for_both_methods(self):
         self.texture500_audit()
@@ -296,6 +300,76 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
         inference.write(self.audit_path, self.audit)
         with self.assertRaisesRegex(ValueError, 'source token, steps or initializer'):
             inference.run(self.audit_path, self.root / 'wrong-training-config', 'fullrank', 'texture', attribute_step=500)
+
+    def test_subject200_and400_use_same_step_adapters_and_embeddings_with_texture500(self):
+        self.texture500_audit()
+        with patch.dict(sys.modules, self.modules()), \
+             patch.object(inference.evaluate, 'read_json', side_effect=self.model_json):
+            for step in (200, 400):
+                self.snapshot_audit('subject', step)
+                for method in inference.METHODS:
+                    self.calls.clear()
+                    self.loads.clear()
+                    self.installs.clear()
+                    self.embeddings.clear()
+                    output = self.root / f'subject{step}' / method
+                    proof = inference.run(self.audit_path, output, method, 'texture', 'cpu', True,
+                                          attribute_step=500, subject_step=step)
+                    subject = self.audit['sources']['subject'][method]
+                    texture = self.audit['sources']['texture'][method]
+                    self.assertEqual((proof['subject_step'], proof['attribute_step'], proof['generated_images']), (step, 500, 31))
+                    self.assertEqual(subject['training_steps'], 600)
+                    self.assertEqual(texture['training_steps'], 1000)
+                    self.assertEqual(self.embeddings, [(subject['checkpoint'], '<S*>.bin'), (texture['checkpoint'], '<T*>.bin')])
+                    self.assertEqual(self.loads, [str(Path(item['checkpoint']) / item['weight'])
+                        for item in ((texture,) if method == 'fullrank' else (subject, texture))])
+                    if method == 'fullrank':
+                        self.assertEqual(self.installs[0][1], (subject['checkpoint'],))
+                    self.assertEqual(self.installs[-1][0], 'dual_fullrank' if method == 'fullrank' else 'dual_lora')
+                    self.assertEqual([call[2]['generator'] for call in self.calls], list(range(30, 61)))
+                    for tokens, prompt, kwargs in self.calls:
+                        self.assertEqual(tokens, ('<S*>.bin', '<T*>.bin'))
+                        self.assertEqual(prompt, inference.PROMPTS['texture'])
+                        self.assertEqual((kwargs['num_inference_steps'], kwargs['guidance_scale']), (100, 3.5))
+                        masks = kwargs['cross_attention_kwargs']['modifier_token_mask']
+                        self.assertEqual([int(masks[key][0].sum()) for key in masks], [0, 0])
+                        self.assertEqual([int(masks[key][1].sum()) for key in masks], [1, 1])
+                    rows = [json.loads(line) for line in (output / 'generation_manifest.jsonl').read_text().splitlines()]
+                    self.assertTrue(all(row['subject_step'] == step and row['attribute_step'] == 500 for row in rows))
+                    self.assertIn(f'S{step} + T500', (output / 'index.html').read_text(encoding='utf8'))
+
+    def test_subject600_cannot_replace_requested200_or400_and_invalid_steps_are_rejected(self):
+        self.texture500_audit()
+        with patch.object(inference.evaluate, 'load_pipeline') as load:
+            for step in (200, 400):
+                for method in inference.METHODS:
+                    with self.subTest(step=step, method=method), self.assertRaisesRegex(ValueError, f'Subject{step}'):
+                        inference.run(self.audit_path, self.root / f'wrong-subject{step}-{method}', method,
+                                      'texture', 'cpu', True, attribute_step=500, subject_step=step)
+            for step in (500, 200.0, True):
+                with self.subTest(step=step), self.assertRaises(ValueError):
+                    inference.prompt_rows('fullrank', 'texture', attribute_step=500, subject_step=step)
+            load.assert_not_called()
+
+    def test_subject200_still_requires600_training_steps_and600_training_config(self):
+        self.texture500_audit()
+        self.snapshot_audit('subject', 200)
+        subject = self.audit['sources']['subject']['fullrank']
+        subject['training_steps'] = 200
+        inference.write(self.audit_path, self.audit)
+        with self.assertRaisesRegex(ValueError, 'Subject200'):
+            inference.run(self.audit_path, self.root / 'wrong-subject-total', 'fullrank', 'texture',
+                          attribute_step=500, subject_step=200)
+        subject['training_steps'] = 600
+        config_path = Path(subject['run']) / 'config.yaml'
+        config = json.loads(config_path.read_text())
+        config['args']['max_train_steps'] = 200
+        inference.write(config_path, config)
+        subject['hashes'][str(config_path)] = self.audit['source_locks'][str(config_path)] = inference.sha256(config_path)
+        inference.write(self.audit_path, self.audit)
+        with self.assertRaisesRegex(ValueError, 'source token, steps or initializer'):
+            inference.run(self.audit_path, self.root / 'wrong-subject-config', 'fullrank', 'texture',
+                          attribute_step=500, subject_step=200)
 
     def test_wrong_steps_branch_method_revision_and_missing_locks_fail_before_loading(self):
         cases = ('subject_step', 'attribute_step', 'cross_method', 'wrong_attribute', 'wrong_subject', 'git', 'missing_lock')
