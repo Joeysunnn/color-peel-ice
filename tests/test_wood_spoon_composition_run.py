@@ -28,12 +28,14 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         self.stack.enter_context(patch.object(runner.source, 'prepare', side_effect=self.prepare))
         self.stack.enter_context(patch.object(runner.inference, 'run', side_effect=self.preflight))
 
-    def prepare(self, folder):
+    def prepare(self, folder, *, texture_step=1000, include_material=True):
+        self.source_options = (texture_step, include_material)
         folder.mkdir(parents=True)
         runner.write(folder / 'audit.json', {'inference_git': self.git})
         self.events.append('source_audit')
 
-    def preflight(self, audit_path, output, method, branch, device='cuda:0', execute=False):
+    def preflight(self, audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000):
+        self.assertEqual(attribute_step, self.source_options[0] if branch == 'texture' else 1000)
         self.assertTrue(Path(audit_path).is_file())
         self.assertFalse(execute)
         self.assertEqual(device, 'cuda:0')
@@ -48,7 +50,8 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
     def process_factory(self, fail=False, parallel=False):
         owner = self
         lock = threading.Lock()
-        barrier = threading.Barrier(3) if parallel else None
+        expected_jobs = 4 if self.source_options[1] else 2
+        barrier = threading.Barrier(min(3, expected_jobs)) if parallel else None
         active = set()
 
         class Process:
@@ -68,7 +71,7 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
                 owner.assertEqual(kwargs['env']['PYTHONDONTWRITEBYTECODE'], '1')
                 state = json.loads((owner.output / 'status.json').read_text())
                 owner.assertEqual(state['status'], 'inference')
-                owner.assertEqual(len(owner.preflights), 4)
+                owner.assertEqual(len(owner.preflights), expected_jobs)
                 with lock:
                     owner.assertNotIn(self.gpu, active)
                     active.add(self.gpu)
@@ -82,8 +85,9 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
                     barrier.wait(timeout=10)
                 if not fail:
                     self.output.mkdir(parents=True)
+                    step = int(self.command[self.command.index('--attribute-step') + 1])
                     rows = [{**row, 'status': 'ok', 'image_sha256': 'fixture'}
-                            for row in inference.prompt_rows(self.method, self.branch)]
+                            for row in inference.prompt_rows(self.method, self.branch, step)]
                     (self.output / 'generation_status.jsonl').write_text(
                         ''.join(json.dumps(row) + '\n' for row in rows))
                     runner.write(self.output / 'provenance.json',
@@ -107,6 +111,7 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         self.assertFalse(result['monitoring'])
 
     def test_three_gpu_queues_execute_each_condition_once_and_align_all_seeds(self):
+        self.source_options = (1000, True)
         with patch.object(runner.subprocess, 'Popen', side_effect=self.process_factory(parallel=True)):
             result = runner.run(self.output, [0, 2, 3], execute=True)
         expected = {(b, m) for b in runner.BRANCHES for m in runner.METHODS}
@@ -126,6 +131,7 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
             self.assertTrue(all(row['status'] == 'succeeded' for row in json.loads(p.read_text())))
 
     def test_failed_child_without_provenance_is_recorded_and_not_retried(self):
+        self.source_options = (1000, True)
         with patch.object(runner.subprocess, 'Popen', side_effect=self.process_factory(fail=True)):
             with self.assertRaisesRegex(RuntimeError, 'failed'):
                 runner.run(self.output, [0], execute=True)
@@ -134,6 +140,21 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         queue = json.loads((self.output / 'queue_gpu0.json').read_text())
         self.assertEqual(queue[0]['status'], 'failed')
         self.assertEqual(queue[0]['returncode'], 1)
+
+    def test_texture500_only_dispatches_two_jobs_and_keeps_methods_together(self):
+        self.source_options = (500, False)
+        with patch.object(runner.subprocess, 'Popen', side_effect=self.process_factory(parallel=True)):
+            result = runner.run(self.output, [2, 3], execute=True, texture_step=500, texture_only=True)
+        self.assertEqual(self.source_options, (500, False))
+        self.assertEqual({(b, m) for b, m, gpu in self.calls}, {('texture', m) for m in runner.METHODS})
+        self.assertEqual(result['generated_images'], 62)
+        self.assertEqual(result['attribute_steps'], {'texture': 500})
+        self.assertFalse((self.output / 'material').exists())
+        page = (self.output / 'index.html').read_text(encoding='utf8')
+        self.assertIn('S600 + T500', page)
+        self.assertNotIn('S+M', page)
+        self.assertEqual(page.count('<tr><th>seed'), 31)
+        self.assertEqual(page.count('<td><img'), 62)
 
 
 if __name__ == '__main__':

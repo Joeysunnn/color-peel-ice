@@ -62,3 +62,23 @@ both compositions side by side for each seed. Individual pages show all actual
 S72 and M8/T16 training RGB references/captions. Source audits, old/new Git
 revisions, prompts, hash/safety ledgers and sampler are recorded separately.
 Successful generation alone is not a subject/attribute disentanglement verdict.
+
+## Texture500 rerun (2026-10-30)
+
+The screenshot-selected Texture source is the same natural Texture training run,
+but its **step500** paired export is used instead of step1000. Training total was
+1000; both its adapter and `<T*>` embedding must come from snapshot500. Subject
+remains the user's wood_spoon step600. Match fullrank with fullrank and rank64
+with rank64, using the same prompt and seeds30–60: **62 images**.
+
+```sh
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.wood_spoon_composition_v1.run \
+  --output "$NEW_EXTERNAL_ROOT" --gpus 2 3 \
+  --texture-only --texture-step 500 --execute
+```
+
+This mode audits only the two S600 and two T500 pairs, dispatches only S+T,
+and keeps both methods together under a fresh experiment root. The previous
+S+M and S+T1000 outputs stay unchanged. `index.html` compares both methods per
+seed and links their actual S72/T16 training references. No training or monitor.

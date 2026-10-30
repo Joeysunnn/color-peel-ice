@@ -1,4 +1,4 @@
-"""Render frozen wood-spoon S600 with independently trained M1000 or T1000 K/V."""
+"""Render frozen wood-spoon S600 with independently trained M1000 or T500/T1000 K/V."""
 
 import argparse
 import html
@@ -32,16 +32,22 @@ def check_locks(locks):
         raise ValueError('missing or changed composition source locks')
 
 
-def prompt_rows(method, branch):
-    if method not in METHODS or branch not in BRANCHES:
-        raise ValueError('expected a declared composition method and attribute branch')
+def _check_scope(method, branch, attribute_step):
+    if (method not in METHODS or branch not in BRANCHES or type(attribute_step) is not int
+            or attribute_step not in ((500, 1000) if branch == 'texture' else (1000,))):
+        raise ValueError('expected a declared method with Material1000 or Texture500/1000')
+
+
+def prompt_rows(method, branch, attribute_step=1000):
+    _check_scope(method, branch, attribute_step)
     return [{'id': f'{method}__{branch}__seed{seed}', 'method': method, 'branch': branch,
-             'condition': 'subject_' + branch, 'subject_step': 600, 'attribute_step': 1000,
+             'condition': 'subject_' + branch, 'subject_step': 600, 'attribute_step': attribute_step,
              'seed': seed, 'prompt': PROMPTS[branch], 'image_path': f'images/seed{seed}.png'}
             for seed in SEEDS]
 
 
-def selections(audit, method, branch):
+def selections(audit, method, branch, attribute_step=1000):
+    _check_scope(method, branch, attribute_step)
     if audit.get('inference_git') != git_info():
         raise ValueError('prepared composition audit differs from the clean inference revision')
     locks = audit.get('source_locks', {})
@@ -49,17 +55,18 @@ def selections(audit, method, branch):
     result = []
     for name in ('subject', branch):
         item = audit.get('sources', {}).get(name, {}).get(method, {})
-        step = 600 if name == 'subject' else 1000
+        step = 600 if name == 'subject' else attribute_step
+        training_steps = 600 if name == 'subject' else 1000
         token = TOKENS[name]
         weight = 'pytorch_token_local_kv_weights.bin' if method == 'fullrank' else 'pytorch_lora_kv_weights.bin'
         hashes = item.get('hashes', {})
         if (item.get('method') != method or item.get('branch') != name or item.get('token') != token
                 or item.get('status') != 'verified' or item.get('steps') != step
-                or item.get('step') != step or item.get('training_steps') != step or item.get('weight') != weight
+                or item.get('step') != step or item.get('training_steps') != training_steps or item.get('weight') != weight
                 or item.get('concept_id') != ('wood_spoon' if name == 'subject' else 'wood_spoon_' + name)
                 or item.get('paired_embedding_finite') is not True or not hashes
                 or any(locks.get(path) != digest for path, digest in hashes.items())):
-            raise ValueError('composition requires matching audited Subject600 and attribute1000 pairs')
+            raise ValueError(f'composition requires matching audited Subject600 and attribute{attribute_step} pairs')
         run, checkpoint = Path(item['run']), Path(item['checkpoint'])
         required = [run / 'config.yaml', checkpoint / weight, checkpoint / (token + '.bin'),
                     checkpoint / 'adaptation_config.json']
@@ -67,7 +74,7 @@ def selections(audit, method, branch):
             raise ValueError('composition adapter, token and configuration must be source-locked')
         config = read_config(run / 'config.yaml')
         initializer = {'subject': 'spoon', 'material': 'material', 'texture': 'texture'}[name]
-        if (config['args'].get('modifier_token') != token or config['args'].get('max_train_steps') != step
+        if (config['args'].get('modifier_token') != token or config['args'].get('max_train_steps') != training_steps
                 or config['args'].get('initializer_token') != initializer):
             raise ValueError('composition source token, steps or initializer differs')
         adaptation = read_json(checkpoint / 'adaptation_config.json')
@@ -121,15 +128,16 @@ def review(output, refs, rows, state):
         + f'<figcaption>seed {row["seed"]}: {html.escape(row.get("status", "planned"))}</figcaption></figure>' for row in rows)
     (output / 'index.html').write_text('<!doctype html><meta charset="utf-8">' + style
         + f'<p><a href="../../index.html">Both methods comparison</a></p><h1>{html.escape(state["prompt"])}</h1>'
-        + f'<p>{state["method"]}; S600 + {state["branch"]}1000; {state["status"]}; PNDM100 / CFG3.5</p>'
+        + f'<p>{state["method"]}; S600 + {"M" if state["branch"] == "material" else "T"}{state["attribute_step"]}'
+        + f' ({state["branch"]}); {state["status"]}; PNDM100 / CFG3.5</p>'
         + '<ul>' + ''.join(links) + '</ul><h2>Seeds30–60</h2><section>' + cards + '</section>', encoding='utf8')
 
 
-def run(audit_path, output, method, branch, device='cuda:0', execute=False):
-    rows = prompt_rows(method, branch)
+def run(audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000):
+    rows = prompt_rows(method, branch, attribute_step)
     audit_path, output = Path(audit_path).resolve(), resolve_run_dir(Path(output))
     audit, revision = read_json(audit_path), git_info()
-    selected = selections(audit, method, branch)
+    selected = selections(audit, method, branch, attribute_step)
     paths = [Path(item[field]).resolve() for group in audit['sources'].values() for item in group.values()
              for field in ('run', 'checkpoint')]
     paths += [Path(row['image']).resolve() for group in audit['references'].values() for row in group]
@@ -142,7 +150,7 @@ def run(audit_path, output, method, branch, device='cuda:0', execute=False):
     state = {'status': 'running' if execute else 'dry_run', 'inference_git': revision,
         'training_gits': audit.get('training_gits', {}), 'audit': str(audit_path),
         'method': method, 'branch': branch, 'prompt': PROMPTS[branch], 'subject_step': 600,
-        'attribute_step': 1000, 'expected_images': len(rows), 'generated_images': 0,
+        'attribute_step': attribute_step, 'expected_images': len(rows), 'generated_images': 0,
         'sampling': SAMPLING, 'retraining': False, 'reexporting': False, 'monitoring': False,
         'subject_training': selected[0], 'attribute_training': selected[1],
         'internal_adapter_slots': {'subject': '<S*>', 'material': TOKENS[branch]},
@@ -199,7 +207,9 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--method', required=True, choices=METHODS)
     parser.add_argument('--branch', required=True, choices=BRANCHES)
+    parser.add_argument('--attribute-step', type=int, choices=(500, 1000), default=1000)
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--execute-inference', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(run(args.audit, args.output, args.method, args.branch, args.device, args.execute_inference)))
+    print(json.dumps(run(args.audit, args.output, args.method, args.branch, args.device,
+                         args.execute_inference, args.attribute_step)))

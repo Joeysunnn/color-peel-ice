@@ -1,4 +1,4 @@
-"""Read-only, selected-wood audits for paired S600, Material1000 and Texture1000."""
+"""Read-only wood S600 and selected Texture/Material paired-snapshot audits."""
 
 import json
 import os
@@ -12,7 +12,7 @@ from experiments.natural_texture_material_v1.training_source import verify_datas
 from experiments.sd15_token_local_kv_v1 import snapshots
 from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 from experiments.texture_material_disentangled_v1 import step_snapshots, train as shared
-from scripts.launch.colorpeel_run import git_info, resolve_run_dir
+from scripts.launch.colorpeel_run import git_info, read_config, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[2]
 SUBJECT_ROOT = Path('/var/tmp/colorpeel-r12user5/runs/subject_trellis_spoons600_v1/'
@@ -75,7 +75,9 @@ def verify_pair(parent, derived, step, directory, locks):
 
     directory = Path(directory).resolve()
     token, method = parent['token'], parent['method']
-    if (type(step) is not int or step != parent['steps']
+    config = read_config(Path(parent['run']) / 'config.yaml')
+    if (type(step) is not int or config['args']['max_train_steps'] != parent['steps']
+            or step not in snapshots.checkpoint_plan(config['args'])
             or any(derived.get(key) != parent.get(key) for key in
                    ('run', 'method', 'branch', 'concept_id', 'source_id', 'token', 'weight', 'status'))
             or derived.get('steps') != step or derived.get('step') != step
@@ -106,7 +108,7 @@ def verify_pair(parent, derived, step, directory, locks):
                _read(locks, Path(parent['checkpoint']) / 'adaptation_config.json')):
         raise ValueError('Derived payload hashes or adaptation configuration differ')
     if parent['branch'] == 'subject':
-        token_id, _ = snapshots._embedding_audit(Path(parent['checkpoint']) / 'embedding_update_audit.json', step, token)
+        token_id, _ = snapshots._embedding_audit(Path(parent['checkpoint']) / 'embedding_update_audit.json', parent['steps'], token)
         adapter = torch.load(snapshot / 'pytorch_model.bin', map_location='cpu')
         table = torch.load(snapshot / 'pytorch_model_1.bin', map_location='cpu')[snapshots.EMBEDDING_KEY]
         if (not isinstance(table, torch.Tensor) or table.ndim != 2 or table.shape[1] != 768
@@ -116,8 +118,9 @@ def verify_pair(parent, derived, step, directory, locks):
         del table
     else:
         adapter, embedding, _, record = step_snapshots._paired(torch, parent, step)
-        if record['source_snapshot_hashes'] != snapshot_hashes or derived.get('final_snapshot_matches_export') is not True:
-            raise ValueError('Natural final snapshot provenance differs')
+        if (record['source_snapshot_hashes'] != snapshot_hashes
+                or derived.get('final_snapshot_matches_export') is not (step == parent['steps'])):
+            raise ValueError('Natural snapshot provenance differs')
     shapes, empty = snapshots.adapter_schema(method)
     if not bool(torch.isfinite(embedding).all()):
         raise ValueError('Paired snapshot embedding is nonfinite')
@@ -196,7 +199,9 @@ print('WOOD_COMPOSITION_AUDIT='+json.dumps({'parents':parents,'git':git_info()})
     return sources, references
 
 
-def prepare(output):
+def prepare(output, *, texture_step=1000, include_material=True):
+    if type(texture_step) is not int or texture_step not in (500, 1000) or type(include_material) is not bool:
+        raise ValueError('Select Texture500/1000 and an explicit Material inclusion flag')
     output = resolve_run_dir(Path(output)).resolve()
     if output.exists() or output.is_relative_to(ROOT) or any(
             output.is_relative_to(path) or path.is_relative_to(output)
@@ -217,30 +222,34 @@ def prepare(output):
     for path, digest in dataset_locks.items():
         _lock(locks, path, digest)
     natural_index = _read(locks, NATURAL_ROOT / 'training/training_index.json')
-    texture_index = _read(locks, NATURAL_ROOT / 'step1000/training_index.json')
-    material_state = _read(locks, MATERIAL_ROOT / 'status.json')
-    plan = _read(locks, MATERIAL_ROOT / 'plan.json')
-    material_index = _read(locks, MATERIAL_ROOT / 'training/training_index.json')
-    material_exports = _read(locks, MATERIAL_ROOT / 'exports/step1000/index.json')
+    texture_index = _read(locks, NATURAL_ROOT / f'step{texture_step}/training_index.json')
     if (natural_index.get('git') != NATURAL_GIT or texture_index.get('git') != NATURAL_GIT
-            or texture_index.get('training_steps') != 1000 or texture_index.get('source_training_steps') != 1000
-            or material_state.get('status') != 'execution_verified' or material_state.get('git') != MATERIAL_GIT
-            or plan.get('git') != MATERIAL_GIT or not _wood_material_plan(plan)
-            or plan.get('initializer', {}).get('word') != 'material'
-            or plan.get('source_training') != str(NATURAL_ROOT)
-            or plan.get('protocol') != protocol
-            or material_index.get('git') != MATERIAL_GIT or material_exports.get('git') != MATERIAL_GIT
-            or material_exports.get('step') != 1000):
-        raise ValueError('Natural/initializer source indices, initializer or revisions differ')
-    # The historical ablation lock index also contains unrelated sources and steps.
-    # Bind that index, but validate only selected weights below and dataset files above.
-    _read(locks, MATERIAL_ROOT / 'source_locks.json')
+            or texture_index.get('training_steps') != texture_step
+            or texture_index.get('source_training_steps') != 1000):
+        raise ValueError('Natural source indices, selected step or revisions differ')
+    branches = []
+    if include_material:
+        material_state = _read(locks, MATERIAL_ROOT / 'status.json')
+        plan = _read(locks, MATERIAL_ROOT / 'plan.json')
+        material_index = _read(locks, MATERIAL_ROOT / 'training/training_index.json')
+        material_exports = _read(locks, MATERIAL_ROOT / 'exports/step1000/index.json')
+        if (material_state.get('status') != 'execution_verified' or material_state.get('git') != MATERIAL_GIT
+                or plan.get('git') != MATERIAL_GIT or not _wood_material_plan(plan)
+                or plan.get('initializer', {}).get('word') != 'material'
+                or plan.get('source_training') != str(NATURAL_ROOT)
+                or plan.get('protocol') != protocol
+                or material_index.get('git') != MATERIAL_GIT or material_exports.get('git') != MATERIAL_GIT
+                or material_exports.get('step') != 1000):
+            raise ValueError('Initializer source indices, initializer or revisions differ')
+        # Bind the historical index without auditing unrelated weights or steps.
+        _read(locks, MATERIAL_ROOT / 'source_locks.json')
+        branches.append(('material', material_index, material_exports, 1000))
+    branches.append(('texture', natural_index, texture_index, texture_step))
     sources, references = {'subject': subject}, {'subject': subject_refs}
-    for branch, parent_index, derived_index in (('material', material_index, material_exports),
-                                               ('texture', natural_index, texture_index)):
+    for branch, parent_index, derived_index, step in branches:
         token = '<M*>' if branch == 'material' else '<T*>'
         parents = _methods(parent_index['runs'], branch, token, 1000)
-        derived = _methods(derived_index['runs'], branch, token, 1000)
+        derived = _methods(derived_index['runs'], branch, token, step)
         references[branch] = _references(locks, dataset / 'staging' / ('wood_spoon_' + branch) /
             'training_assets_manifest.jsonl', 8 if branch == 'material' else 16)
         sources[branch] = {}
@@ -259,13 +268,14 @@ def prepare(output):
             if actual != parent:
                 raise ValueError('Selected natural training index differs from actual training audit')
             directory = (MATERIAL_ROOT / 'exports/step1000/checkpoints' / method if branch == 'material'
-                         else NATURAL_ROOT / 'step1000/checkpoints' / (method + '__wood_spoon_texture'))
-            sources[branch][method] = verify_pair(parent, derived[method], 1000, directory, locks)
+                         else NATURAL_ROOT / f'step{step}/checkpoints' / (method + '__wood_spoon_texture'))
+            sources[branch][method] = verify_pair(parent, derived[method], step, directory, locks)
     verify_locks(locks)
     if git_info() != inference_git:
         raise ValueError('Inference checkout changed during the source audit')
     result = {'sources': sources, 'source_locks': locks,
-        'training_gits': {'subject': SUBJECT_GIT, 'material': MATERIAL_GIT, 'texture': NATURAL_GIT},
+        'training_gits': {branch: {'subject': SUBJECT_GIT, 'material': MATERIAL_GIT,
+            'texture': NATURAL_GIT}[branch] for branch in sources},
         'references': references, 'inference_git': inference_git}
     (output / 'audit.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf8')
     return result
