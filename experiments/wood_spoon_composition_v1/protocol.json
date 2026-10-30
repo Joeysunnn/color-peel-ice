@@ -1,0 +1,19 @@
+{
+  "schema": "wood_spoon_subject_attribute_composition/v1",
+  "subject_id": "wood_spoon",
+  "methods": ["fullrank", "lora_r64"],
+  "subject_step": 600,
+  "material_step": 1000,
+  "texture_step": 1000,
+  "initializers": {"subject": "spoon", "material": "material", "texture": "texture"},
+  "prompts": {
+    "material": "a photo of <S*> spoon made of <M*>",
+    "texture": "a photo of <S*> spoon with <T*> texture"
+  },
+  "seeds": [30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60],
+  "sampling": {"scheduler":"PNDM", "num_inference_steps":100, "guidance_scale":3.5, "width":512, "height":512, "dtype":"float16", "safety_checker":true},
+  "expected_images": 124,
+  "training": false,
+  "monitoring": false,
+  "definition": "Use existing wood Subject600 and wood Material(material initialization)/Texture1000. Match methods; independently load both tokens and both token-local adapters. Same seed across four conditions."
+}
