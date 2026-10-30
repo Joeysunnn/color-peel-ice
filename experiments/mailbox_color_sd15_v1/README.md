@@ -102,3 +102,31 @@ Each method/checkpoint's HTML displays the nine actual training RGBs/captions
 and links thirteen prompt pages, each with31 seed outputs. Preserve all images,
 hashes, model/optimizer records and provenance; old sources are read-only.
 Successful execution is not a color/identity/disentanglement quality verdict.
+
+## Parallel continuation on additional idle GPUs
+
+`parallel --output "$NEW_CONTINUATION" --gpus 0 2 3 --execute --handoff`
+uses the completed original training and fixed Subject reference. Deploy its
+new code through local commit/push and a separate server checkout; keep the
+original16f9fcc checkout unchanged. NEW_CONTINUATION is a new directory below
+the original timestamped container's `continuations/`, beside `experiment/`.
+
+The scheduler strictly audits the completed training in the old checkout, then
+checks exact worker PID/UID/command/starttime and SIGINT handling before asking
+only this experiment's inference workers to stop. It waits for workers and the
+old coordinator to finish writing their interruption records. Never interrupt
+unfinished training, change old checkpoints or use another user's occupied GPU.
+
+All eight method/checkpoint units are audited before dispatch. A complete
+ledger prefix requires exact original prompts/seeds and matching512px RGB PNG
+hashes. Copy and reuse these PNGs into the new continuation; preserve an
+unrecorded trailing image/ledger fragment in the source and regenerate only
+that uncompleted row. Files present without a verified ledger are not treated
+as finished. Source outputs are never overwritten. Three independent GPU
+processes handle remaining units from one queue, without retraining or retry.
+
+The new index links all eight unit pages. Source and new inference revisions,
+interruption reason, copied/generated counts and hashes are recorded separately.
+Original orchestration may record `KeyboardInterrupt`/failed during handoff;
+its completed training receipts remain verified. Inspect the continuation's
+status for the rescheduled work. After startup checks, no monitor is started.
