@@ -97,7 +97,8 @@ def audit_run(recipe, run, expected_config, *, expected_git=None):
     weight = "pytorch_token_local_kv_weights.bin" if method == "fullrank" else "pytorch_lora_kv_weights.bin"
     adaptation = read_json(checkpoint / "adaptation_config.json")
     expected_mode = "token_local_kv" if method == "fullrank" else (
-        "lora_material_kv" if token == "<M*>" else "lora_subject_kv")
+        "lora_material_kv" if token == "<M*>" else
+        "lora_color_kv" if token == "<C*>" else "lora_subject_kv")
     if (adaptation.get("modifier_tokens") != [token] or adaptation.get("adaptation_mode") != expected_mode
             or (method == "lora_r64" and any(adaptation.get(key) != value for key, value in
                 {"rank": 64, "alpha": 64, "mode": "token_local_kv"}.items()))):

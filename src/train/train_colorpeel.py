@@ -1085,6 +1085,8 @@ def main(args):
         lora_token = args.modifier_token[0] if args.modifier_token and len(args.modifier_token) == 1 else None
         lora_initializer = args.initializer_token[0] if args.initializer_token and len(args.initializer_token) == 1 else None
         valid_concept = ((lora_token == "<S*>" and lora_initializer in ("mailbox", "spoon"))
+                         or ((lora_token, lora_initializer) == ("<C*>", "orange")
+                             and args.subject_lora_mode == "token_local_kv")
                          or (lora_token == "<M*>" and lora_initializer in ("metal", "material", "wood")
                              and args.subject_lora_mode == "token_local_kv")
                          or ((lora_token, lora_initializer) == ("<T*>", "texture")
@@ -1678,7 +1680,8 @@ def main(args):
         if args.subject_lora_mode:
             from experiments.lora_kv_subject_v1.attention import subject_lora_state_dict
             write_json(Path(args.output_dir) / "adaptation_config.json", {
-                "adaptation_mode": "lora_material_kv" if args.modifier_token == ["<M*>"] else "lora_subject_kv",
+                "adaptation_mode": ("lora_material_kv" if args.modifier_token == ["<M*>"] else
+                                    "lora_color_kv" if args.modifier_token == ["<C*>"] else "lora_subject_kv"),
                 "mode": args.subject_lora_mode,
                 "rank": args.subject_lora_rank,
                 "alpha": args.subject_lora_alpha,

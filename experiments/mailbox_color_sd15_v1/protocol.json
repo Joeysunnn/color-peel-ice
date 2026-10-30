@@ -1,0 +1,32 @@
+{
+  "schema": "mailbox_color_sd15/v1",
+  "study": "mailbox_color_sd15_v1",
+  "source_id": "D1GT:81/130.png",
+  "source_image": "experiments/natural_material_supermat_v1/assets/source_mailbox.jpg",
+  "source_image_sha256": "ba9c6624d9998cdfcd16308b0cf8fd8f3778909d8655efe2ba9cebba370483d0",
+  "training_images": 9,
+  "steps": [400, 600, 800, 1000],
+  "max_train_steps": 1000,
+  "methods": ["fullrank", "lora_r64"],
+  "token": "<C*>",
+  "initializer": "orange",
+  "seed": 42,
+  "transfer_prompt_source": "experiments/natural_image_subject_color_pilot/configs/d1_mailbox_orange_shared_kv_joint_1000_color_transfer_protocol_v1.json",
+  "joint_prompts": [
+    "a photo of <S*> mailbox in <C*> color",
+    "a photo of <S*> mailbox in <C*> color in the snow",
+    "a photo of <S*> mailbox in <C*> color surrounded by flowers"
+  ],
+  "seeds": [30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60],
+  "sampling": {"scheduler":"PNDM", "num_inference_steps":100, "guidance_scale":6.0, "width":512, "height":512, "dtype":"float16", "safety_checker":true},
+  "subject_reference": {"study":"subject_trellis_blue_green72_training_v1", "step":1000, "retrain":false, "method_matching":true},
+  "training_changes": {
+    "base": "frozen SD1.5 revision451f4fe instead of SD1.4",
+    "dose": "100 to1000 updates; explicit400/600/800/1000 checkpoints",
+    "weight_decay": "0.01 to0, preserving ordinary token embeddings",
+    "lora": "additional token-local rank64/alpha64 comparison; K/V LR5e-5, embedding LR1e-5",
+    "fullrank": "existing token-local fullrank K/V LR1e-5, embedding LR1e-5",
+    "data_and_captions": "byte-identical historical orange Emission9; no subject images in Color training",
+    "loss": "existing valid-image-region reconstruction loss; no supplied object masks; cos_weight0"
+  }
+}

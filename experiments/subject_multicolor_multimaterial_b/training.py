@@ -84,7 +84,7 @@ def build_configuration_bundle(dataset, output, *, verify_dataset=None, config_b
 
 
 def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=None, config_builder=None,
-        allowed_arg_changes=None):
+        allowed_arg_changes=None, audit_recipe=None):
     if verify_dataset is None:
         from experiments.subject_multicolor_multimaterial_b.data import verify_dataset
 
@@ -133,7 +133,7 @@ def run(dataset, output, method, gpu, execute_training=False, *, verify_dataset=
                                     stdout=log, stderr=subprocess.STDOUT)
         if result.returncode:
             raise RuntimeError("shared trainer failed; see training.log")
-        recipe = {"method": method, "branch": "subject", "concept_id": config.get("subject_id", "mailbox"), "token": "<S*>"}
+        recipe = audit_recipe or {"method": method, "branch": "subject", "concept_id": config.get("subject_id", "mailbox"), "token": "<S*>"}
         audit = shared.audit_run(recipe, Path(command[-1]), config)
         _write(report / "training_audit.json", audit)
         _write(output / "training_index.json", {"git": git, "runs": [audit]})
