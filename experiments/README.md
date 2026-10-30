@@ -12,6 +12,10 @@ experiments/<study_slug>/
 
 Runtime artifacts belong below `$COLORPEEL_RUN_ROOT/<study_slug>/<run_id>/`, never in this registry.
 
+Current provisional Subject branch plan (2026-10-30):
+[`SUBJECT_BRANCH_PLAN.md`](SUBJECT_BRANCH_PLAN.md) — TRELLIS.2 blue/green72 per subject,
+1000 updates, checkpoints400/600/800/1000. Documented only; historical runs retain their settings.
+
 ## Record levels
 
 | Change | Record |
