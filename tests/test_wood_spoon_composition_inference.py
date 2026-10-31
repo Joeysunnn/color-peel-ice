@@ -241,6 +241,20 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
     def texture500_audit(self):
         self.snapshot_audit('texture', 500)
 
+    def subject180_audit(self):
+        reference = self.audit['references']['subject'][0]
+        self.audit['references']['subject'] = [{**reference, 'caption': f'a photo of <S*> training example {i}'}
+                                                for i in range(180)]
+        for method in inference.METHODS:
+            subject = self.audit['sources']['subject'][method]
+            config_path = Path(subject['run']) / 'config.yaml'
+            config = json.loads(config_path.read_text())
+            config['args']['max_train_steps'] = 1000
+            inference.write(config_path, config)
+            subject['training_steps'] = 1000
+            subject['hashes'][str(config_path)] = self.audit['source_locks'][str(config_path)] = inference.sha256(config_path)
+        inference.write(self.audit_path, self.audit)
+
     def test_texture500_uses_its_actual_adapter_and_embedding_with_subject600_for_both_methods(self):
         self.texture500_audit()
         with patch.dict(sys.modules, self.modules()), \
@@ -396,6 +410,92 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
                         inference.run(self.audit_path, output, method, 'texture', 'cpu', True, attribute_step=750)
                     self.assertFalse(output.exists())
             load.assert_not_called()
+
+    def test_subject180_at750_and1000_routes_both_methods_with_texture500_and_copies180_references(self):
+        self.subject180_audit()
+        self.texture500_audit()
+        with patch.dict(sys.modules, self.modules()), \
+             patch.object(inference.evaluate, 'read_json', side_effect=self.model_json):
+            for step in (750, 1000):
+                self.snapshot_audit('subject', step)
+                for method in inference.METHODS:
+                    with self.subTest(step=step, method=method):
+                        self.calls.clear()
+                        self.loads.clear()
+                        self.installs.clear()
+                        self.embeddings.clear()
+                        subject = self.audit['sources']['subject'][method]
+                        texture = self.audit['sources']['texture'][method]
+                        self.assertEqual(inference.selections(self.audit, method, 'texture', 500, step, 180), [subject, texture])
+                        output = self.root / 'subject180' / f'step{step}' / method
+                        proof = inference.run(self.audit_path, output, method, 'texture', 'cpu', True,
+                                              attribute_step=500, subject_step=step, subject_images=180)
+                        self.assertEqual((proof['subject_images'], proof['subject_step'], proof['attribute_step']), (180, step, 500))
+                        self.assertEqual(proof['subject_training']['training_steps'], 1000)
+                        self.assertEqual(proof['training_images'], {'subject': 180, 'texture': 16})
+                        self.assertEqual(proof['generated_images'], 31)
+                        self.assertEqual(self.embeddings, [(subject['checkpoint'], '<S*>.bin'), (texture['checkpoint'], '<T*>.bin')])
+                        self.assertEqual(self.loads, [str(Path(item['checkpoint']) / item['weight'])
+                            for item in ((texture,) if method == 'fullrank' else (subject, texture))])
+                        if method == 'fullrank':
+                            self.assertEqual(self.installs[0][1], (subject['checkpoint'],))
+                        self.assertEqual(self.installs[-1][0], 'dual_fullrank' if method == 'fullrank' else 'dual_lora')
+                        self.assertEqual([call[2]['generator'] for call in self.calls], list(range(30, 61)))
+                        for tokens, prompt, kwargs in self.calls:
+                            self.assertEqual(tokens, ('<S*>.bin', '<T*>.bin'))
+                            self.assertEqual(prompt, inference.PROMPTS['texture'])
+                            self.assertEqual((kwargs['num_inference_steps'], kwargs['guidance_scale']), (100, 3.5))
+                            masks = kwargs['cross_attention_kwargs']['modifier_token_mask']
+                            self.assertEqual([int(masks[key][0].sum()) for key in masks], [0, 0])
+                            self.assertEqual([int(masks[key][1].sum()) for key in masks], [1, 1])
+                        rows = [json.loads(line) for line in (output / 'generation_manifest.jsonl').read_text().splitlines()]
+                        self.assertTrue(all(row['subject_images'] == 180 and row['subject_step'] == step
+                                            and row['attribute_step'] == 500 for row in rows))
+                        refs = json.loads((output / 'training_references.json').read_text())['references']
+                        self.assertEqual(refs['subject'], [{**row, 'review_image': f'training_references/subject/train_{i:03d}.png'}
+                                                          for i, row in enumerate(self.audit['references']['subject'])])
+                        self.assertEqual(len(list((output / 'training_references' / 'subject').glob('*.png'))), 180)
+                        page = (output / 'index.html').read_text(encoding='utf8')
+                        self.assertIn(f'S{step} + T500', page)
+                        self.assertIn('Subject training images: 180', page)
+
+    def test_subject_image_count_and_step_recipe_cannot_be_mixed(self):
+        for images, step in ((72, 750), (72, 1000), (180, 200), (180, 400), (180, 600), (35, 750), (180.0, 750), (True, 750)):
+            with self.subTest(images=images, step=step), self.assertRaises(ValueError):
+                inference.prompt_rows('fullrank', 'texture', attribute_step=500, subject_step=step, subject_images=images)
+        self.subject180_audit()
+        with self.assertRaisesRegex(ValueError, 'every actual selected training RGB'):
+            inference.references(self.audit, 'texture', self.root / 'wrong-count72', subject_images=72)
+        self.texture500_audit()
+        self.snapshot_audit('subject', 750)
+        self.audit['references']['subject'] = self.audit['references']['subject'][:72]
+        inference.write(self.audit_path, self.audit)
+        with patch.object(inference.evaluate, 'load_pipeline') as load:
+            with self.assertRaisesRegex(ValueError, 'every actual selected training RGB'):
+                inference.run(self.audit_path, self.root / 'missing108-references', 'fullrank', 'texture', 'cpu', True,
+                              attribute_step=500, subject_step=750, subject_images=180)
+            load.assert_not_called()
+
+    def test_subject180_requires1000_training_updates_and_config(self):
+        self.subject180_audit()
+        self.texture500_audit()
+        self.snapshot_audit('subject', 750)
+        subject = self.audit['sources']['subject']['fullrank']
+        subject['training_steps'] = 600
+        inference.write(self.audit_path, self.audit)
+        with self.assertRaisesRegex(ValueError, 'Subject750'):
+            inference.run(self.audit_path, self.root / 'wrong180-total', 'fullrank', 'texture',
+                          attribute_step=500, subject_step=750, subject_images=180)
+        subject['training_steps'] = 1000
+        config_path = Path(subject['run']) / 'config.yaml'
+        config = json.loads(config_path.read_text())
+        config['args']['max_train_steps'] = 600
+        inference.write(config_path, config)
+        subject['hashes'][str(config_path)] = self.audit['source_locks'][str(config_path)] = inference.sha256(config_path)
+        inference.write(self.audit_path, self.audit)
+        with self.assertRaisesRegex(ValueError, 'source token, steps or initializer'):
+            inference.run(self.audit_path, self.root / 'wrong180-config', 'fullrank', 'texture',
+                          attribute_step=500, subject_step=750, subject_images=180)
 
     def test_subject600_cannot_replace_requested200_or400_and_invalid_steps_are_rejected(self):
         self.texture500_audit()

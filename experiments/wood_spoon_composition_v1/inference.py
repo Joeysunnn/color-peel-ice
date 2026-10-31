@@ -1,4 +1,4 @@
-"""Render frozen wood-spoon S200/400/600 with independent M1000 or T500/750/1000 K/V."""
+"""Compose frozen 72/180-image wood-spoon Subject snapshots with independent M/T K/V."""
 
 import argparse
 import html
@@ -32,23 +32,26 @@ def check_locks(locks):
         raise ValueError('missing or changed composition source locks')
 
 
-def _check_scope(method, branch, attribute_step, subject_step):
+def _check_scope(method, branch, attribute_step, subject_step, subject_images=72):
     if (method not in METHODS or branch not in BRANCHES or type(attribute_step) is not int
             or attribute_step not in ((500, 750, 1000) if branch == 'texture' else (1000,))
-            or type(subject_step) is not int or subject_step not in (200, 400, 600)):
-        raise ValueError('expected a declared method with Subject200/400/600 and Material1000 or Texture500/750/1000')
+            or type(subject_images) is not int or subject_images not in (72, 180)
+            or type(subject_step) is not int
+            or subject_step not in ((200, 400, 600) if subject_images == 72 else (750, 1000))):
+        raise ValueError('expected Subject72 at200/400/600 or Subject180 at750/1000, with Material1000 or Texture500/750/1000')
 
 
-def prompt_rows(method, branch, attribute_step=1000, subject_step=600):
-    _check_scope(method, branch, attribute_step, subject_step)
+def prompt_rows(method, branch, attribute_step=1000, subject_step=600, subject_images=72):
+    _check_scope(method, branch, attribute_step, subject_step, subject_images)
     return [{'id': f'{method}__{branch}__seed{seed}', 'method': method, 'branch': branch,
              'condition': 'subject_' + branch, 'subject_step': subject_step, 'attribute_step': attribute_step,
+             'subject_images': subject_images,
              'seed': seed, 'prompt': PROMPTS[branch], 'image_path': f'images/seed{seed}.png'}
             for seed in SEEDS]
 
 
-def selections(audit, method, branch, attribute_step=1000, subject_step=600):
-    _check_scope(method, branch, attribute_step, subject_step)
+def selections(audit, method, branch, attribute_step=1000, subject_step=600, subject_images=72):
+    _check_scope(method, branch, attribute_step, subject_step, subject_images)
     if audit.get('inference_git') != git_info():
         raise ValueError('prepared composition audit differs from the clean inference revision')
     locks = audit.get('source_locks', {})
@@ -57,7 +60,7 @@ def selections(audit, method, branch, attribute_step=1000, subject_step=600):
     for name in ('subject', branch):
         item = audit.get('sources', {}).get(name, {}).get(method, {})
         step = subject_step if name == 'subject' else attribute_step
-        training_steps = 600 if name == 'subject' else 1000
+        training_steps = 600 if name == 'subject' and subject_images == 72 else 1000
         token = TOKENS[name]
         weight = 'pytorch_token_local_kv_weights.bin' if method == 'fullrank' else 'pytorch_lora_kv_weights.bin'
         hashes = item.get('hashes', {})
@@ -89,11 +92,11 @@ def selections(audit, method, branch, attribute_step=1000, subject_step=600):
     return result
 
 
-def references(audit, branch, output):
+def references(audit, branch, output, subject_images=72):
     result, copies = {}, {}
     for name in ('subject', branch):
         rows = audit.get('references', {}).get(name, [])
-        if len(rows) != COUNTS[name]:
+        if len(rows) != (subject_images if name == 'subject' else COUNTS[name]):
             raise ValueError('review must display every actual selected training RGB and caption')
         folder = output / 'training_references' / name
         folder.mkdir(parents=True)
@@ -130,15 +133,16 @@ def review(output, refs, rows, state):
     (output / 'index.html').write_text('<!doctype html><meta charset="utf-8">' + style
         + f'<p><a href="../../index.html">Both methods comparison</a></p><h1>{html.escape(state["prompt"])}</h1>'
         + f'<p>{state["method"]}; S{state["subject_step"]} + {"M" if state["branch"] == "material" else "T"}{state["attribute_step"]}'
-        + f' ({state["branch"]}); {state["status"]}; PNDM100 / CFG3.5</p>'
+        + f' ({state["branch"]}); Subject training images: {state["subject_images"]}; {state["status"]}; PNDM100 / CFG3.5</p>'
         + '<ul>' + ''.join(links) + '</ul><h2>Seeds30–60</h2><section>' + cards + '</section>', encoding='utf8')
 
 
-def run(audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000, subject_step=600):
-    rows = prompt_rows(method, branch, attribute_step, subject_step)
+def run(audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000, subject_step=600,
+        subject_images=72):
+    rows = prompt_rows(method, branch, attribute_step, subject_step, subject_images)
     audit_path, output = Path(audit_path).resolve(), resolve_run_dir(Path(output))
     audit, revision = read_json(audit_path), git_info()
-    selected = selections(audit, method, branch, attribute_step, subject_step)
+    selected = selections(audit, method, branch, attribute_step, subject_step, subject_images)
     paths = [Path(item[field]).resolve() for group in audit['sources'].values() for item in group.values()
              for field in ('run', 'checkpoint')]
     paths += [Path(row['image']).resolve() for group in audit['references'].values() for row in group]
@@ -151,13 +155,14 @@ def run(audit_path, output, method, branch, device='cuda:0', execute=False, attr
     state = {'status': 'running' if execute else 'dry_run', 'inference_git': revision,
         'training_gits': audit.get('training_gits', {}), 'audit': str(audit_path),
         'method': method, 'branch': branch, 'prompt': PROMPTS[branch], 'subject_step': subject_step,
+        'subject_images': subject_images,
         'attribute_step': attribute_step, 'expected_images': len(rows), 'generated_images': 0,
         'sampling': SAMPLING, 'retraining': False, 'reexporting': False, 'monitoring': False,
         'subject_training': selected[0], 'attribute_training': selected[1],
         'internal_adapter_slots': {'subject': '<S*>', 'material': TOKENS[branch]},
         'attribute_semantics': branch, 'historical_second_slot_name': 'material'}
     try:
-        refs, copies = references(audit, branch, output)
+        refs, copies = references(audit, branch, output, subject_images)
         state['training_images'] = {name: len(images) for name, images in refs.items()}
         (output / 'generation_manifest.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows), encoding='utf8')
         if execute:
@@ -209,9 +214,10 @@ if __name__ == '__main__':
     parser.add_argument('--method', required=True, choices=METHODS)
     parser.add_argument('--branch', required=True, choices=BRANCHES)
     parser.add_argument('--attribute-step', type=int, choices=(500, 750, 1000), default=1000)
-    parser.add_argument('--subject-step', type=int, choices=(200, 400, 600), default=600)
+    parser.add_argument('--subject-step', type=int, choices=(200, 400, 600, 750, 1000), default=600)
+    parser.add_argument('--subject-images', type=int, choices=(72, 180), default=72)
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--execute-inference', action='store_true')
     args = parser.parse_args()
     print(json.dumps(run(args.audit, args.output, args.method, args.branch, args.device,
-                         args.execute_inference, args.attribute_step, args.subject_step)))
+                         args.execute_inference, args.attribute_step, args.subject_step, args.subject_images)))

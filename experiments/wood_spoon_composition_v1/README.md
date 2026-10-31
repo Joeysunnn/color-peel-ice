@@ -125,3 +125,30 @@ for each seed after completion. Audit all sources and preflight all six jobs
 before dispatch, check first outputs, then disconnect without monitoring.
 Previous Texture500 and other results stay unchanged. Check GPU occupancy
 immediately before launch. Default selection remains S600/T1000.
+
+## Collect72 and180 Subject tests with Texture500 (2026-10-31)
+
+Copy the six completed S72 step200/400/600 + T500 groups into one new experiment,
+preserving every original file byte and historical provenance. Validate all31
+seeds, PNG hashes, source locks, training references, prompt and sampler first;
+write an additional reuse receipt. These186 images are never regenerated.
+
+Audit the original wood180 Subject step750/1000 pairs from the completed
+continuation. Reuse the old fullrank training at its original revision and the
+completed rank64 continuation, matching each method with Texture500. Generate
+four31-image groups (124 new images), with actual180 training RGB references.
+No training or checkpoint export is performed.
+
+```sh
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.wood_spoon_composition_v1.collect_t500 \
+  --output "$NEW_EXTERNAL_ROOT" --gpus 0 2 3 --execute
+```
+
+All310 images share a fresh root with `s72_step{200,400,600}/{fullrank,lora_r64}`
+and `s180_step{750,1000}/{fullrank,lora_r64}`. After completion `index.html`
+shows ten columns per seed. The copied methods keep their original provenance;
+new methods record both source training revisions. The two dataset sizes also
+have different total training steps, so this is not a controlled dose comparison.
+Keep seed30–60, PNDM100, CFG3.5,512px,fp16 and checker. Complete all audits and
+four preflights before dispatch; verify startup, then stop checking.
