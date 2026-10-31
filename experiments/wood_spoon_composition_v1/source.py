@@ -201,7 +201,9 @@ print('WOOD_COMPOSITION_AUDIT='+json.dumps({'parents':parents,'git':git_info()})
     return sources, references
 
 
-def prepare(output, *, texture_step=1000, include_material=True, subject_step=600):
+def prepare(output, *, texture_step=1000, include_material=True, subject_step=600, include_subject=True):
+    if type(include_subject) is not bool:
+        raise ValueError('Select an explicit Subject inclusion flag')
     if type(subject_step) is not int or subject_step not in (200, 400, 600):
         raise ValueError('Select a Subject200/400/600 snapshot from the fixed600-step run')
     if type(texture_step) is not int or texture_step not in (500, 750, 1000) or type(include_material) is not bool:
@@ -214,8 +216,11 @@ def prepare(output, *, texture_step=1000, include_material=True, subject_step=60
     inference_git = git_info()
     output.mkdir(parents=True)
     locks = {}
-    subject, subject_refs = (_subject(output, locks) if subject_step == 600
-                             else _subject(output, locks, step=subject_step))
+    sources, references = {}, {}
+    if include_subject:
+        subject, subject_refs = (_subject(output, locks) if subject_step == 600
+                                 else _subject(output, locks, step=subject_step))
+        sources['subject'], references['subject'] = subject, subject_refs
     state = _read(locks, NATURAL_ROOT / 'status.json')
     if (state.get('status') != 'execution_verified' or state.get('git') != NATURAL_GIT
             or state.get('max_steps_per_run') != 1000):
@@ -250,7 +255,6 @@ def prepare(output, *, texture_step=1000, include_material=True, subject_step=60
         _read(locks, MATERIAL_ROOT / 'source_locks.json')
         branches.append(('material', material_index, material_exports, 1000))
     branches.append(('texture', natural_index, texture_index, texture_step))
-    sources, references = {'subject': subject}, {'subject': subject_refs}
     for branch, parent_index, derived_index, step in branches:
         token = '<M*>' if branch == 'material' else '<T*>'
         parents = _methods(parent_index['runs'], branch, token, 1000)

@@ -250,7 +250,7 @@ class WoodCompositionSourceTest(unittest.TestCase):
                     self.verify(fixture)
         self.root = original_root
 
-    def _prepare_texture500(self, subject_step=600, texture_step=500):
+    def _prepare_texture500(self, subject_step=600, texture_step=500, include_subject=True):
         natural = self.root / 'natural'
         material = self.root / 'material-must-not-be-read'
         inference_git = {'commit': 'inference', 'branch': 'cpu'}
@@ -272,6 +272,8 @@ class WoodCompositionSourceTest(unittest.TestCase):
         def read_selected(locks, path):
             path = Path(path)
             self.assertFalse(path.is_relative_to(material))
+            if not include_subject:
+                self.assertFalse(path.is_relative_to(source.SUBJECT_ROOT))
             observed.append(path)
             return read(locks, path)
         subject = {method: {'method': method, 'steps': subject_step, 'training_steps': 600}
@@ -288,12 +290,19 @@ class WoodCompositionSourceTest(unittest.TestCase):
                  next(row for row in parents if row['run'] == str(run))) as audit, \
              patch.object(source, 'verify_pair', side_effect=lambda parent, item, *args: item) as pairs:
             kwargs = {} if subject_step == 600 else {'subject_step': subject_step}
+            if not include_subject:
+                subject_reader.side_effect = AssertionError('Literal baseline must not audit Subject')
+                kwargs['include_subject'] = False
             result = source.prepare(self.root / 'selected-audit', texture_step=texture_step, include_material=False, **kwargs)
-        self.assertEqual(set(result['sources']), {'subject', 'texture'})
-        self.assertEqual(set(result['references']), {'subject', 'texture'})
-        self.assertEqual(set(result['training_gits']), {'subject', 'texture'})
-        self.assertEqual(result['sources']['subject'], subject)
-        self.assertEqual(subject_reader.call_args.kwargs, {} if subject_step == 600 else {'step': subject_step})
+        branches = {'subject', 'texture'} if include_subject else {'texture'}
+        self.assertEqual(set(result['sources']), branches)
+        self.assertEqual(set(result['references']), branches)
+        self.assertEqual(set(result['training_gits']), branches)
+        if include_subject:
+            self.assertEqual(result['sources']['subject'], subject)
+            self.assertEqual(subject_reader.call_args.kwargs, {} if subject_step == 600 else {'step': subject_step})
+        else:
+            subject_reader.assert_not_called()
         self.assertEqual(audit.call_count, 2)
         self.assertEqual(pairs.call_count, 2)
         self.assertEqual(references.call_count, 1)
@@ -305,6 +314,9 @@ class WoodCompositionSourceTest(unittest.TestCase):
 
     def test_prepare_selects_texture500_without_reading_material_source(self):
         self._prepare_texture500()
+
+    def test_literal_texture500_does_not_audit_subject_or_read_subject_references(self):
+        self._prepare_texture500(include_subject=False)
 
     def test_prepare_selects_texture750_without_material_source(self):
         self._prepare_texture500(subject_step=400, texture_step=750)

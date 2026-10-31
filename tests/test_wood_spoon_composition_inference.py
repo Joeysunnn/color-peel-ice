@@ -153,6 +153,8 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
             'custom_attention.unet_2d_condition_custom': SimpleNamespace(UNet2DConditionModel=UNet),
             'src.methods.colorpeel_ice.dual_token_local_kv': SimpleNamespace(install_dual_token_local_kv=
                 lambda *args, **kwargs: owner.installs.append(('dual_fullrank', args, kwargs))),
+            'experiments.lora_kv_subject_v1.attention': SimpleNamespace(install_subject_lora_kv=
+                lambda *args, **kwargs: owner.installs.append(('single_lora', args, kwargs))),
             'experiments.lora_kv_material_v1.attention': SimpleNamespace(install_dual_token_local_lora_kv=
                 lambda *args, **kwargs: owner.installs.append(('dual_lora', args, kwargs)))}
 
@@ -254,6 +256,103 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
             subject['training_steps'] = 1000
             subject['hashes'][str(config_path)] = self.audit['source_locks'][str(config_path)] = inference.sha256(config_path)
         inference.write(self.audit_path, self.audit)
+
+    def literal_texture_audit(self):
+        self.texture500_audit()
+        textures = self.audit['sources']['texture']
+        refs = self.audit['references']['texture']
+        self.audit['sources'] = {'texture': textures}
+        self.audit['references'] = {'texture': refs}
+        paths = {path for item in textures.values() for path in item['hashes']}
+        paths.update(row['image'] for row in refs)
+        self.audit['source_locks'] = {path: self.audit['source_locks'][path] for path in paths}
+        self.audit['training_gits'] = {'texture': {'commit': 'original-texture'}}
+        inference.write(self.audit_path, self.audit)
+
+    def test_literal_prompt_uses_only_texture500_and_ignores_subject_arguments(self):
+        for method in inference.METHODS:
+            rows = inference.prompt_rows(method, 'texture', attribute_step=500, literal_subject=True)
+            self.assertEqual(rows, inference.prompt_rows(method, 'texture', 500, 750, 180, True))
+            self.assertEqual(len(rows), 31)
+            self.assertEqual([row['seed'] for row in rows], list(range(30, 61)))
+            self.assertTrue(all(row['prompt'] == 'a photo of a wood spoon with <T*> texture' for row in rows))
+            self.assertTrue(all(row['subject_step'] is None and row['subject_images'] == 0 for row in rows))
+            self.assertTrue(all(row['condition'] == 'literal_texture' for row in rows))
+            self.assertEqual(inference.prompt_rows(method, 'texture'),
+                             inference.prompt_rows(method, 'texture', literal_subject=False))
+        for method, branch, step in (('fullrank', 'material', 1000), ('fullrank', 'texture', 750),
+                                    ('lora_r64', 'texture', 1000), ('wrong', 'texture', 500)):
+            with self.subTest(method=method, branch=branch, step=step), self.assertRaisesRegex(ValueError, 'Texture500'):
+                inference.prompt_rows(method, branch, attribute_step=step, literal_subject=True)
+
+    def test_literal_real_loader_uses_only_texture_adapter_embedding_and_single_mask_for_both_methods(self):
+        self.literal_texture_audit()
+        with patch.dict(sys.modules, self.modules()), \
+             patch.object(inference.evaluate, 'read_json', side_effect=self.model_json):
+            for method in inference.METHODS:
+                self.calls.clear()
+                self.loads.clear()
+                self.installs.clear()
+                self.embeddings.clear()
+                texture = self.audit['sources']['texture'][method]
+                self.assertEqual(inference.selections(self.audit, method, 'texture', 500, literal_subject=True), [texture])
+                output = self.root / 'literal' / method
+                proof = inference.run(self.audit_path, output, method, 'texture', 'cpu', True,
+                                      attribute_step=500, literal_subject=True)
+                self.assertTrue(proof['literal_subject'])
+                self.assertEqual((proof['subject_step'], proof['subject_images'], proof['subject_training']), (None, 0, None))
+                self.assertEqual(proof['attribute_training'], texture)
+                self.assertEqual(proof['internal_adapter_slots'], {'modifier': '<T*>'})
+                self.assertEqual(proof['training_images'], {'texture': 16})
+                self.assertEqual(proof['generated_images'], 31)
+                self.assertEqual(self.embeddings, [(texture['checkpoint'], '<T*>.bin')])
+                self.assertEqual(len(self.installs), 1)
+                if method == 'fullrank':
+                    self.assertEqual(self.installs[0][1], (texture['checkpoint'],))
+                    self.assertEqual(self.installs[0][2]['weight_name'], texture['weight'])
+                    self.assertEqual(self.loads, [])
+                else:
+                    self.assertEqual(self.installs[0][0], 'single_lora')
+                    self.assertEqual(self.installs[0][1][1:], ({'source': str(Path(texture['checkpoint']) / texture['weight'])},
+                                                            'token_local_kv', 64, 64))
+                    self.assertEqual(self.loads, [str(Path(texture['checkpoint']) / texture['weight'])])
+                self.assertEqual([call[2]['generator'] for call in self.calls], list(range(30, 61)))
+                for tokens, prompt, kwargs in self.calls:
+                    self.assertEqual(tokens, ('<T*>.bin',))
+                    self.assertEqual(prompt, 'a photo of a wood spoon with <T*> texture')
+                    self.assertNotIn('<S*>', prompt)
+                    self.assertEqual((kwargs['num_inference_steps'], kwargs['guidance_scale'], kwargs['width'], kwargs['height']), (100, 3.5, 512, 512))
+                    mask = kwargs['cross_attention_kwargs']['modifier_token_mask']
+                    self.assertNotIsInstance(mask, dict)
+                    self.assertEqual(mask.dtype, np.bool_)
+                    self.assertEqual(mask.shape, (2, 77))
+                    self.assertEqual((int(mask[0].sum()), int(mask[1].sum())), (0, 1))
+                records = [json.loads(line) for line in (output / 'generation_status.jsonl').read_text().splitlines()]
+                self.assertTrue(all(row['subject_adapter_loaded'] is False and row['attribute_adapter_loaded'] is True for row in records))
+                refs = json.loads((output / 'training_references.json').read_text())['references']
+                self.assertEqual(set(refs), {'texture'})
+                self.assertEqual(len(refs['texture']), 16)
+                self.assertFalse((output / 'training_references' / 'subject').exists())
+                self.assertFalse((output / 'references_subject.html').exists())
+                page = (output / 'index.html').read_text(encoding='utf8')
+                self.assertIn('literal wood spoon + T500', page)
+                self.assertNotIn('Subject training images: 0', page)
+                self.assertNotIn('SNone', page)
+
+    def test_literal_missing_texture_or_wrong_snapshot_fails_without_subject_fallback(self):
+        self.literal_texture_audit()
+        self.audit['sources']['texture']['fullrank']['steps'] = 1000
+        inference.write(self.audit_path, self.audit)
+        with patch.object(inference.evaluate, 'load_pipeline') as load:
+            with self.assertRaisesRegex(ValueError, 'audited Texture500'):
+                inference.run(self.audit_path, self.root / 'wrong-literal-step', 'fullrank', 'texture', 'cpu', True,
+                              attribute_step=500, literal_subject=True)
+            del self.audit['sources']['texture']['lora_r64']
+            inference.write(self.audit_path, self.audit)
+            with self.assertRaisesRegex(ValueError, 'audited Texture500'):
+                inference.run(self.audit_path, self.root / 'missing-literal-texture', 'lora_r64', 'texture', 'cpu', True,
+                              attribute_step=500, literal_subject=True)
+            load.assert_not_called()
 
     def test_texture500_uses_its_actual_adapter_and_embedding_with_subject600_for_both_methods(self):
         self.texture500_audit()

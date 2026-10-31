@@ -18,6 +18,7 @@ TOKENS = {'subject': '<S*>', 'material': '<M*>', 'texture': '<T*>'}
 COUNTS = {'subject': 72, 'material': 8, 'texture': 16}
 PROMPTS = {'material': 'a photo of <S*> spoon made of <M*>',
            'texture': 'a photo of <S*> spoon with <T*> texture'}
+LITERAL_PROMPT = 'a photo of a wood spoon with <T*> texture'
 SAMPLING = {'scheduler': 'PNDM', 'num_inference_steps': 100, 'guidance_scale': 3.5,
             'width': 512, 'height': 512, 'dtype': 'float16', 'safety_checker': True,
             'generator': 'fresh_device_generator_per_image', 'seeds': list(SEEDS)}
@@ -32,7 +33,11 @@ def check_locks(locks):
         raise ValueError('missing or changed composition source locks')
 
 
-def _check_scope(method, branch, attribute_step, subject_step, subject_images=72):
+def _check_scope(method, branch, attribute_step, subject_step, subject_images=72, literal_subject=False):
+    if literal_subject:
+        if method not in METHODS or branch != 'texture' or type(attribute_step) is not int or attribute_step != 500:
+            raise ValueError('literal wood spoon requires a declared method and Texture500')
+        return
     if (method not in METHODS or branch not in BRANCHES or type(attribute_step) is not int
             or attribute_step not in ((500, 750, 1000) if branch == 'texture' else (1000,))
             or type(subject_images) is not int or subject_images not in (72, 180)
@@ -41,23 +46,24 @@ def _check_scope(method, branch, attribute_step, subject_step, subject_images=72
         raise ValueError('expected Subject72 at200/400/600 or Subject180 at750/1000, with Material1000 or Texture500/750/1000')
 
 
-def prompt_rows(method, branch, attribute_step=1000, subject_step=600, subject_images=72):
-    _check_scope(method, branch, attribute_step, subject_step, subject_images)
-    return [{'id': f'{method}__{branch}__seed{seed}', 'method': method, 'branch': branch,
-             'condition': 'subject_' + branch, 'subject_step': subject_step, 'attribute_step': attribute_step,
-             'subject_images': subject_images,
-             'seed': seed, 'prompt': PROMPTS[branch], 'image_path': f'images/seed{seed}.png'}
+def prompt_rows(method, branch, attribute_step=1000, subject_step=600, subject_images=72, literal_subject=False):
+    _check_scope(method, branch, attribute_step, subject_step, subject_images, literal_subject)
+    return [{'id': f'{method}__{"literal_" if literal_subject else ""}{branch}__seed{seed}', 'method': method, 'branch': branch,
+             'condition': ('literal_' if literal_subject else 'subject_') + branch,
+             'subject_step': None if literal_subject else subject_step, 'attribute_step': attribute_step,
+             'subject_images': 0 if literal_subject else subject_images,
+             'seed': seed, 'prompt': LITERAL_PROMPT if literal_subject else PROMPTS[branch], 'image_path': f'images/seed{seed}.png'}
             for seed in SEEDS]
 
 
-def selections(audit, method, branch, attribute_step=1000, subject_step=600, subject_images=72):
-    _check_scope(method, branch, attribute_step, subject_step, subject_images)
+def selections(audit, method, branch, attribute_step=1000, subject_step=600, subject_images=72, literal_subject=False):
+    _check_scope(method, branch, attribute_step, subject_step, subject_images, literal_subject)
     if audit.get('inference_git') != git_info():
         raise ValueError('prepared composition audit differs from the clean inference revision')
     locks = audit.get('source_locks', {})
     check_locks(locks)
     result = []
-    for name in ('subject', branch):
+    for name in ((branch,) if literal_subject else ('subject', branch)):
         item = audit.get('sources', {}).get(name, {}).get(method, {})
         step = subject_step if name == 'subject' else attribute_step
         training_steps = 600 if name == 'subject' and subject_images == 72 else 1000
@@ -70,6 +76,8 @@ def selections(audit, method, branch, attribute_step=1000, subject_step=600, sub
                 or item.get('concept_id') != ('wood_spoon' if name == 'subject' else 'wood_spoon_' + name)
                 or item.get('paired_embedding_finite') is not True or not hashes
                 or any(locks.get(path) != digest for path, digest in hashes.items())):
+            if literal_subject:
+                raise ValueError('literal wood spoon requires an audited Texture500 pair')
             raise ValueError(f'composition requires matching audited Subject{subject_step} and attribute{attribute_step} pairs')
         run, checkpoint = Path(item['run']), Path(item['checkpoint'])
         required = [run / 'config.yaml', checkpoint / weight, checkpoint / (token + '.bin'),
@@ -92,9 +100,11 @@ def selections(audit, method, branch, attribute_step=1000, subject_step=600, sub
     return result
 
 
-def references(audit, branch, output, subject_images=72):
+def references(audit, branch, output, subject_images=72, literal_subject=False):
+    if literal_subject and branch != 'texture':
+        raise ValueError('literal wood spoon requires Texture references only')
     result, copies = {}, {}
-    for name in ('subject', branch):
+    for name in ((branch,) if literal_subject else ('subject', branch)):
         rows = audit.get('references', {}).get(name, [])
         if len(rows) != (subject_images if name == 'subject' else COUNTS[name]):
             raise ValueError('review must display every actual selected training RGB and caption')
@@ -130,19 +140,21 @@ def review(output, refs, rows, state):
             + f'<a href="index.html">Results</a><h1>{branch}: actual training references</h1><section>{cards}</section>', encoding='utf8')
     cards = ''.join('<figure>' + (f'<img loading="lazy" src="{row["image_path"]}">' if row.get('status') else '<p>Planned</p>')
         + f'<figcaption>seed {row["seed"]}: {html.escape(row.get("status", "planned"))}</figcaption></figure>' for row in rows)
+    label = ('literal wood spoon + T500; Texture training images: 16' if state['literal_subject'] else
+             f'S{state["subject_step"]} + {"M" if state["branch"] == "material" else "T"}{state["attribute_step"]}'
+             f' ({state["branch"]}); Subject training images: {state["subject_images"]}')
     (output / 'index.html').write_text('<!doctype html><meta charset="utf-8">' + style
         + f'<p><a href="../../index.html">Both methods comparison</a></p><h1>{html.escape(state["prompt"])}</h1>'
-        + f'<p>{state["method"]}; S{state["subject_step"]} + {"M" if state["branch"] == "material" else "T"}{state["attribute_step"]}'
-        + f' ({state["branch"]}); Subject training images: {state["subject_images"]}; {state["status"]}; PNDM100 / CFG3.5</p>'
+        + f'<p>{state["method"]}; {label}; {state["status"]}; PNDM100 / CFG3.5</p>'
         + '<ul>' + ''.join(links) + '</ul><h2>Seeds30–60</h2><section>' + cards + '</section>', encoding='utf8')
 
 
 def run(audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000, subject_step=600,
-        subject_images=72):
-    rows = prompt_rows(method, branch, attribute_step, subject_step, subject_images)
+        subject_images=72, literal_subject=False):
+    rows = prompt_rows(method, branch, attribute_step, subject_step, subject_images, literal_subject)
     audit_path, output = Path(audit_path).resolve(), resolve_run_dir(Path(output))
     audit, revision = read_json(audit_path), git_info()
-    selected = selections(audit, method, branch, attribute_step, subject_step, subject_images)
+    selected = selections(audit, method, branch, attribute_step, subject_step, subject_images, literal_subject)
     paths = [Path(item[field]).resolve() for group in audit['sources'].values() for item in group.values()
              for field in ('run', 'checkpoint')]
     paths += [Path(row['image']).resolve() for group in audit['references'].values() for row in group]
@@ -154,15 +166,15 @@ def run(audit_path, output, method, branch, device='cuda:0', execute=False, attr
     refs, generated, copies = {}, [], {}
     state = {'status': 'running' if execute else 'dry_run', 'inference_git': revision,
         'training_gits': audit.get('training_gits', {}), 'audit': str(audit_path),
-        'method': method, 'branch': branch, 'prompt': PROMPTS[branch], 'subject_step': subject_step,
-        'subject_images': subject_images,
+        'method': method, 'branch': branch, 'prompt': rows[0]['prompt'], 'subject_step': rows[0]['subject_step'],
+        'subject_images': rows[0]['subject_images'], 'literal_subject': literal_subject,
         'attribute_step': attribute_step, 'expected_images': len(rows), 'generated_images': 0,
         'sampling': SAMPLING, 'retraining': False, 'reexporting': False, 'monitoring': False,
-        'subject_training': selected[0], 'attribute_training': selected[1],
-        'internal_adapter_slots': {'subject': '<S*>', 'material': TOKENS[branch]},
-        'attribute_semantics': branch, 'historical_second_slot_name': 'material'}
+        'subject_training': None if literal_subject else selected[0], 'attribute_training': selected[-1],
+        'internal_adapter_slots': ({'modifier': '<T*>'} if literal_subject else {'subject': '<S*>', 'material': TOKENS[branch]}),
+        'attribute_semantics': branch, 'historical_second_slot_name': None if literal_subject else 'material'}
     try:
-        refs, copies = references(audit, branch, output, subject_images)
+        refs, copies = references(audit, branch, output, subject_images, literal_subject)
         state['training_images'] = {name: len(images) for name, images in refs.items()}
         (output / 'generation_manifest.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows), encoding='utf8')
         if execute:
@@ -173,7 +185,8 @@ def run(audit_path, output, method, branch, device='cuda:0', execute=False, attr
                 for row in rows:
                     result = pipe(row['prompt'], num_inference_steps=100, guidance_scale=3.5,
                         width=512, height=512, generator=torch.Generator(device=device).manual_seed(row['seed']),
-                        cross_attention_kwargs=evaluate.attention_masks(pipe, row['prompt'], ['<S*>', TOKENS[branch]], 3.5))
+                        cross_attention_kwargs=evaluate.attention_masks(pipe, row['prompt'],
+                            [TOKENS[branch]] if literal_subject else ['<S*>', TOKENS[branch]], 3.5))
                     if result.nsfw_content_detected is None or len(result.nsfw_content_detected) != 1:
                         raise ValueError('missing safety checker result')
                     if result.images[0].mode != 'RGB' or result.images[0].size != (512, 512):
@@ -183,7 +196,7 @@ def run(audit_path, output, method, branch, device='cuda:0', execute=False, attr
                     with image.open('xb') as handle:
                         result.images[0].save(handle, format='PNG')
                     generated.append({**row, 'status': 'safety_filtered' if result.nsfw_content_detected[0] else 'ok',
-                        'subject_adapter_loaded': True, 'attribute_adapter_loaded': True,
+                        'subject_adapter_loaded': not literal_subject, 'attribute_adapter_loaded': True,
                         'attribute_token': TOKENS[branch], 'image_sha256': sha256(image)})
                     ledger.write(json.dumps(generated[-1]) + '\n')
                     ledger.flush()
@@ -216,8 +229,9 @@ if __name__ == '__main__':
     parser.add_argument('--attribute-step', type=int, choices=(500, 750, 1000), default=1000)
     parser.add_argument('--subject-step', type=int, choices=(200, 400, 600, 750, 1000), default=600)
     parser.add_argument('--subject-images', type=int, choices=(72, 180), default=72)
+    parser.add_argument('--literal-subject', action='store_true')
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--execute-inference', action='store_true')
     args = parser.parse_args()
     print(json.dumps(run(args.audit, args.output, args.method, args.branch, args.device,
-                         args.execute_inference, args.attribute_step, args.subject_step, args.subject_images)))
+                         args.execute_inference, args.attribute_step, args.subject_step, args.subject_images, args.literal_subject)))

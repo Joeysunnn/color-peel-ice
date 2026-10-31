@@ -30,14 +30,16 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         self.stack.enter_context(patch.object(runner.source, 'prepare', side_effect=self.prepare))
         self.stack.enter_context(patch.object(runner.inference, 'run', side_effect=self.preflight))
 
-    def prepare(self, folder, *, texture_step=1000, include_material=True, subject_step=600):
+    def prepare(self, folder, *, texture_step=1000, include_material=True, subject_step=600, include_subject=True):
+        self.include_subject = include_subject
         self.source_options = (texture_step, include_material)
         self.source_subjects.append(subject_step)
         folder.mkdir(parents=True)
         runner.write(folder / 'audit.json', {'inference_git': self.git})
         self.events.append('source_audit')
 
-    def preflight(self, audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000, subject_step=600):
+    def preflight(self, audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000, subject_step=600, literal_subject=False):
+        self.assertEqual(literal_subject, not self.include_subject)
         self.assertEqual(attribute_step, self.source_options[0] if branch == 'texture' else 1000)
         self.assertTrue(Path(audit_path).is_file())
         self.assertFalse(execute)
@@ -97,7 +99,8 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
                     self.output.mkdir(parents=True)
                     step = int(self.command[self.command.index('--attribute-step') + 1])
                     rows = [{**row, 'status': 'ok', 'image_sha256': 'fixture'}
-                            for row in inference.prompt_rows(self.method, self.branch, step, subject_step=self.subject_step)]
+                            for row in inference.prompt_rows(self.method, self.branch, step, subject_step=self.subject_step,
+                                                             literal_subject='--literal-subject' in self.command)]
                     (self.output / 'generation_status.jsonl').write_text(
                         ''.join(json.dumps(row) + '\n' for row in rows))
                     runner.write(self.output / 'provenance.json',
@@ -213,6 +216,23 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
         for step in self.subject_steps:
             for method in runner.METHODS:
                 self.assertIn(f'step{step}_texture/{method}/images/seed30.png', page)
+
+    def test_literal_wood_spoon_only_audits_and_dispatches_two_texture500_jobs(self):
+        self.source_options = (500, False)
+        with patch.object(runner.subprocess, 'Popen', side_effect=self.process_factory(parallel=True)):
+            result = runner.run(self.output, [2, 3], execute=True, texture_step=500, literal_subject=True)
+        self.assertFalse(self.include_subject)
+        self.assertTrue(result['literal_subject'])
+        self.assertEqual(result['subject_steps'], [])
+        self.assertEqual(result['generated_images'], 62)
+        commands = json.loads((self.output / 'repro_outputs/COMMANDS.json').read_text())
+        self.assertEqual(len(commands), 2)
+        self.assertTrue(all('--literal-subject' in row['command'] and row['branch'] == 'texture' for row in commands))
+        page = (self.output / 'index.html').read_text(encoding='utf8')
+        self.assertIn('literal wood spoon', page)
+        self.assertNotIn('S600', page)
+        self.assertEqual(page.count('<td><img'), 62)
+        self.assertIn('Only the Texture500', page)
 
 
 if __name__ == '__main__':

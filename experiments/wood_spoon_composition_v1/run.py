@@ -28,7 +28,8 @@ def review(output, state, jobs):
     cells = []
     for job in jobs:
         branch, method = job['branch'], job['method']
-        label = f'S{job["subject_step"]}+{branch[0].upper()}{state["attribute_steps"][branch]}: {method}'
+        primary = 'literal wood spoon' if state['literal_subject'] else f'S{job["subject_step"]}'
+        label = f'{primary}+{branch[0].upper()}{state["attribute_steps"][branch]}: {method}'
         path = f'{job["folder"]}/index.html'
         cells.append(f'<li><a href="{path}">{label}</a></li>')
     comparisons = []
@@ -50,11 +51,16 @@ def review(output, state, jobs):
     subjects = '/'.join(f'S{s}' for s in state['subject_steps'])
     headers = ''.join(f'<th>S{j["subject_step"]}+{j["branch"][0].upper()} '
         + ('original' if j['method'] == 'fullrank' else 'rank64') + '</th>' for j in jobs)
+    loaded = 'Both token embeddings and both matching token-local adapters are loaded.'
+    if state['literal_subject']:
+        subjects = 'literal wood spoon'
+        headers = '<th>literal + T500 original</th><th>literal + T500 rank64</th>'
+        loaded = 'Only the Texture500 token embedding and token-local adapter are loaded.'
     (output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><title>Wood spoon composition</title>'
         + '<style>body{font:16px sans-serif}td,th{vertical-align:top;padding:8px}img{max-width:100%}</style>'
         + f'<h1>Wood spoon {subjects} + {heading}</h1><p>Status: {state["status"]};{state["expected_images"]} planned images;seeds30–60.</p>'
         + '<p>PNDM100/CFG3.5/512/fp16/checker. '
-        + 'Both token embeddings and both matching token-local adapters are loaded. No retraining.</p>'
+        + loaded + ' No retraining.</p>'
         + '<ul>' + ''.join(cells) + '</ul><table><tr><th>Seed</th>' + headers
         + '</tr>' + ''.join(comparisons) + '</table>', encoding='utf8')
 
@@ -74,16 +80,24 @@ def report(output, state, commands):
         'SCIENTIFIC_CHANGELOG.md': f'Selected inference snapshots: Subject{subjects} + {attributes}. Subject uses spoon initialization/72 images and training total600; Texture uses texture initialization/16 images; selected Material uses material initialization/8 images. Attribute training total remains1000 even for snapshot500. Each branch loads its own same-step adapter and embedding. No training or source edits.\n',
         'COMPARABILITY_REPORT.md': 'Same seeds30–60 across selected compositions and both methods;PNDM100/CFG3.5/512/fp16/checker. S+M uses only S/M, S+T uses only S/T. Sources have different training revisions and durations, recorded separately. The historical second slot named material carries M or T explicitly. No additional controls.\n',
         'PATCHES.md': 'Add read-only source/paired-tensor audits, two-token composition runner and same-seed comparison HTML; existing models/results remain read-only.\n'}
+    if state['literal_subject']:
+        notes['SUMMARY.md'] = f"Status: {state['status']}. Literal wood spoon + Texture500; two31-image methods. No Subject adapter or token.\n"
+        notes['SCIENTIFIC_CHANGELOG.md'] = 'Prompt: a photo of a wood spoon with <T*> texture. Load only Texture500 embedding and same-step K/V. T uses16 training images and texture initialization. No Subject audit, references, embedding or adapter; no training.\n'
+        notes['COMPARABILITY_REPORT.md'] = 'Same T500, methods, seeds30–60 and PNDM100/CFG3.5/512/fp16/checker as S+T experiments. The subject is specified by the literal words wood spoon. Only <T*> receives token-local updates.\n'
     for name, text in notes.items():
         (folder / name).write_text(text, encoding='utf8')
     review(output, state, commands)
 
 
-def run(output, gpus, execute=False, *, texture_step=1000, texture_only=False, subject_steps=(600,)):
+def run(output, gpus, execute=False, *, texture_step=1000, texture_only=False, subject_steps=(600,), literal_subject=False):
+    if literal_subject and (texture_step != 500 or tuple(subject_steps) != (600,)):
+        raise ValueError('literal baseline uses fixed Texture500 with no selected Subject snapshot')
+    texture_only = texture_only or literal_subject
+    scope = {'literal_subject': True} if literal_subject else {}
     if not subject_steps or len(set(subject_steps)) != len(subject_steps):
         raise ValueError('select distinct Subject snapshot steps')
     for step in subject_steps:
-        inference.prompt_rows('fullrank', 'texture', texture_step, subject_step=step)
+        inference.prompt_rows('fullrank', 'texture', texture_step, subject_step=step, **scope)
     branches = ('texture',) if texture_only else BRANCHES
     attribute_steps = {b: texture_step if b == 'texture' else 1000 for b in branches}
     output = resolve_run_dir(Path(output))
@@ -93,7 +107,8 @@ def run(output, gpus, execute=False, *, texture_step=1000, texture_only=False, s
     output.mkdir(parents=True)
     state = {'status': 'auditing_sources', 'git': git_info(), 'gpus': gpus, 'execute': execute,
              'training': False, 'monitoring': False, 'expected_images': 62 * len(branches) * len(subject_steps), 'completed_jobs': [],
-             'branches': list(branches), 'attribute_steps': attribute_steps, 'subject_steps': list(subject_steps)}
+             'branches': list(branches), 'attribute_steps': attribute_steps,
+             'subject_steps': [] if literal_subject else list(subject_steps), 'literal_subject': literal_subject}
     jobs = []
     audits = {step: output / 'source_audit' / (f'step{step}' if len(subject_steps) > 1 else '') for step in subject_steps}
     for step in subject_steps:
@@ -106,14 +121,18 @@ def run(output, gpus, execute=False, *, texture_step=1000, texture_only=False, s
                     '--output', str(output / folder), '--method', method, '--branch', branch,
                     '--device', 'cuda:0', '--attribute-step', str(attribute_steps[branch]),
                     '--subject-step', str(step), '--execute-inference']})
+                if literal_subject:
+                    jobs[-1]['command'].append('--literal-subject')
+                    jobs[-1]['literal_subject'] = True
     report(output, state, jobs)
     try:
         for step, audit in audits.items():
-            source.prepare(audit, texture_step=texture_step, include_material=not texture_only, subject_step=step)
+            source.prepare(audit, texture_step=texture_step, include_material=not texture_only, subject_step=step,
+                           **({'include_subject': False} if literal_subject else {}))
         for job in jobs:
             inference.run(audits[job['subject_step']] / 'audit.json', output / 'preflight' / job['folder'],
                           job['method'], job['branch'], attribute_step=attribute_steps[job['branch']],
-                          subject_step=job['subject_step'])
+                          subject_step=job['subject_step'], **scope)
         if git_info() != state['git']:
             raise ValueError('inference checkout changed during preparation')
         state['status'] = 'dry_run_verified'
@@ -157,7 +176,7 @@ def run(output, gpus, execute=False, *, texture_step=1000, texture_only=False, s
             completed = [row for future in futures for row in future.result()]
         state.update(status='execution_verified', generated_images=state['expected_images'],
                      completed_jobs=[{'method': row['method'], 'branch': row['branch'],
-                                      'subject_step': row['subject_step']} for row in completed])
+                                      'subject_step': None if literal_subject else row['subject_step']} for row in completed])
         return state
     except BaseException as error:
         state.update(status='failed', error=f'{type(error).__name__}: {error}')
@@ -173,7 +192,9 @@ if __name__ == '__main__':
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--texture-step', type=int, choices=(500, 750, 1000), default=1000)
     parser.add_argument('--texture-only', action='store_true')
+    parser.add_argument('--literal-subject', action='store_true')
     parser.add_argument('--subject-steps', nargs='+', type=int, choices=(200, 400, 600), default=[600])
     args = parser.parse_args()
     print(json.dumps(run(args.output, args.gpus, args.execute,
-                         texture_step=args.texture_step, texture_only=args.texture_only, subject_steps=args.subject_steps)))
+                         texture_step=args.texture_step, texture_only=args.texture_only,
+                         subject_steps=args.subject_steps, literal_subject=args.literal_subject)))

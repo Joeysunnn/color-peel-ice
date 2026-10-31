@@ -152,3 +152,25 @@ new methods record both source training revisions. The two dataset sizes also
 have different total training steps, so this is not a controlled dose comparison.
 Keep seed30–60, PNDM100, CFG3.5,512px,fp16 and checker. Complete all audits and
 four preflights before dispatch; verify startup, then stop checking.
+
+## Literal wood spoon + Texture500 (2026-10-31)
+
+Use `a photo of a wood spoon with <T*> texture`, with the literal words
+`wood spoon` and **only** the Texture500 embedding and token-local K/V adapter.
+No Subject token, adapter, source audit or Subject references are loaded.
+Both original/fullrank and rank64/alpha64 use seeds30–60:62 images.
+PNDM100/CFG3.5/512px/fp16/checker and fresh generator per image stay fixed.
+
+```sh
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.wood_spoon_composition_v1.run \
+  --output "$NEW_EXTERNAL_ROOT" --gpus 2 3 \
+  --texture-step 500 --literal-subject --execute
+```
+
+Only T500 sources are audited. The pipeline loads a single token/adapter and
+applies a single-position mask for `<T*>`; ordinary wood/spoon words retain
+their base embeddings. The literal baseline has no learned subject identity.
+Keep both methods in a new root; pages display T16 actual RGB references and
+same-seed comparisons. Preserve all old outputs. Verify startup, then disconnect
+without monitoring. No training or re-exporting.
