@@ -174,3 +174,30 @@ their base embeddings. The literal baseline has no learned subject identity.
 Keep both methods in a new root; pages display T16 actual RGB references and
 same-seed comparisons. Preserve all old outputs. Verify startup, then disconnect
 without monitoring. No training or re-exporting.
+
+## Eight seed42 controls (2026-10-31)
+
+Fix rank64/alpha64, Texture500 and Subject72 step600. Compare four subject
+conditions: literal mug, spoon, wood spoon, and learned `<S*> spoon`. Each has
+two arms: no Texture, or `with <T*> texture`. The no-T arm removes its embedding
+and K/V adapter together with the prompt token; learned Subject keeps S600 in
+both arms. No-T ordinary words use the same unadapted common loader as the
+historical mug baseline. All use fresh seed42, PNDM100/CFG3.5/512/fp16/checker.
+
+Reuse the old mug native/T500 pair, literal wood spoon/T500 and S600/T500
+images after exact prompt, source selection, sampler, safety and PNG hash
+checks. Copy historical provenance and ledgers into each case's reuse evidence;
+keep every source file unchanged. Generate only the missing spoon no-T/T500,
+wood spoon no-T and S600 no-T images. All eight share one fresh output root.
+
+```sh
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.wood_spoon_composition_v1.control_run \
+  --output "$NEW_EXTERNAL_ROOT" --gpus 2 3 --execute
+```
+
+The root page has four subject rows and two no-T/T500 columns, recording which
+images were copied or generated. Case pages retain prompts, source records,
+safety/hash and actual training references for loaded concepts. All existing
+weights/results are read-only. Audit sources and preflight all missing cases
+before dispatch; verify startup, then disconnect without monitoring or retry.
