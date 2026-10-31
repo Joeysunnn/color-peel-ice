@@ -278,7 +278,7 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
                 with self.subTest(method=method), self.assertRaisesRegex(ValueError, 'attribute500'):
                     inference.run(self.audit_path, self.root / ('wrong-texture-' + method), method,
                                   'texture', 'cpu', True, attribute_step=500)
-            for branch, step in (('material', 500), ('texture', 750), ('texture', 500.0), ('texture', True)):
+            for branch, step in (('material', 500), ('texture', 900), ('texture', 500.0), ('texture', True)):
                 with self.subTest(branch=branch, step=step), self.assertRaises(ValueError):
                     inference.run(self.audit_path, self.root / 'invalid-step', 'fullrank', branch,
                                   'cpu', True, attribute_step=step)
@@ -337,6 +337,65 @@ class WoodSpoonCompositionInferenceTest(unittest.TestCase):
                     rows = [json.loads(line) for line in (output / 'generation_manifest.jsonl').read_text().splitlines()]
                     self.assertTrue(all(row['subject_step'] == step and row['attribute_step'] == 500 for row in rows))
                     self.assertIn(f'S{step} + T500', (output / 'index.html').read_text(encoding='utf8'))
+
+    def test_texture750_routes_paired_adapters_and_tokens_with_all_three_subject_steps(self):
+        self.snapshot_audit('texture', 750)
+        generated = 0
+        with patch.dict(sys.modules, self.modules()), \
+             patch.object(inference.evaluate, 'read_json', side_effect=self.model_json):
+            for step in (200, 400, 600):
+                self.snapshot_audit('subject', step)
+                for method in inference.METHODS:
+                    with self.subTest(step=step, method=method):
+                        self.calls.clear()
+                        self.loads.clear()
+                        self.installs.clear()
+                        self.embeddings.clear()
+                        subject = self.audit['sources']['subject'][method]
+                        texture = self.audit['sources']['texture'][method]
+                        selected = inference.selections(self.audit, method, 'texture',
+                                                        attribute_step=750, subject_step=step)
+                        self.assertEqual(selected, [subject, texture])
+                        self.assertEqual((selected[0]['step'], selected[0]['training_steps']), (step, 600))
+                        self.assertEqual((selected[1]['step'], selected[1]['steps'], selected[1]['training_steps']), (750, 750, 1000))
+                        output = self.root / 'texture750' / f'subject{step}' / method
+                        proof = inference.run(self.audit_path, output, method, 'texture', 'cpu', True,
+                                              attribute_step=750, subject_step=step)
+                        generated += proof['generated_images']
+                        self.assertEqual((proof['subject_step'], proof['attribute_step'], proof['generated_images']), (step, 750, 31))
+                        self.assertEqual(proof['subject_training'], subject)
+                        self.assertEqual(proof['attribute_training'], texture)
+                        self.assertEqual(self.embeddings, [(subject['checkpoint'], '<S*>.bin'), (texture['checkpoint'], '<T*>.bin')])
+                        self.assertEqual(self.loads, [str(Path(item['checkpoint']) / item['weight'])
+                            for item in ((texture,) if method == 'fullrank' else (subject, texture))])
+                        if method == 'fullrank':
+                            self.assertEqual(self.installs[0][1], (subject['checkpoint'],))
+                        self.assertEqual(self.installs[-1][0], 'dual_fullrank' if method == 'fullrank' else 'dual_lora')
+                        self.assertEqual([call[2]['generator'] for call in self.calls], list(range(30, 61)))
+                        for tokens, prompt, kwargs in self.calls:
+                            self.assertEqual(tokens, ('<S*>.bin', '<T*>.bin'))
+                            self.assertEqual(prompt, 'a photo of <S*> spoon with <T*> texture')
+                            self.assertEqual((kwargs['num_inference_steps'], kwargs['guidance_scale']), (100, 3.5))
+                            masks = kwargs['cross_attention_kwargs']['modifier_token_mask']
+                            self.assertEqual([int(masks[key][0].sum()) for key in masks], [0, 0])
+                            self.assertEqual([int(masks[key][1].sum()) for key in masks], [1, 1])
+                        rows = [json.loads(line) for line in (output / 'generation_manifest.jsonl').read_text().splitlines()]
+                        self.assertEqual(len(rows), 31)
+                        self.assertTrue(all(row['subject_step'] == step and row['attribute_step'] == 750 for row in rows))
+                        self.assertIn(f'S{step} + T750', (output / 'index.html').read_text(encoding='utf8'))
+        self.assertEqual(generated, 186)
+
+    def test_texture500_and1000_cannot_replace_requested750(self):
+        with patch.object(inference.evaluate, 'load_pipeline') as load:
+            for actual in (1000, 500):
+                if actual == 500:
+                    self.snapshot_audit('texture', 500)
+                for method in inference.METHODS:
+                    output = self.root / f'wrong-texture{actual}-{method}'
+                    with self.subTest(actual=actual, method=method), self.assertRaisesRegex(ValueError, 'attribute750'):
+                        inference.run(self.audit_path, output, method, 'texture', 'cpu', True, attribute_step=750)
+                    self.assertFalse(output.exists())
+            load.assert_not_called()
 
     def test_subject600_cannot_replace_requested200_or400_and_invalid_steps_are_rejected(self):
         self.texture500_audit()

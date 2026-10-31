@@ -1,4 +1,4 @@
-"""Audit existing wood spoon tokens, then dispatch four finite composition jobs."""
+"""Audit existing wood spoon tokens, then dispatch finite composition jobs."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -171,7 +171,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--gpus', nargs='+', type=int, required=True)
     parser.add_argument('--execute', action='store_true')
-    parser.add_argument('--texture-step', type=int, choices=(500, 1000), default=1000)
+    parser.add_argument('--texture-step', type=int, choices=(500, 750, 1000), default=1000)
     parser.add_argument('--texture-only', action='store_true')
     parser.add_argument('--subject-steps', nargs='+', type=int, choices=(200, 400, 600), default=[600])
     args = parser.parse_args()

@@ -233,18 +233,35 @@ class WoodCompositionSourceTest(unittest.TestCase):
                         self.verify(fixture)
         self.root = original_root
 
-    def _prepare_texture500(self, subject_step=600):
+    def test_texture750_pairs_its_actual_snapshot_and_rejects_final_token(self):
+        original_root = self.root
+        for method in source.METHODS:
+            with self.subTest(method=method):
+                self.root = original_root / method
+                self.root.mkdir()
+                fixture = self.fixture('texture', method, 750)
+                parent, derived, directory, payloads, _ = fixture
+                self.assertEqual(self.verify(fixture), derived)
+                self.assertEqual(derived['steps'], 750)
+                self.assertEqual(derived['training_steps'], 1000)
+                self.assertFalse(derived['final_snapshot_matches_export'])
+                payloads[directory / '<T*>.bin'] = payloads[Path(parent['checkpoint']) / '<T*>.bin']
+                with self.assertRaisesRegex(ValueError, 'tensors differ'):
+                    self.verify(fixture)
+        self.root = original_root
+
+    def _prepare_texture500(self, subject_step=600, texture_step=500):
         natural = self.root / 'natural'
         material = self.root / 'material-must-not-be-read'
         inference_git = {'commit': 'inference', 'branch': 'cpu'}
         parents = [{**recipe, 'status': 'verified', 'steps': 1000,
             'run': str(natural / 'training' / (recipe['concept_id'] + '_' + recipe['method']))}
             for recipe in source.natural_config.recipes() if recipe['concept_id'] == 'wood_spoon_texture']
-        derived = [{**row, 'steps': 500, 'step': 500, 'training_steps': 1000} for row in parents]
+        derived = [{**row, 'steps': texture_step, 'step': texture_step, 'training_steps': 1000} for row in parents]
         files = {'status.json': {'status': 'execution_verified', 'git': source.NATURAL_GIT,
                      'max_steps_per_run': 1000, 'source_dataset': str(self.root / 'data')},
             'protocol.json': {}, 'training/training_index.json': {'git': source.NATURAL_GIT, 'runs': parents},
-            'step500/training_index.json': {'git': source.NATURAL_GIT, 'training_steps': 500,
+            f'step{texture_step}/training_index.json': {'git': source.NATURAL_GIT, 'training_steps': texture_step,
                 'source_training_steps': 1000, 'runs': derived}}
         for name, data in files.items():
             path = natural / name
@@ -271,7 +288,7 @@ class WoodCompositionSourceTest(unittest.TestCase):
                  next(row for row in parents if row['run'] == str(run))) as audit, \
              patch.object(source, 'verify_pair', side_effect=lambda parent, item, *args: item) as pairs:
             kwargs = {} if subject_step == 600 else {'subject_step': subject_step}
-            result = source.prepare(self.root / 'selected-audit', texture_step=500, include_material=False, **kwargs)
+            result = source.prepare(self.root / 'selected-audit', texture_step=texture_step, include_material=False, **kwargs)
         self.assertEqual(set(result['sources']), {'subject', 'texture'})
         self.assertEqual(set(result['references']), {'subject', 'texture'})
         self.assertEqual(set(result['training_gits']), {'subject', 'texture'})
@@ -281,13 +298,16 @@ class WoodCompositionSourceTest(unittest.TestCase):
         self.assertEqual(pairs.call_count, 2)
         self.assertEqual(references.call_count, 1)
         self.assertEqual(references.call_args.args[2], 16)
-        self.assertTrue(all(call.args[2] == 500 for call in pairs.call_args_list))
-        self.assertTrue(all('step500' in str(call.args[3]) for call in pairs.call_args_list))
-        self.assertIn(natural / 'step500/training_index.json', observed)
+        self.assertTrue(all(call.args[2] == texture_step for call in pairs.call_args_list))
+        self.assertTrue(all(f'step{texture_step}' in str(call.args[3]) for call in pairs.call_args_list))
+        self.assertIn(natural / f'step{texture_step}/training_index.json', observed)
         self.assertTrue((self.root / 'selected-audit/audit.json').is_file())
 
     def test_prepare_selects_texture500_without_reading_material_source(self):
         self._prepare_texture500()
+
+    def test_prepare_selects_texture750_without_material_source(self):
+        self._prepare_texture500(subject_step=400, texture_step=750)
 
     def test_prepare_forwards_subject200_and400_with_texture500_only(self):
         original_root = self.root

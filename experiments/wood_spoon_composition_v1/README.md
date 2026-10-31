@@ -104,3 +104,24 @@ preflights complete before GPU dispatch. The Subject training total remains600;
 only the selected snapshot changes. Preserve previous S600+T500 and all other
 results. Choose GPUs from a fresh occupancy check, verify startup, then stop
 checking as requested. The defaults still select S600.
+
+## Texture750 with Subject200/400/600 (2026-10-31)
+
+Use the existing natural Texture **step750** paired adapter and embedding,
+matching methods with Subject200,400,600 from the same600-update wood spoon run.
+The Texture training total remains1000; no training or re-exporting is needed.
+Keep the same prompt and seeds30–60:3 snapshots ×2 methods ×31 seeds =186 images.
+
+```sh
+/home/r12user5/miniforge3/envs/colorpeel017/bin/python -u -B \
+  -m experiments.wood_spoon_composition_v1.run \
+  --output "$NEW_EXTERNAL_ROOT" --gpus 0 2 3 \
+  --texture-only --texture-step 750 --subject-steps 200 400 600 --execute
+```
+
+Use a fresh output root containing all six conditions under
+`step{200,400,600}_texture/{fullrank,lora_r64}`. The root page compares six columns
+for each seed after completion. Audit all sources and preflight all six jobs
+before dispatch, check first outputs, then disconnect without monitoring.
+Previous Texture500 and other results stay unchanged. Check GPU occupancy
+immediately before launch. Default selection remains S600/T1000.

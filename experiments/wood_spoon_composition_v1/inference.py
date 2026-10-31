@@ -1,4 +1,4 @@
-"""Render frozen wood-spoon S200/400/600 with independent M1000 or T500/T1000 K/V."""
+"""Render frozen wood-spoon S200/400/600 with independent M1000 or T500/750/1000 K/V."""
 
 import argparse
 import html
@@ -34,9 +34,9 @@ def check_locks(locks):
 
 def _check_scope(method, branch, attribute_step, subject_step):
     if (method not in METHODS or branch not in BRANCHES or type(attribute_step) is not int
-            or attribute_step not in ((500, 1000) if branch == 'texture' else (1000,))
+            or attribute_step not in ((500, 750, 1000) if branch == 'texture' else (1000,))
             or type(subject_step) is not int or subject_step not in (200, 400, 600)):
-        raise ValueError('expected a declared method with Subject200/400/600 and Material1000 or Texture500/1000')
+        raise ValueError('expected a declared method with Subject200/400/600 and Material1000 or Texture500/750/1000')
 
 
 def prompt_rows(method, branch, attribute_step=1000, subject_step=600):
@@ -208,7 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--method', required=True, choices=METHODS)
     parser.add_argument('--branch', required=True, choices=BRANCHES)
-    parser.add_argument('--attribute-step', type=int, choices=(500, 1000), default=1000)
+    parser.add_argument('--attribute-step', type=int, choices=(500, 750, 1000), default=1000)
     parser.add_argument('--subject-step', type=int, choices=(200, 400, 600), default=600)
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--execute-inference', action='store_true')

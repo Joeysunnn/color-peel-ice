@@ -204,8 +204,8 @@ print('WOOD_COMPOSITION_AUDIT='+json.dumps({'parents':parents,'git':git_info()})
 def prepare(output, *, texture_step=1000, include_material=True, subject_step=600):
     if type(subject_step) is not int or subject_step not in (200, 400, 600):
         raise ValueError('Select a Subject200/400/600 snapshot from the fixed600-step run')
-    if type(texture_step) is not int or texture_step not in (500, 1000) or type(include_material) is not bool:
-        raise ValueError('Select Texture500/1000 and an explicit Material inclusion flag')
+    if type(texture_step) is not int or texture_step not in (500, 750, 1000) or type(include_material) is not bool:
+        raise ValueError('Select Texture500/750/1000 and an explicit Material inclusion flag')
     output = resolve_run_dir(Path(output)).resolve()
     if output.exists() or output.is_relative_to(ROOT) or any(
             output.is_relative_to(path) or path.is_relative_to(output)

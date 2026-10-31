@@ -191,5 +191,29 @@ class WoodSpoonCompositionRunTest(unittest.TestCase):
                 self.assertIn(f'step{step}_texture/{method}/images/seed30.png', page)
 
 
+    def test_subject200_400_600_texture750_dispatches_six_and_compares186_images(self):
+        self.source_options = (750, False)
+        self.subject_steps = (200, 400, 600)
+        with patch.object(runner.subprocess, 'Popen', side_effect=self.process_factory(parallel=True)):
+            result = runner.run(self.output, [0, 2, 3], execute=True, texture_step=750,
+                                texture_only=True, subject_steps=self.subject_steps)
+        self.assertEqual(self.source_subjects, [200, 400, 600])
+        self.assertEqual(self.events[:9], ['source_audit'] * 3 + ['preflight'] * 6)
+        self.assertEqual(result['generated_images'], 186)
+        self.assertEqual({(r['subject_step'], r['method']) for r in result['completed_jobs']},
+                         {(s, m) for s in self.subject_steps for m in runner.METHODS})
+        commands = json.loads((self.output / 'repro_outputs/COMMANDS.json').read_text())
+        self.assertEqual(len({row['folder'] for row in commands}), 6)
+        self.assertTrue(all(row['branch'] == 'texture' and
+                            row['command'][row['command'].index('--attribute-step') + 1] == '750'
+                            for row in commands))
+        page = (self.output / 'index.html').read_text(encoding='utf8')
+        self.assertIn('S200/S400/S600 + T750', page)
+        self.assertEqual(page.count('<td><img'), 186)
+        for step in self.subject_steps:
+            for method in runner.METHODS:
+                self.assertIn(f'step{step}_texture/{method}/images/seed30.png', page)
+
+
 if __name__ == '__main__':
     unittest.main()
