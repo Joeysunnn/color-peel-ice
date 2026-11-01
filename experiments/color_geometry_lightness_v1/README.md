@@ -32,3 +32,21 @@ No GPU or fresh Blender rendering is required. index.html compares Emission,
 neutral and candidate for all nine rows; comparison.png is a compact overview.
 manifest.json retains exact captions and source records; source_locks.json
 and files.json record source and output hashes.
+
+## Uniform gray background derivative
+
+After the user accepted geometry/color, `gray_background` creates a separate
+nine-image version with every mask-exterior pixel set to sRGB uint8(128,128,128).
+All foreground RGB pixels and mask files are unchanged; external cast shadows
+are intentionally removed. No feathering, rerendering or training is performed.
+The exact accepted source file index is hash-pinned and every source file is
+verified before and after. Each saved PNG is checked for foreground identity
+and exactly uniform background. Use the same deployment workflow, then:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 /home/r12user5/miniforge3/envs/colorpeel017/bin/python -B \
+  -m experiments.color_geometry_lightness_v1.gray_background --output "$NEW_EXTERNAL_RUN"
+```
+
+The new index shows before/after; contact_sheet.png shows all nine new RGBs.
+Source geometry acceptance does not authorize training of the background variant.
