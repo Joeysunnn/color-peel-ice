@@ -74,7 +74,7 @@ def run(output, gpus=(2, 3), smoke=False, execute=False, *, contract=contract, i
     if len(orange) != 1 or orange[0] in tokenizer.all_special_ids:
         raise ValueError('orange initializer must be one ordinary SD2.1 token')
     output.parent.mkdir(parents=True, exist_ok=True)
-    if shutil.disk_usage(output.parent).free < (8 if smoke else 24) * 1024 ** 3:
+    if shutil.disk_usage(output.parent).free < (8 if smoke else getattr(contract, 'MIN_FREE_GIB', 24)) * 1024 ** 3:
         raise OSError('insufficient free space for immutable complete snapshots and outputs')
     if execute:
         stats = subprocess.check_output(['nvidia-smi', '--query-gpu=index,memory.used',
