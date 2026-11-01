@@ -15,7 +15,8 @@ SEEDS = tuple(range(30, 41))
 SAMPLING = {**shared.SAMPLING, 'seeds': list(SEEDS)}
 
 
-def prompt_rows(method, step):
+def prompt_rows(method, step, *, experiment_contract=contract):
+    contract = experiment_contract
     if method not in contract.METHODS or type(step) is not int or step not in contract.STEPS:
         raise ValueError('require declared Subject method and paired checkpoint step')
     templates = [row for row in blue_green_prompt_rows(500) if row['method'] == method and row['seed'] == 42]
@@ -30,8 +31,9 @@ def prompt_rows(method, step):
     return rows
 
 
-def run(method, train_run, output, device='cuda:0', execute=False):
-    prompt_rows(method, contract.STEPS[0])
+def run(method, train_run, output, device='cuda:0', execute=False, *, experiment_contract=contract):
+    contract = experiment_contract
+    prompt_rows(method, contract.STEPS[0], experiment_contract=contract)
     output = resolve_run_dir(Path(output))
     train_run = Path(train_run).resolve()
     if (output.exists() or output.is_relative_to(shared.ROOT) or output.is_relative_to(train_run)
@@ -44,7 +46,7 @@ def run(method, train_run, output, device='cuda:0', execute=False):
     state = {'status': 'running', 'git': revision, 'method': method, 'branch': 'subject',
         'base_model': model['model'], 'sampling': SAMPLING,
         'generated_images': 0, 'completed_steps': [], 'monitoring': False,
-        'training_images': 27, 'expected_images': 297}
+        'training_images': 27, 'expected_images': 99 * len(contract.STEPS)}
     try:
         exported = snapshots.audit_export(train_run, 'subject', method, output / 'ckpts', False,
                                           experiment_contract=contract)
@@ -53,7 +55,7 @@ def run(method, train_run, output, device='cuda:0', execute=False):
         for step, selection in exported['steps'].items():
             directory = output / f'step{step}'
             directory.mkdir()
-            rows = prompt_rows(method, step)
+            rows = prompt_rows(method, step, experiment_contract=contract)
             (directory / 'generation_manifest.jsonl').write_text(
                 ''.join(json.dumps(row) + '\n' for row in rows), encoding='utf8')
             generated = []

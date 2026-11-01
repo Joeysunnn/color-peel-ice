@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[2]
 REQUEST = '24张studio蓝绿M0/1、R.15/.85、三视角，加orange原图及blue/green原图换色；训练600步，保存200/400/600并transfer seed30–40。'
 
 
-def jobs(output, revision, gpus):
+def jobs(output, revision, gpus, *, experiment_contract=contract, inference_module=inference):
+    contract, inference = experiment_contract, inference_module
     stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     planned = []
     for number, method in enumerate(contract.METHODS):

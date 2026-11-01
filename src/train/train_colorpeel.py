@@ -34,6 +34,7 @@ from joint_binding_utils import (
 from token_gradient_utils import inactive_modifier_ids_for_unpaired_step, modifier_rows_to_zero
 from context_prior_utils import load_context_prior_records
 from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
+from resume_utils import prepare_resume, restore_resume_audit, validate_loaded_state
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -615,8 +616,8 @@ def parse_args(input_args=None):
         type=str,
         default=None,
         help=(
-            "Whether training should be resumed from a previous checkpoint. Use a path saved by"
-            ' `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint.'
+            "Explicit final checkpoint-N path from a completed run; resumes full state into a new output."
+            " Requires fixed-order single-process batch1 accumulation1 training with constant LR."
         ),
     )
     parser.add_argument(
@@ -1338,12 +1339,27 @@ def main(args):
 
     # Observation-only audit state. This snapshots the full embedding table but
     # does not change the official full-parameter AdamW optimizer above.
+    resume_plan = None
+    if args.resume_from_checkpoint is not None:
+        if (args.with_prior_preservation or args.joint_two_object_binding or args.hflip
+                or any(not isinstance(record[1], list) or len(record[1]) != 1
+                       for record in train_dataset.instance_images_path)):
+            raise ValueError("resume requires fixed images and one fixed caption per image without class prior")
+        resume_plan = prepare_resume(
+            args.resume_from_checkpoint, args.output_dir,
+            dict(zip(args.modifier_token or [], modifier_token_id)),
+            len(train_dataloader), args.max_train_steps,
+            num_processes=accelerator.num_processes, batch_size=args.train_batch_size,
+            accumulation=args.gradient_accumulation_steps,
+            scheduler=args.lr_scheduler, warmup=args.lr_warmup_steps,
+        )
     training_metrics_path = None
     embedding_update_audit = None
     token_local_audit = None
     if accelerator.is_main_process:
         training_metrics_path = Path(args.output_dir) / "training_metrics.jsonl"
-        training_metrics_path.write_text("", encoding="utf-8")
+        if resume_plan is None:
+            training_metrics_path.write_text("", encoding="utf-8")
         if args.modifier_token is not None:
             initial_embedding_weight = (
                 accelerator.unwrap_model(text_encoder).get_input_embeddings().weight
@@ -1352,6 +1368,16 @@ def main(args):
                 dict(zip(args.modifier_token, modifier_token_id)),
                 initial_embedding_weight,
             )
+    if resume_plan is not None:
+        accelerator.load_state(resume_plan["checkpoint"])
+        validate_loaded_state(resume_plan, optimizer, lr_scheduler)
+        restore_resume_audit(
+            resume_plan, embedding_update_audit,
+            accelerator.unwrap_model(text_encoder).get_input_embeddings().weight,
+            args.output_dir,
+        )
+        logger.info(f"Resumed complete state at step {resume_plan['global_step']}; "
+                    f"first epoch {resume_plan['first_epoch']}, skip {resume_plan['skip_batches']} batches")
 
     # Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
@@ -1364,8 +1390,8 @@ def main(args):
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
-    global_step = 0
-    first_epoch = 0
+    global_step = resume_plan["global_step"] if resume_plan is not None else 0
+    first_epoch = resume_plan["first_epoch"] if resume_plan is not None else 0
 
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
@@ -1380,6 +1406,8 @@ def main(args):
             text_encoder.train()
 
         for step, batch in enumerate(train_dataloader):
+            if resume_plan is not None and epoch == first_epoch and step < resume_plan["skip_batches"]:
+                continue
             present_modifier_tokens_value = []
             with accelerator.accumulate(unet), accelerator.accumulate(text_encoder):
                 if embedding_update_audit is not None:
