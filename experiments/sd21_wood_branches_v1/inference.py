@@ -214,7 +214,8 @@ def _generate(pipe, rows, output, device, token=None):
     return generated
 
 
-def run(branch, method, train_run, output, seeds=SEEDS, smoke=False, device='cuda:0', execute=False):
+def run(branch, method, train_run, output, seeds=SEEDS, smoke=False, device='cuda:0', execute=False,
+        *, snapshot_exporter=None):
     from experiments.sd21_wood_branches_v1.prepare_model import verify_model
     literal = branch == 'literal'
     seeds = _seeds(seeds)
@@ -234,7 +235,8 @@ def run(branch, method, train_run, output, seeds=SEEDS, smoke=False, device='cud
         'smoke': smoke, 'training': False, 'monitoring': False, 'generated_images': 0, 'completed_steps': []}
     reference_hashes = {}
     try:
-        exported = None if literal else snapshots.audit_export(train_run, branch, method, output / 'ckpts', smoke)
+        exporter = snapshots.audit_export if snapshot_exporter is None else snapshot_exporter
+        exported = None if literal else exporter(train_run, branch, method, output / 'ckpts', smoke)
         if exported:
             locks.update(exported['source_locks'])
         references = [] if literal else exported['references']

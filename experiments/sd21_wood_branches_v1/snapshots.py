@@ -50,11 +50,12 @@ def adapter_schema(method):
     return shapes, empty
 
 
-def audit_export(train_run, branch, method, output, smoke=False):
+def audit_export(train_run, branch, method, output, smoke=False, *, experiment_contract=None):
     import torch
     from experiments.sd21_wood_branches_v1.prepare_model import verify_model
 
-    if branch not in contract.BRANCHES or method not in contract.METHODS or type(smoke) is not bool:
+    recipe_contract = contract if experiment_contract is None else experiment_contract
+    if branch not in recipe_contract.BRANCHES or method not in recipe_contract.METHODS or type(smoke) is not bool:
         raise ValueError('select a declared SD2.1 branch, method and smoke flag')
     run = Path(train_run).resolve()
     output = shared._new_output(output, run)
@@ -62,7 +63,7 @@ def audit_export(train_run, branch, method, output, smoke=False):
         raise ValueError('SD2.1 exports must be fresh and outside code and training runs')
     model_dir = Path(MODEL_DIR).resolve()
     receipt = verify_model(model_dir)
-    expected = contract.build_config(branch, method, model_dir=model_dir, smoke=smoke)
+    expected = recipe_contract.build_config(branch, method, model_dir=model_dir, smoke=smoke)
     config, manifest = read_config(run / 'config.yaml'), read_json(run / 'manifest.json')
     revision = git_info()
     if (config != expected or manifest.get('status') != 'succeeded' or manifest.get('returncode') != 0
@@ -70,12 +71,12 @@ def audit_export(train_run, branch, method, output, smoke=False):
             or manifest.get('git') != revision):
         raise ValueError('SD2.1 training recipe, revision or completion differs')
     maximum = 2 if smoke else 1000
-    steps = [2] if smoke else list(contract.STEPS)
+    steps = [2] if smoke else list(recipe_contract.STEPS)
     if (config['args'].get('max_train_steps') != maximum or shared.checkpoint_plan(config['args']) != steps
             or Path(config['args']['pretrained_model_name_or_path']).resolve() != model_dir):
         raise ValueError('SD2.1 base or checkpoint plan differs')
-    data = contract.verify_dataset(branch)
-    checkpoint, token = run / 'checkpoints', contract.TOKENS[branch]
+    data = recipe_contract.verify_dataset(branch)
+    checkpoint, token = run / 'checkpoints', recipe_contract.TOKENS[branch]
     adaptation = read_json(checkpoint / 'adaptation_config.json')
     mode = 'token_local_kv' if method == 'fullrank' else ('lora_material_kv' if branch == 'material' else 'lora_subject_kv')
     if (adaptation.get('modifier_tokens') != [token] or adaptation.get('adaptation_mode') != mode

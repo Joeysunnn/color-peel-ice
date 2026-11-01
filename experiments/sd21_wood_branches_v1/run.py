@@ -76,7 +76,10 @@ def report_training(group, state, job):
         'Startup verification does not establish output quality.\n', encoding='utf8')
 
 
-def run_queue(gpu, jobs, output, revision, smoke=False, seeds=tuple(range(30, 61)), literal=False):
+def run_queue(gpu, jobs, output, revision, smoke=False, seeds=tuple(range(30, 61)), literal=False,
+              *, dataset_verifier=None, training_reporter=None):
+    verify_data = verify_dataset if dataset_verifier is None else dataset_verifier
+    report = report_training if training_reporter is None else training_reporter
     queue = {'gpu': gpu, 'status': 'running', 'jobs': [], 'monitoring': False}
     path = output / f'gpu_{gpu}.json'
     environment = {**os.environ, 'CUDA_VISIBLE_DEVICES': str(gpu),
@@ -86,7 +89,7 @@ def run_queue(gpu, jobs, output, revision, smoke=False, seeds=tuple(range(30, 61
         for job in jobs:
             if git_info() != revision:
                 raise ValueError('execution checkout changed')
-            verify_dataset(job['branch'])
+            verify_data(job['branch'])
             group = Path(job['group'])
             state = {'status': 'training', 'git': revision, 'gpu': gpu,
                      'branch': job['branch'], 'method': job['method'], 'run': job['run'],
@@ -95,7 +98,7 @@ def run_queue(gpu, jobs, output, revision, smoke=False, seeds=tuple(range(30, 61
                      'best_metric': None, 'best_checkpoint': None, 'stop_reason': None}
             queue['jobs'].append(state)
             _write(path, queue)
-            report_training(group, state, job)
+            report(group, state, job)
             try:
                 for phase, command in (('training', job['training_command']),
                                        ('inference', job['inference_command'])):
@@ -105,15 +108,15 @@ def run_queue(gpu, jobs, output, revision, smoke=False, seeds=tuple(range(30, 61
                                        stderr=subprocess.STDOUT, check=True)
                     if phase == 'training':
                         state.update(status='inference', completed_steps=state['max_steps'])
-                        report_training(group, state, job)
+                        report(group, state, job)
                         _write(path, queue)
-                verify_dataset(job['branch'])
+                verify_data(job['branch'])
                 state.update(status='succeeded', stop_reason='max_steps reached; paired inference completed')
             except BaseException as error:
                 state.update(status='failed', stop_reason=f'{type(error).__name__}: {error}')
                 raise
             finally:
-                report_training(group, state, job)
+                report(group, state, job)
                 _write(path, queue)
         if literal:
             command = [sys.executable, '-u', '-B', '-m',
