@@ -1,5 +1,12 @@
 # Rendered-background Color9: fresh150 steps, snapshots100/150
 
+User review (2026-11-01): the experiment is complete and both100/150-step
+Color transfer results meet the user's requirements. Color needs relatively
+few updates in this evaluated setting. The provisional future default is150
+updates with100/150 paired snapshots for both methods; see
+[Color branch plan](../COLOR_BRANCH_PLAN.md). This records user acceptance,
+not a new server audit or a claim that the dose generalizes to every color.
+
 User-authorized new original/fullrank and rank64/alpha64 training from the same
 pinned SD2.1-base512. Keep the exact rendered9 source RGBs/captions/fixed order,
 C/orange, training seed42,fp32,batch1/accum1,constantLR,embeddingLR1e-5,KVLR
