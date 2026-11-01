@@ -15,19 +15,19 @@ SEEDS = tuple(range(30, 41))
 SAMPLING = {**prompts.SAMPLING, 'seeds': list(SEEDS)}
 
 
-def prompt_rows(method, step, smoke=False):
-    if method not in contract.METHODS or step not in ((2,) if smoke else contract.STEPS):
+def prompt_rows(method, step, smoke=False, *, recipe=contract, seeds=SEEDS):
+    if method not in recipe.METHODS or step not in ((2,) if smoke else recipe.STEPS):
         raise ValueError('require declared Color method and paired step')
     conditions = [row for row in prompts.conditions() if row['arm'] == 'color_only']
     rows = [{'id': f'{method}__step{step}__{row["condition"]}__seed{seed}',
              'branch': 'color', 'method': method, 'step': step, 'seed': seed,
              **row, 'label': row['condition'], 'cfg': 6.0, 'color_adapter_loaded': True,
              'image_path': f'images/{row["condition"]}__seed{seed}.png'}
-            for row in conditions for seed in ((30,) if smoke else SEEDS)]
+            for row in conditions for seed in ((30,) if smoke else seeds)]
     return rows[:1] if smoke else rows
 
 
-def run(method, train_run, output, smoke=False, device='cuda:0', execute=False):
+def run(method, train_run, output, smoke=False, device='cuda:0', execute=False, *, recipe=contract, seeds=SEEDS):
     output = resolve_run_dir(Path(output))
     train_run = Path(train_run).resolve()
     if (output.exists() or output.is_relative_to(shared.ROOT) or output.is_relative_to(train_run)
@@ -35,30 +35,30 @@ def run(method, train_run, output, smoke=False, device='cuda:0', execute=False):
         raise ValueError('require a fresh external inference directory separate from training')
     revision = git_info()
     model = verify_model()
-    locks = snapshots.model_locks(contract.MODEL_DIR, model)
+    locks = snapshots.model_locks(recipe.MODEL_DIR, model)
     locks[str(prompts.SOURCE)] = prompts.sha256(prompts.SOURCE)
     output.mkdir(parents=True)
     state = {'status': 'running', 'git': revision, 'method': method, 'branch': 'color',
-             'base_model': model['model'], 'sampling': {**SAMPLING, 'seeds': [30] if smoke else list(SEEDS)},
+             'base_model': model['model'], 'sampling': {**SAMPLING, 'seeds': [30] if smoke else list(seeds)},
              'smoke': smoke, 'generated_images': 0, 'completed_steps': [], 'monitoring': False,
-             'training_images': 9, 'expected_images': 1 if smoke else 440}
+             'training_images': 9, 'expected_images': 1 if smoke else len(recipe.STEPS) * len(prompt_rows(method, recipe.STEPS[0], recipe=recipe, seeds=seeds))}
     try:
         exported = snapshots.audit_export(train_run, 'color', method, output / 'ckpts', smoke,
-                                          experiment_contract=contract)
+                                          experiment_contract=recipe)
         locks.update(exported['source_locks'])
         reference_hashes = shared.reference_review(output, exported['references'])
         locks.update(reference_hashes)
         for step, selection in exported['steps'].items():
             directory = output / f'step{step}'
             directory.mkdir()
-            rows = prompt_rows(method, step, smoke)
+            rows = prompt_rows(method, step, smoke, recipe=recipe, seeds=seeds)
             (directory / 'generation_manifest.jsonl').write_text(
                 ''.join(json.dumps(row) + '\n' for row in rows), encoding='utf8')
             generated = []
             if execute:
                 import torch
                 snapshots.check_locks(locks)
-                pipe = shared.load_pipeline([selection], device, experiment_contract=contract)
+                pipe = shared.load_pipeline([selection], device, experiment_contract=recipe)
                 generated = shared._generate(pipe, rows, directory, device, '<C*>')
                 del pipe
                 torch.cuda.empty_cache()

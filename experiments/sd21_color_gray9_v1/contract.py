@@ -78,41 +78,48 @@ def source_snapshot():
     return rows, locks
 
 
-def stage_dataset(output):
+def stage_dataset(output, *, recipe=None):
+    if recipe is None:
+        import sys
+        recipe = sys.modules[__name__]
     output = dataset_path(output)
-    if output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(SOURCE_ROOT) or SOURCE_ROOT.is_relative_to(output):
+    if output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(recipe.SOURCE_ROOT) or recipe.SOURCE_ROOT.is_relative_to(output):
         raise ValueError('Stage only into a fresh external dataset directory')
-    sources, locks = source_snapshot()
+    sources, locks = recipe.source_snapshot()
     output.mkdir(parents=True)
     rows, concepts = [], []
     for source in sources:
         path = output / 'images' / source['id'] / 'image.png'
         path.parent.mkdir(parents=True)
-        shutil.copyfile(SOURCE_ROOT / source['image'], path)
+        shutil.copyfile(recipe.SOURCE_ROOT / source['image'], path)
         rows.append({'id': source['id'], 'caption': source['caption'], 'shape': source['shape'],
                      'view': source['view'], 'image': str(path), 'image_sha256': source['image_sha256'],
-                     'source_image': str(SOURCE_ROOT / source['image']), 'uses_object_mask': False})
+                     'source_image': str(recipe.SOURCE_ROOT / source['image']), 'uses_object_mask': False})
         concepts.append({'instance_prompt': [source['caption']], 'instance_data_dir': str(path.parent)})
     _write(output / 'concepts.json', concepts)
     (output / 'training_assets_manifest.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in rows), encoding='utf8')
-    _write(output / 'authorization.json', authorization())
+    _write(output / 'authorization.json', recipe.authorization())
     _write(output / 'source_locks.json', locks)
     names = ('concepts.json', 'training_assets_manifest.jsonl', 'authorization.json', 'source_locks.json')
-    _write(output / 'dataset_audit.json', {'rows': 9, 'source': str(SOURCE_ROOT), 'source_index_sha256': SOURCE_INDEX_SHA,
+    maximum = recipe.authorization()['max_train_steps']
+    _write(output / 'dataset_audit.json', {'rows': 9, 'source': str(recipe.SOURCE_ROOT), 'source_index_sha256': recipe.SOURCE_INDEX_SHA,
         'files': {name: sha256(output / name) for name in names}, 'uses_masks': False,
-        'source_note': SOURCE_NOTE, 'sampling': {'shuffle': False, 'complete_cycles': 111, 'extra_prefix_images': 1}})
-    return verify_dataset('color', dataset=output)
+        'source_note': recipe.SOURCE_NOTE, 'sampling': {'shuffle': False, 'complete_cycles': maximum // 9, 'extra_prefix_images': maximum % 9}})
+    return recipe.verify_dataset('color', dataset=output)
 
 
-def verify_dataset(branch, *, dataset=None):
+def verify_dataset(branch, *, dataset=None, recipe=None):
+    if recipe is None:
+        import sys
+        recipe = sys.modules[__name__]
     if branch != 'color':
         raise ValueError('Only Color is authorized in gray9')
     dataset = dataset_path(dataset)
-    sources, locks = source_snapshot()
+    sources, locks = recipe.source_snapshot()
     audit = read_json(dataset / 'dataset_audit.json')
-    if audit['rows'] != 9 or audit['source_index_sha256'] != SOURCE_INDEX_SHA or audit['uses_masks'] is not False:
+    if audit['rows'] != 9 or audit['source_index_sha256'] != recipe.SOURCE_INDEX_SHA or audit['uses_masks'] is not False:
         raise ValueError('Staged gray9 audit differs')
-    if read_json(dataset / 'authorization.json') != authorization() or read_json(dataset / 'source_locks.json') != locks:
+    if read_json(dataset / 'authorization.json') != recipe.authorization() or read_json(dataset / 'source_locks.json') != locks:
         raise ValueError('Staged gray9 authorization/source locks differ')
     for name, digest in audit['files'].items():
         path = (dataset / name).resolve()
@@ -135,7 +142,7 @@ def verify_dataset(branch, *, dataset=None):
     if read_json(dataset / 'concepts.json') != concepts:
         raise ValueError('Gray9 concepts/image/caption alignment differs')
     return {'branch': branch, 'dataset': str(dataset), 'rows': 9, 'token': '<C*>', 'initializer': 'orange',
-            'references': rows, 'source_locks': locks, 'source_metadata': audit, 'source_note': SOURCE_NOTE,
+            'references': rows, 'source_locks': locks, 'source_metadata': audit, 'source_note': recipe.SOURCE_NOTE,
             'concepts': str(dataset / 'concepts.json'), 'manifest': str(dataset / 'training_assets_manifest.jsonl')}
 
 

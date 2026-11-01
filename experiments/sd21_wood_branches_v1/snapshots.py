@@ -70,7 +70,7 @@ def audit_export(train_run, branch, method, output, smoke=False, *, experiment_c
             or manifest.get('stage') != 'train' or manifest.get('run') != config['run']
             or manifest.get('git') != revision):
         raise ValueError('SD2.1 training recipe, revision or completion differs')
-    maximum = 2 if smoke else 1000
+    maximum = expected['args']['max_train_steps']
     steps = [2] if smoke else list(recipe_contract.STEPS)
     if (config['args'].get('max_train_steps') != maximum or shared.checkpoint_plan(config['args']) != steps
             or Path(config['args']['pretrained_model_name_or_path']).resolve() != model_dir):
