@@ -78,7 +78,8 @@ def audit_export(train_run, branch, method, output, smoke=False, *, experiment_c
     data = recipe_contract.verify_dataset(branch)
     checkpoint, token = run / 'checkpoints', recipe_contract.TOKENS[branch]
     adaptation = read_json(checkpoint / 'adaptation_config.json')
-    mode = 'token_local_kv' if method == 'fullrank' else ('lora_material_kv' if branch == 'material' else 'lora_subject_kv')
+    mode = 'token_local_kv' if method == 'fullrank' else {
+        'material': 'lora_material_kv', 'color': 'lora_color_kv'}.get(branch, 'lora_subject_kv')
     if (adaptation.get('modifier_tokens') != [token] or adaptation.get('adaptation_mode') != mode
             or (method == 'lora_r64' and any(adaptation.get(key) != value for key, value in
                 {'rank': 64, 'alpha': 64, 'mode': 'token_local_kv'}.items()))):
@@ -108,7 +109,9 @@ def audit_export(train_run, branch, method, output, smoke=False, *, experiment_c
                 raise ValueError('SD2.1 paired snapshot has missing or empty training state')
             locks[str(path)] = sha256(path)
     check_locks(locks)
-    parent = {'method': method, 'branch': branch, 'concept_id': 'wood_spoon' if branch == 'subject' else 'wood_spoon_' + branch,
+    concept_id = getattr(recipe_contract, 'CONCEPT_IDS', {}).get(
+        branch, 'wood_spoon' if branch == 'subject' else 'wood_spoon_' + branch)
+    parent = {'method': method, 'branch': branch, 'concept_id': concept_id,
         'token': token, 'status': 'verified', 'run': str(run), 'checkpoint': str(checkpoint), 'weight': weight,
         'steps': maximum, 'metrics': metrics, 'embedding_audit': embedding_audit, 'embedding_dim': WIDTH,
         'base_model': receipt['model'], 'hashes': locks, 'final_snapshot_matches_export': True}

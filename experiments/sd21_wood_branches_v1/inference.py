@@ -74,11 +74,12 @@ def literal_rows(seeds=SEEDS, smoke=False):
         for cfg in ((3.5,) if smoke else (3.5, 5.0, 7.5)) for seed in ((42,) if smoke else seeds)]
 
 
-def load_pipeline(selections, device, *, model_dir=MODEL_DIR, stock=False):
+def load_pipeline(selections, device, *, model_dir=MODEL_DIR, stock=False, experiment_contract=None):
     import torch
     from diffusers import PNDMScheduler, StableDiffusionPipeline
     from experiments.sd21_wood_branches_v1.prepare_model import verify_model
 
+    recipe_contract = contract if experiment_contract is None else experiment_contract
     model_dir = Path(model_dir).resolve()
     receipt = verify_model(model_dir)
     if len(selections) > 1 or (stock and selections):
@@ -86,8 +87,8 @@ def load_pipeline(selections, device, *, model_dir=MODEL_DIR, stock=False):
     for selection in selections:
         if (selection.get('base_model') != receipt['model'] or selection.get('embedding_dim') != snapshots.WIDTH
                 or selection.get('status') != 'verified' or selection.get('paired_embedding_finite') is not True
-                or selection.get('method') not in contract.METHODS
-                or selection.get('token') != contract.TOKENS.get(selection.get('branch'))):
+                or selection.get('method') not in recipe_contract.METHODS
+                or selection.get('token') != recipe_contract.TOKENS.get(selection.get('branch'))):
             raise ValueError('adapter/token selection belongs to another base or branch')
         snapshots.check_locks(selection.get('hashes', {}))
     scheduler = PNDMScheduler.from_pretrained(str(model_dir), subfolder='scheduler', local_files_only=True)
