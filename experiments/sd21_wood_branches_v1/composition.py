@@ -25,20 +25,21 @@ SEEDS = tuple(range(30, 61))
 write = review_helpers.write
 
 
-def prompt_rows(method):
-    if method not in contract.METHODS:
+def prompt_rows(method, *, subject_step=400, subject_images=72):
+    if method not in contract.METHODS or subject_step not in (400, 600) or subject_images not in (27, 72):
         raise ValueError('select original/fullrank or rank64')
-    return [{'id': f'{method}__S400_T600__seed{seed}', 'method': method, 'branch': 'texture',
-             'seed': seed, 'prompt': PROMPT, 'subject_step': 400, 'attribute_step': 600,
-             'subject_images': 72, 'image_path': f'images/seed{seed}.png'} for seed in SEEDS]
+    return [{'id': f'{method}__S{subject_step}_T600__seed{seed}', 'method': method, 'branch': 'texture',
+             'seed': seed, 'prompt': PROMPT, 'subject_step': subject_step, 'attribute_step': 600,
+             'subject_images': subject_images, 'image_path': f'images/seed{seed}.png'} for seed in SEEDS]
 
 
-def check_pair(item, branch, method):
+def check_pair(item, branch, method, *, step=None):
     """Compare the existing export tensors with the exact selected training snapshot."""
     import torch
     from experiments.sd15_token_local_kv_v1 import snapshots as shared
 
-    step, token = BRANCH_STEPS[branch], contract.TOKENS[branch]
+    step = BRANCH_STEPS[branch] if step is None else step
+    token = contract.TOKENS[branch]
     folder = Path(item['checkpoint'])
     snapshot = Path(item['run']) / 'checkpoints' / f'checkpoint-{step}'
     shapes, empty = snapshots.adapter_schema(method)
@@ -143,7 +144,8 @@ def load_pipeline(subject, texture, device):
     return pipe
 
 
-def generate(audit_path, output, method, device='cuda:0', execute=False):
+def generate(audit_path, output, method, device='cuda:0', execute=False,
+             *, subject_step=400, subject_images=72):
     output, audit_path = resolve_run_dir(Path(output)), Path(audit_path).resolve()
     audit, revision = read_json(audit_path), git_info()
     if (output.exists() or output.is_relative_to(ROOT) or audit['inference_git'] != revision
@@ -151,16 +153,22 @@ def generate(audit_path, output, method, device='cuda:0', execute=False):
         raise ValueError('use a fresh external composition output at the audited revision')
     locks = {**audit['source_locks'], str(audit_path): sha256(audit_path)}
     snapshots.check_locks(locks)
+    subject = audit['sources']['subject'][method]
+    texture = audit['sources']['texture'][method]
+    if (subject.get('step') != subject_step or texture.get('step') != 600
+            or subject.get('method') != method or texture.get('method') != method):
+        raise ValueError('composition selections differ from requested steps or method')
     output.mkdir(parents=True)
-    rows, generated, refs, copies = prompt_rows(method), [], {}, {}
+    rows = prompt_rows(method, subject_step=subject_step, subject_images=subject_images)
+    generated, refs, copies = [], {}, {}
     state = {'status': 'running' if execute else 'dry_run', 'method': method, 'branch': 'texture',
-             'literal_subject': False, 'subject_step': 400, 'attribute_step': 600, 'subject_images': 72,
+             'literal_subject': False, 'subject_step': subject_step, 'attribute_step': 600, 'subject_images': subject_images,
              'prompt': PROMPT, 'sampling': {**inference.SAMPLING, 'seeds': list(SEEDS)},
              'inference_git': revision, 'training_gits': audit['training_gits'],
              'expected_images': 31, 'generated_images': 0, 'retraining': False, 'monitoring': False,
              'internal_adapter_slots': {'subject': '<S*>', 'material': '<T*>'}}
     try:
-        refs, copies = review_helpers.references(audit, 'texture', output)
+        refs, copies = review_helpers.references(audit, 'texture', output, subject_images=subject_images)
         (output / 'generation_manifest.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows), encoding='utf8')
         if execute:
             import torch
