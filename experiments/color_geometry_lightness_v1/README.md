@@ -50,3 +50,29 @@ PYTHONDONTWRITEBYTECODE=1 /home/r12user5/miniforge3/envs/colorpeel017/bin/python
 
 The new index shows before/after; contact_sheet.png shows all nine new RGBs.
 Source geometry acceptance does not authorize training of the background variant.
+
+## Rendered continuous background
+
+`render_background.py` replaces only the finite Ground mesh with a 360-degree
+gray studio: radius-12 floor, radius-8 tangent cove, radius-20 wall to height32.
+The original gray material, World strength0, lights, camera views0/8/16,
+foreground geometry/material, Cycles512 samples and seed42 are retained.
+All 512x512 camera rays plus frame corners must hit the new background.
+The old camera/light/object/material metadata must match exactly. The source
+asset contract is hash pinned; source files are verified before and after.
+
+Deploy via local commit/push and server Git checkout. In a fresh experiment
+parent, render `--shapes sphere --output "$RUN/sphere3"` first, using Blender
+`--background --python-exit-code 1 --python experiments/color_geometry_lightness_v1/render_background.py --`
+and `--asset-root /home/r12user5/Documents/Jiawei/papers/CLEVER/image_generation`.
+Set CUDA_VISIBLE_DEVICES to a checked available GPU. Run ordinary Python
+`-m experiments.color_geometry_lightness_v1.review_background --inputs "$RUN/sphere3" --output "$RUN/sphere_review"`.
+Inspect all three sphere images before rendering `--shapes cube cylinder`
+to a fresh `$RUN/remaining6`; then review both inputs into `$RUN/result9`.
+The three approved sphere renders are reused without rerendering.
+
+Review calls the existing `prepare.remap` unchanged and requires identical old
+object-mask pixels. Background and cast shadows remain byte-identical to the
+fresh neutral render, with no gray filling. Scene geometry can change indirect
+illumination; foreground final RGB is not promised identical. Saved .blend
+files and camera-ray audits retain scene evidence. Preview only; no training.
