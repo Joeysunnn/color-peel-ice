@@ -70,3 +70,31 @@ ledgers record actual status. A queued job is not a completed job. After startup
 verification, disconnect; do not create monitoring jobs or change this checkout
 while queues are active. Training success does not establish disentanglement or
 better spoon geometry; those require visual review of the generated results.
+
+## S400 + T600 combination
+
+After the completed `19049ce` experiment, the authorized composition uses its
+existing **Subject400 + Texture600** paired exports, matching original with
+original and rank64 with rank64. Prompt:
+
+```text
+a photo of <S*> spoon with <T*> texture
+```
+
+Seeds30–60 inclusive, PNDM100/CFG3.5/512px/fp16/common checker: 62 images.
+Both embeddings and both token-local adapters are loaded. The inherited dual
+adapter's internal `material` slot carries `<T*>`; no Material adapter is loaded.
+Each export is checked against its exact training snapshot, its historical
+receipt/index and source Git. The old training metadata are kept unchanged.
+No training or re-exporting. The single-branch entrypoint remains unchanged.
+
+```bash
+$TPY -B -u -m experiments.sd21_wood_branches_v1.composition \
+  --output "$NEW_COMPOSITION_FOLDER" --gpus 2 3 --execute
+```
+
+Use a fresh folder under the completed experiment's `compositions/` directory.
+The two methods share this new folder, with separate source receipts, logs,
+generation ledgers and pages displaying the actual Subject72/Texture16 RGB and
+captions. Old outputs are read only. After initial images are verified, stop
+checking; no monitoring is created.
