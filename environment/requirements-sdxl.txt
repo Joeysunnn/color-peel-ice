@@ -1,0 +1,14 @@
+# Separate SDXL environment; never install these into colorpeel017.
+# Observed versions in the SDXL environment; CUDA build and borrowed package
+# paths are recorded in the external environment receipt. This is not a lock
+# of every transitive dependency.
+torch==2.6.0
+diffusers==0.35.1
+transformers==4.57.3
+accelerate==1.11.0
+huggingface-hub==0.36.2
+xformers==0.0.29.post3
+peft==0.17.1
+safetensors==0.5.3
+Pillow==11.0.0
+numpy==2.1.2
