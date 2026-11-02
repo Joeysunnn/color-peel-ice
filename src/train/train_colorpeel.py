@@ -35,6 +35,13 @@ from token_gradient_utils import inactive_modifier_ids_for_unpaired_step, modifi
 from context_prior_utils import load_context_prior_records
 from training_audit import EmbeddingUpdateAudit, append_jsonl, build_training_metric, write_json
 from resume_utils import prepare_resume, restore_resume_audit, validate_loaded_state
+from texture_background_preservation import (
+    background_preservation_loss,
+    background_training_metrics,
+    cache_reference_conditioning,
+    reference_prediction,
+    validate_texture_background_preservation,
+)
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -541,6 +548,10 @@ def parse_args(input_args=None):
     )
     parser.add_argument("--prior_loss_weight", type=float, default=1.0, help="The weight of prior preservation loss.")
     parser.add_argument(
+        "--texture_background_preservation_weight", type=float, default=0.0,
+        help="Opt-in Texture foreground-exterior consistency with the frozen base; zero preserves the old training path.",
+    )
+    parser.add_argument(
         "--num_class_images",
         type=int,
         default=200,
@@ -958,6 +969,7 @@ def main(args):
         raise ValueError("lambda_attention is only supported by joint_two_object_binding")
     if args.with_prior_preservation and args.joint_two_object_binding:
         raise ValueError("with_prior_preservation is only implemented for single-subject training")
+    preserve_texture_background = validate_texture_background_preservation(args)
 
     # Handle the repository creation
     if accelerator.is_main_process:
@@ -1337,6 +1349,23 @@ def main(args):
     checkpoint_steps = validate_checkpoint_plan(
         args.checkpoint_steps, args.checkpointing_steps, args.max_train_steps)
 
+    texture_reference = None
+    if preserve_texture_background:
+        if any(record[2] is None for record in train_dataset.instance_images_path):
+            raise ValueError("texture background preservation requires foreground masks for every image")
+        reference_input_ids = torch.cat([
+            tokenizer(caption, truncation=True, padding="max_length",
+                      max_length=tokenizer.model_max_length, return_tensors="pt").input_ids
+            for record in train_dataset.instance_images_path for caption in record[1]
+        ])
+        # Must precede accelerator.load_state: the teacher keeps initialization conditioning.
+        texture_reference = cache_reference_conditioning(
+            accelerator.unwrap_model(text_encoder), reference_input_ids,
+            modifier_token_id[0], initializer_token_id[0][0],
+        )
+        if accelerator.is_main_process:
+            write_json(Path(args.output_dir) / "texture_background_reference.json", texture_reference.audit())
+
     # Observation-only audit state. This snapshots the full embedding table but
     # does not change the official full-parameter AdamW optimizer above.
     resume_plan = None
@@ -1429,6 +1458,12 @@ def main(args):
                 # (this is the forward diffusion process)
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
+                if texture_reference is not None:
+                    # Teacher first: student forward must own the observed attention maps.
+                    texture_teacher = reference_prediction(
+                        unet, noisy_latents, timesteps, batch["input_ids"], texture_reference,
+                    )
+
                 # Get the text embedding for conditioning
                 encoder_hidden_states = text_encoder(batch["input_ids"])[0]
                 token_local_kwargs = {}
@@ -1518,6 +1553,11 @@ def main(args):
                     weighted_attention_loss = raw_attention_loss
                     leakage_mass = torch.zeros((), device=loss.device)
                 instance_loss_value = loss.detach().float().item()
+                if texture_reference is not None:
+                    texture_background_loss, texture_background_region = background_preservation_loss(
+                        model_pred, texture_teacher, mask,
+                    )
+                    loss = loss + args.texture_background_preservation_weight * texture_background_loss
                 prior_loss = torch.zeros((), device=loss.device)
                 if args.with_prior_preservation:
                     class_latents = vae.encode(batch["class_pixel_values"].to(dtype=weight_dtype)).latent_dist.sample()
@@ -1642,7 +1682,10 @@ def main(args):
                         ),
                         prior_loss=prior_loss.detach().float().item() if args.with_prior_preservation else None,
                         prior_loss_weight=args.prior_loss_weight if args.with_prior_preservation else None,
-                    ),
+                    ) | (background_training_metrics(
+                        texture_background_loss, args.texture_background_preservation_weight,
+                        texture_background_region,
+                    ) if texture_reference is not None else {}),
                 )
 
             if global_step >= args.max_train_steps:
