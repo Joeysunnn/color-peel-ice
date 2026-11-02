@@ -27,7 +27,8 @@ class CompositionSourceTest(unittest.TestCase):
             for method in source.contract.METHODS:
                 group = root / 'methods' / method if branch == 'subject' else root / branch / method
                 run = group / 'training' / 'original_run'
-                config = {'run': {'study': branch + '_study', 'variant': method, 'seed': 42}}
+                config = {'run': {'study': branch + '_study', 'variant': method, 'seed': 42},
+                          'args': {'max_train_steps': 1000}}
                 self.configs[run / 'config.yaml'] = config
                 self.files[run / 'manifest.json'] = {'status': 'succeeded', 'returncode': 0,
                     'stage': 'train', 'git': git, 'run': config['run']}
@@ -75,8 +76,8 @@ class CompositionSourceTest(unittest.TestCase):
             patch.object(source, 'git_info', return_value={'commit': 'new', 'branch': 'new'}),
             patch.object(source.previous, 'verify_model', return_value={'model': self.model}),
             patch.object(source.previous.snapshots, 'model_locks', return_value={str(self.root / 'model'): self.digest(self.root / 'model')}),
-            patch.object(source.contract, 'build_config', side_effect=lambda branch, method: {'run': {'study': branch + '_study', 'variant': method, 'seed': 42}}),
-            patch.object(source.previous.contract, 'build_config', side_effect=lambda branch, method: {'run': {'study': branch + '_study', 'variant': method, 'seed': 42}})]
+            patch.object(source.contract, 'build_config', side_effect=lambda branch, method: {'run': {'study': branch + '_study', 'variant': method, 'seed': 42}, 'args': {'max_train_steps': 1000}}),
+            patch.object(source.previous.contract, 'build_config', side_effect=lambda branch, method: {'run': {'study': branch + '_study', 'variant': method, 'seed': 42}, 'args': {'max_train_steps': 1000}})]
         for patcher in self.patches:
             patcher.start()
             self.addCleanup(patcher.stop)

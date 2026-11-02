@@ -33,7 +33,7 @@ def prompt_rows(method, *, subject_step=400, subject_images=72):
              'subject_images': subject_images, 'image_path': f'images/seed{seed}.png'} for seed in SEEDS]
 
 
-def check_pair(item, branch, method, *, step=None):
+def check_pair(item, branch, method, *, step=None, training_steps=1000):
     """Compare the existing export tensors with the exact selected training snapshot."""
     import torch
     from experiments.sd15_token_local_kv_v1 import snapshots as shared
@@ -50,7 +50,7 @@ def check_pair(item, branch, method, *, step=None):
     if any(not torch.equal(adapter[key], saved[key]) for key in shapes):
         raise ValueError('composition adapter differs from selected snapshot')
     token_id, audit = shared._embedding_audit(
-        Path(item['run']) / 'checkpoints/embedding_update_audit.json', 1000, token)
+        Path(item['run']) / 'checkpoints/embedding_update_audit.json', training_steps, token)
     if audit['non_modifier_embedding_drift'].get('changed_rows') != 0:
         raise ValueError('ordinary embeddings changed in source training')
     vector = torch.load(folder / (token + '.bin'), map_location='cpu')

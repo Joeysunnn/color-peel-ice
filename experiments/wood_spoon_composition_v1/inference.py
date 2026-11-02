@@ -146,7 +146,8 @@ def review(output, refs, rows, state):
     (output / 'index.html').write_text('<!doctype html><meta charset="utf-8">' + style
         + f'<p><a href="../../index.html">Both methods comparison</a></p><h1>{html.escape(state["prompt"])}</h1>'
         + f'<p>{state["method"]}; {label}; {state["status"]}; PNDM100 / CFG3.5</p>'
-        + '<ul>' + ''.join(links) + '</ul><h2>Seeds30–60</h2><section>' + cards + '</section>', encoding='utf8')
+        + '<ul>' + ''.join(links) + '</ul><h2>Seeds ' + ', '.join(str(row['seed']) for row in rows)
+        + '</h2><section>' + cards + '</section>', encoding='utf8')
 
 
 def run(audit_path, output, method, branch, device='cuda:0', execute=False, attribute_step=1000, subject_step=600,

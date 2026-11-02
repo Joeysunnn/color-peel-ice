@@ -38,21 +38,24 @@ def _job(source, branch, method, expected_git):
     return group, run
 
 
-def _pair(source, branch, method, step, expected_git, model):
+def _pair(source, branch, method, step, expected_git, model, *, recipe_contract=None):
     group, run = _job(source, branch, method, expected_git)
     folder = group / 'inference'
     checkpoint = folder / f'ckpts/step{step}'
     receipt_path, index_path = checkpoint / 'receipt.json', folder / 'ckpts/index.json'
     item, index = read_json(receipt_path), read_json(index_path)
-    recipe_contract = contract if branch == 'subject' else previous.contract
+    if recipe_contract is None:
+        recipe_contract = contract if branch == 'subject' else previous.contract
     expected = recipe_contract.build_config(branch, method)
+    maximum = expected['args']['max_train_steps']
     manifest = read_json(run / 'manifest.json')
     token = recipe_contract.TOKENS[branch]
     weight = 'pytorch_token_local_kv_weights.bin' if method == 'fullrank' else 'pytorch_lora_kv_weights.bin'
     identity = {'branch': branch, 'method': method, 'step': step, 'steps': step,
-        'training_steps': 1000, 'token': token, 'weight': weight, 'embedding_dim': 1024,
-        'status': 'verified', 'paired_embedding_finite': True, 'final_snapshot_matches_export': False,
-        'concept_id': 'wood_spoon' if branch == 'subject' else 'wood_spoon_texture'}
+        'training_steps': maximum, 'token': token, 'weight': weight, 'embedding_dim': 1024,
+        'status': 'verified', 'paired_embedding_finite': True, 'final_snapshot_matches_export': step == maximum,
+        'concept_id': getattr(recipe_contract, 'CONCEPT_IDS', {}).get(
+            branch, 'wood_spoon' if branch == 'subject' else 'wood_spoon_texture')}
     if (not item.get('hashes') or item != index.get('steps', {}).get(str(step))
             or index.get('git') != expected_git or index.get('smoke') is not False
             or item.get('run') != str(run) or item.get('checkpoint') != str(checkpoint)
@@ -89,7 +92,7 @@ def _pair(source, branch, method, step, expected_git, model):
         raise ValueError('Selected composition payload and snapshot hashes disagree')
     _merge(locks, {str(path): sha256(path) for path in (receipt_path, index_path)})
     previous.snapshots.check_locks(locks)
-    previous.check_pair(item, branch, method, step=step)
+    previous.check_pair(item, branch, method, step=step, training_steps=maximum)
     return {**item, 'hashes': locks}, locks
 
 
