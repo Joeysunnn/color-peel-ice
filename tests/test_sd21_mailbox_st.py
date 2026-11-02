@@ -130,7 +130,7 @@ class MailboxCompositionTest(unittest.TestCase):
                     stack.enter_context(patch.object(source.previous.snapshots, 'check_locks'))
                     check = stack.enter_context(patch.object(source.previous, 'check_pair'))
                     source._pair(root, 'subject', method, 1500, composition.SUBJECT_GIT, {'id': 'sd21'}, recipe_contract=recipe)
-                    check.assert_called_once_with(item, 'subject', method, step=1500, training_steps=1500)
+                    check.assert_called_once_with(item, 'subject', method, step=1500, training_steps=1500, token='<S*>')
                     saved = copy.deepcopy(item)
                     for key, value in (('training_steps', 1000), ('concept_id', 'wood_spoon'),
                                        ('final_snapshot_matches_export', False)):

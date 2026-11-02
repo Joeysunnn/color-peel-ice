@@ -31,7 +31,7 @@ def _job(source, branch, method, expected_git):
                if job.get('branch') == branch and job.get('method') == method]
     if description.get('git') != expected_git or len(matches) != 1:
         raise ValueError('Pinned composition source Git/job description differs')
-    group = source / 'methods' / method if branch == 'subject' else source / branch / method
+    group = source / 'methods' / method if branch in ('subject', 'color') else source / branch / method
     run = Path(matches[0].get('run', ''))
     if not run.is_absolute() or run.parent != group / 'training':
         raise ValueError('Pinned composition job training path differs')
@@ -68,7 +68,8 @@ def _pair(source, branch, method, step, expected_git, model, *, recipe_contract=
         raise ValueError('Selected immutable S27/T16 training or paired export differs')
     adaptation = read_json(checkpoint / 'adaptation_config.json')
     if (adaptation.get('modifier_tokens') != [token]
-            or adaptation.get('adaptation_mode') != ('token_local_kv' if method == 'fullrank' else 'lora_subject_kv')
+            or adaptation.get('adaptation_mode') != ('token_local_kv' if method == 'fullrank' else
+                'lora_color_kv' if branch == 'color' else 'lora_subject_kv')
             or (method == 'lora_r64' and any(adaptation.get(key) != value
                 for key, value in {'rank': 64, 'alpha': 64, 'mode': 'token_local_kv'}.items()))):
         raise ValueError('Selected composition adapter metadata differs')
@@ -92,7 +93,7 @@ def _pair(source, branch, method, step, expected_git, model, *, recipe_contract=
         raise ValueError('Selected composition payload and snapshot hashes disagree')
     _merge(locks, {str(path): sha256(path) for path in (receipt_path, index_path)})
     previous.snapshots.check_locks(locks)
-    previous.check_pair(item, branch, method, step=step, training_steps=maximum)
+    previous.check_pair(item, branch, method, step=step, training_steps=maximum, token=token)
     return {**item, 'hashes': locks}, locks
 
 

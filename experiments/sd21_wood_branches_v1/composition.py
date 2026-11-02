@@ -33,13 +33,13 @@ def prompt_rows(method, *, subject_step=400, subject_images=72):
              'subject_images': subject_images, 'image_path': f'images/seed{seed}.png'} for seed in SEEDS]
 
 
-def check_pair(item, branch, method, *, step=None, training_steps=1000):
+def check_pair(item, branch, method, *, step=None, training_steps=1000, token=None):
     """Compare the existing export tensors with the exact selected training snapshot."""
     import torch
     from experiments.sd15_token_local_kv_v1 import snapshots as shared
 
     step = BRANCH_STEPS[branch] if step is None else step
-    token = contract.TOKENS[branch]
+    token = contract.TOKENS[branch] if token is None else token
     folder = Path(item['checkpoint'])
     snapshot = Path(item['run']) / 'checkpoints' / f'checkpoint-{step}'
     shapes, empty = snapshots.adapter_schema(method)
