@@ -1,5 +1,12 @@
 # SD2.1 Mailbox S1000 + orange C150 + wood T1000
 
+Scene-transfer follow-up: add `--scene-transfer` to append exactly `in the street`,
+`in the snow`, or `surrounded by flowers` to the same learned-token prompt. Each
+method generates3 scenes x31 seeds30–60 inclusive =93 images;186 total. Sources,
+three-slot attention and all sampling parameters remain unchanged. Each prompt
+has its own audited masks and each image gets a fresh seeded generator. All images
+go to a new experiment; no base prompts are regenerated in this mode.
+
 User-requested three-branch inference, without retraining. Reuse the reviewed
 center11 Mailbox Subject1000 and historical wood Texture1000 from the preceding
 S+T test. Add the completed rendered9 original-orange Color150 from commit

@@ -7,6 +7,19 @@ from experiments.sd21_mailbox_sct_v1 import run as sct
 
 
 class SCTPlanTest(unittest.TestCase):
+    def test_scene_transfer_exact_prompts_and186_unique_cases(self):
+        rows = [r for m in sct.METHODS for r in sct.prompt_rows(m, scene_transfer=True)]
+        self.assertEqual(len(rows), 186)
+        self.assertEqual(len({r['id'] for r in rows}), 186)
+        for method in sct.METHODS:
+            selected = [r for r in rows if r['method'] == method]
+            self.assertEqual(len({r['image_path'] for r in selected}), 93)
+            for scene, suffix in sct.SCENES.items():
+                group = [r for r in selected if r['scene'] == scene]
+                self.assertEqual([r['seed'] for r in group], list(range(30, 61)))
+                self.assertEqual({r['prompt'] for r in group}, {sct.PROMPT + ' ' + suffix})
+                self.assertTrue(all(r['steps'] == {'subject': 1000, 'color': 150, 'texture': 1000} for r in group))
+
     def test_three_learned_tokens_and_matched_seeds(self):
         rows = [r for m in sct.METHODS for r in sct.prompt_rows(m)]
         self.assertEqual(len(rows), 22)
