@@ -1,0 +1,68 @@
+[
+  {
+    "id": "center__blue__M0_R15__studio",
+    "caption": "a photo of <S*> mailbox in blue color with a glossy non-metallic surface",
+    "image_sha256": "4aa21a06bfdf1f512fc62e89a672c446ecc747e5efaf7c45deb8c788ca87b779",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "center__blue__M0_R85__studio",
+    "caption": "a photo of <S*> mailbox in blue color with a rough non-metallic surface",
+    "image_sha256": "ca6018dcea7e6c1e14787df711432c5112c0ee3f70f59b8f6ffe165a6ce69b16",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "center__blue__M1_R15__studio",
+    "caption": "a photo of <S*> mailbox in blue color with a glossy metallic surface",
+    "image_sha256": "88a1ef6140099ca606bd400503da6cbacfb8e51fa2e4f7034567f14c047a87f9",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "center__blue__M1_R85__studio",
+    "caption": "a photo of <S*> mailbox in blue color with a rough metallic surface",
+    "image_sha256": "84bdf5d314c3864bb33be41b005ecdd46b5a87c73f5e8817a0c2e8ca0a1bd36c",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "center__green__M0_R15__studio",
+    "caption": "a photo of <S*> mailbox in green color with a glossy non-metallic surface",
+    "image_sha256": "75a1190be654d67a778be80ada9ba44390750a447604b77f64788c7807f4212e",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "center__green__M0_R85__studio",
+    "caption": "a photo of <S*> mailbox in green color with a rough non-metallic surface",
+    "image_sha256": "42011a6487ac8ff46707b3014483f86f7a06932f9c15c17d5c0e4be8fa75d75f",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "center__green__M1_R15__studio",
+    "caption": "a photo of <S*> mailbox in green color with a glossy metallic surface",
+    "image_sha256": "545e94a7330d06e0497b2ae13da86704d5d29ebbb9838d0a99bdafa865527705",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "center__green__M1_R85__studio",
+    "caption": "a photo of <S*> mailbox in green color with a rough metallic surface",
+    "image_sha256": "e40a89aba56ea34aa71f2ad05e91d0454b1cf207a5dae560110218315941c836",
+    "mask_sha256": "7f9d253138de27df65e6567e92c834ae1f7b10b7affcfb1c23aab01cf6d8a940"
+  },
+  {
+    "id": "photo_original",
+    "caption": "a photo of <S*> mailbox in orange color made of glossy painted metal",
+    "image_sha256": "83f0270bc1d0afb76e48a30f5b0eb72e540d3b7df796197e14ed269e9137203f",
+    "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7"
+  },
+  {
+    "id": "photo_lch_blue",
+    "caption": "a photo of <S*> mailbox in blue color made of glossy painted metal",
+    "image_sha256": "5475c02c3713ce6353bd262f584f16105d24c23285ec1312eb427fb87edd4dc5",
+    "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7"
+  },
+  {
+    "id": "photo_lch_green",
+    "caption": "a photo of <S*> mailbox in green color made of glossy painted metal",
+    "image_sha256": "15b93e4e49502870daa3b71f524220943ccfaf2114f810c54da827e0a210aed0",
+    "mask_sha256": "b4d119d110ec356fca9daa9003c8505ba04f7ee694d0d8785e9c5281f63a8cf7"
+  }
+]

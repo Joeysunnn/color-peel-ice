@@ -46,10 +46,11 @@ def run(method, train_run, output, device='cuda:0', execute=False, *, experiment
     state = {'status': 'running', 'git': revision, 'method': method, 'branch': 'subject',
         'base_model': model['model'], 'sampling': SAMPLING,
         'generated_images': 0, 'completed_steps': [], 'monitoring': False,
-        'training_images': 27, 'expected_images': 99 * len(contract.STEPS)}
+        'training_images': None, 'expected_images': 99 * len(contract.STEPS)}
     try:
         exported = snapshots.audit_export(train_run, 'subject', method, output / 'ckpts', False,
                                           experiment_contract=contract)
+        state['training_images'] = exported['training_images']
         locks.update(exported['source_locks'])
         locks.update(shared.reference_review(output, exported['references']))
         for step, selection in exported['steps'].items():
@@ -85,9 +86,9 @@ def run(method, train_run, output, device='cuda:0', execute=False, *, experiment
         write_json(output / 'status.json', state)
         write_json(output / 'provenance.json', state)
         links = ''.join(f'<li><a href="step{step}/index.html">step{step}</a></li>' for step in state['completed_steps'])
-        (output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><h1>SD2.1 Mailbox Subject27</h1>'
+        (output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><h1>SD2.1 Mailbox Subject</h1>'
             + f'<p>{method}; {state["status"]}; {state["generated_images"]} images; PNDM100/CFG3.5/512px</p>'
-            + '<a href="training_references.html">Actual 27 training images and captions</a><ul>' + links + '</ul>', encoding='utf8')
+            + f'<a href="training_references.html">Actual {state["training_images"]} training images and captions</a><ul>' + links + '</ul>', encoding='utf8')
     return state
 
 
