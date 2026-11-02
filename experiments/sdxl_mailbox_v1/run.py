@@ -177,7 +177,8 @@ def run(output, gpus=(1, 2, 3), model_dir=MODEL_DIR, execute=False, smoke=False)
             '<!doctype html><meta charset="utf-8"><h1>SDXL Mailbox: four independent branches</h1>'
             '<p>Subject27 / Color9 / Material8 / Texture16. Fullrank and rank64. '
             'Single-branch transfer only. See experiment.json for live completion state.</p>'
-            '<p><a href="dataset/receipt.json">Data provenance</a></p><ul>' + links + '</ul>', encoding='utf8')
+            '<p><a href="dataset/index.html">Actual training images and captions</a> | '
+            '<a href="dataset/receipt.json">Data provenance</a></p><ul>' + links + '</ul>', encoding='utf8')
         if not execute:
             return state
         with ThreadPoolExecutor(max_workers=len(gpus)) as pool:

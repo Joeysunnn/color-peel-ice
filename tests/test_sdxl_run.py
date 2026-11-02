@@ -67,6 +67,33 @@ class QueueTests(unittest.TestCase):
                 run.check_gpus((1, 2))
             run.check_gpus((0, 2))
 
+    def test_written_configs_lock_git_model_receipt_and_dataset_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model_dir = root / 'model'
+            model_dir.mkdir()
+            (model_dir / 'model_source.json').write_text('{"revision":"test"}')
+
+            def prepare_data(output):
+                sources = {}
+                for branch in run.contract.TRAINING:
+                    manifest = output / branch / 'manifest.json'
+                    manifest.parent.mkdir(parents=True)
+                    manifest.write_text('[]')
+                    sources[branch] = {'manifest': str(manifest)}
+                return sources
+
+            with patch.object(run, 'git_revision', return_value={'commit': 'verified-commit'}), \
+                    patch.object(run, 'verify_model', return_value={'revision': 'test'}), \
+                    patch.object(run.data, 'prepare_data', side_effect=prepare_data):
+                state = run.run(root / 'experiment', model_dir=model_dir)
+            self.assertEqual(state['status'], 'dry_run_verified')
+            for job in state['jobs']:
+                config = json.loads(Path(job['config_path']).read_text())
+                self.assertEqual(config['git_commit'], 'verified-commit')
+                self.assertEqual(config['model_source_sha256'], model.sha256(model_dir / 'model_source.json'))
+                self.assertEqual(config['dataset_manifest_sha256'], model.sha256(config['dataset']))
+
 
 class ModelTests(unittest.TestCase):
     def fixture(self, root):

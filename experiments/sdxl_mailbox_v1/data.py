@@ -1,6 +1,7 @@
 """Copy audited historical RGB/masks; resize only when reading training inputs."""
 
 import hashlib
+import html
 import itertools
 import json
 from pathlib import Path
@@ -113,8 +114,9 @@ def source_rows():
             raise ValueError('Mailbox natural dataset receipt differs')
         items = _ledger(folder / 'training_assets_manifest.jsonl')
         nuisances = ('smooth_dielectric', 'rough_metal') if branch == 'texture' else ('mailbox_material',)
-        expected_conditions = list(itertools.product(('sphere', 'cube'), ('red', 'blue'),
-                                                     ('soft_front', 'side_directional'), nuisances))
+        # Historical staging writes lexicographically sorted IDs, not render-loop order.
+        expected_conditions = sorted(itertools.product(('sphere', 'cube'), ('red', 'blue'),
+                                                       ('soft_front', 'side_directional'), nuisances))
         if [(row['shape'], row['color'], row['light'], row['material_id']) for row in items] != expected_conditions:
             raise ValueError('Mailbox natural factorial order differs')
         for row in items:
@@ -187,7 +189,7 @@ def prepare_data(output):
         raise ValueError('use a new external directory separate from source data and code')
     inputs, locks = source_rows()
     output.mkdir(parents=True)
-    specs, files = {}, {}
+    specs, files, sections = {}, {}, []
     for branch in BRANCHES:
         copied = []
         for index, row in enumerate(inputs[branch]):
@@ -211,6 +213,23 @@ def prepare_data(output):
         files[str(manifest)] = sha256(manifest)
         specs[branch] = {'manifest': str(manifest), 'rows': len(copied),
                          'token': TRAINING[branch]['token'], 'initializer': TRAINING[branch]['initializer']}
+        cards = []
+        for row in copied:
+            image = html.escape(Path(row['image']).relative_to(output).as_posix())
+            cards.append(f'<figure><a href="{image}"><img loading="lazy" src="{image}" '
+                         f'alt="{html.escape(row["id"])}"></a><figcaption>'
+                         f'{html.escape(row["id"])}<br>{html.escape(row["prompt"])}</figcaption></figure>')
+        sections.append(f'<h2>{branch}: {len(copied)} training images</h2>'
+                        f'<p><a href="{branch}/manifest.json">Manifest and source hashes</a></p>'
+                        '<section>' + ''.join(cards) + '</section>')
+    index = output / 'index.html'
+    index.write_text('<!doctype html><meta charset="utf-8"><title>Mailbox SDXL training inputs</title>'
+                     '<style>body{font:16px sans-serif;margin:24px}section{display:flex;flex-wrap:wrap;gap:16px}'
+                     'figure{width:256px;margin:0}img{width:256px}figcaption{overflow-wrap:anywhere}</style>'
+                     '<h1>Mailbox SDXL: actual 60 training images and captions</h1>'
+                     '<p>Frozen 512px source copies, in training order. Training resizes RGB to 1024px.</p>'
+                     + ''.join(sections), encoding='utf8')
+    files[str(index)] = sha256(index)
     _check_locks(locks)
     _write(output / 'receipt.json', {'schema': 'sdxl_mailbox_data/v1', 'branches': specs,
            'source_locks': locks, 'files': files, 'copied_source_bytes_unchanged': True,
