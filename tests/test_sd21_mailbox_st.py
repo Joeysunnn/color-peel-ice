@@ -1,4 +1,4 @@
-"""CPU checks for the selected Mailbox S1500 plus wood T600 composition."""
+"""CPU checks for the authorized Mailbox and wood Texture compositions."""
 
 from contextlib import ExitStack
 import copy
@@ -27,6 +27,18 @@ class MailboxCompositionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             composition.prompt_rows('mixed')
 
+    def test_s1000_t1000_rows_and_invalid_pairs(self):
+        rows = [row for method in composition.METHODS
+                for row in composition.prompt_rows(method, 1000, 1000)]
+        self.assertEqual(len(rows), 22)
+        self.assertEqual(len({row['id'] for row in rows}), 22)
+        self.assertEqual({(row['subject_step'], row['attribute_step']) for row in rows}, {(1000, 1000)})
+        self.assertTrue(all('S1000_wood_T1000' in row['id'] for row in rows))
+        self.assertEqual({row['prompt'] for row in rows}, {composition.PROMPT})
+        for pair in ((1500, 1000), (1000, 600), (500, 1000)):
+            with self.assertRaisesRegex(ValueError, 'authorized'):
+                composition.prompt_rows('fullrank', *pair)
+
     def test_prepare_forwards_distinct_recipes_and_historical_sources(self):
         data = lambda count: {'rows': count, 'references': list(range(count)), 'source_locks': {}}
         model, revision = {'id': 'sd21'}, {'commit': 'new', 'branch': 'new'}
@@ -38,17 +50,18 @@ class MailboxCompositionTest(unittest.TestCase):
              patch.object(composition.subject_contract, 'verify_dataset', return_value=data(11)), \
              patch.object(composition.shared.contract, 'verify_dataset', return_value=data(16)), \
              patch.object(composition.source, '_pair', return_value=({'paired': True}, {})) as pair:
-            audit = composition.prepare()
+            audit = composition.prepare(1000, 1000)
             self.assertEqual(os.environ[composition.subject_contract.DATASET_ENV], str(composition.SUBJECT_ROOT / 'dataset'))
         expected = []
         for method in composition.METHODS:
-            expected += [call(composition.SUBJECT_ROOT, 'subject', method, 1500,
+            expected += [call(composition.SUBJECT_ROOT, 'subject', method, 1000,
                               composition.SUBJECT_GIT, model, recipe_contract=composition.subject_contract),
-                         call(composition.source.TEXTURE_ROOT, 'texture', method, 600,
+                         call(composition.source.TEXTURE_ROOT, 'texture', method, 1000,
                               composition.source.TEXTURE_GIT, model, recipe_contract=composition.shared.contract)]
         self.assertEqual(pair.call_args_list, expected)
         self.assertEqual({key: len(value) for key, value in audit['references'].items()}, {'subject': 11, 'texture': 16})
         self.assertEqual(audit['texture_source'], 'wood_spoon_texture')
+        self.assertEqual((audit['subject_step'], audit['texture_step']), (1000, 1000))
 
     def test_gpu_idle_checks_precede_both_serial_methods(self):
         with tempfile.TemporaryDirectory(prefix='mailbox-st-') as temporary:

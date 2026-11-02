@@ -1,5 +1,13 @@
 # SD2.1 Mailbox Subject1500 + wood Texture600
 
+Follow-up on2026-11-02: the user requested Subject1000 + Texture1000. Use the same
+entrypoint with `--subject-step 1000 --texture-step 1000` and a fresh output root.
+Both methods and all sampling parameters remain unchanged. Subject1000 is an
+intermediate paired snapshot of the original1500-step training; Texture1000 is
+the final paired snapshot of its1000-step training. Do not change training configs
+or retrain. The default pair remains S1500/T600; only these two requested pairs
+are accepted. Status, source audit, row IDs and review title record the selection.
+
 User selected the existing wood-grain Texture600 checkpoint on2026-11-02.
 Compose the reviewed eleven-image Mailbox Subject1500 with that independent
 Texture16 branch, matching fullrank/fullrank and rank64/rank64. No training.

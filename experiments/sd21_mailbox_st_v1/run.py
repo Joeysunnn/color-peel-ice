@@ -1,4 +1,4 @@
-"""Compose reviewed Mailbox center11 Subject1500 with existing wood Texture600."""
+"""Compose reviewed Mailbox center11 Subject with existing wood Texture pairs."""
 
 import argparse
 import json
@@ -25,16 +25,19 @@ PROMPT = 'a photo of <S*> mailbox with <T*> texture'
 write = review_helpers.write
 
 
-def prompt_rows(method):
+def prompt_rows(method, subject_step=1500, texture_step=600):
     if method not in METHODS:
         raise ValueError('require matching fullrank or rank64 methods')
-    return [{'id': f'{method}__mailbox_S1500_wood_T600__seed{seed}', 'method': method,
-        'branch': 'texture', 'seed': seed, 'prompt': PROMPT, 'subject_step': 1500,
-        'attribute_step': 600, 'subject_images': 11, 'texture_source': 'wood_spoon_texture',
+    if (subject_step, texture_step) not in ((1500, 600), (1000, 1000)):
+        raise ValueError('require authorized S1500/T600 or S1000/T1000 pair')
+    return [{'id': f'{method}__mailbox_S{subject_step}_wood_T{texture_step}__seed{seed}', 'method': method,
+        'branch': 'texture', 'seed': seed, 'prompt': PROMPT, 'subject_step': subject_step,
+        'attribute_step': texture_step, 'subject_images': 11, 'texture_source': 'wood_spoon_texture',
         'image_path': f'images/seed{seed}.png'} for seed in SEEDS]
 
 
-def prepare():
+def prepare(subject_step=1500, texture_step=600):
+    prompt_rows(METHODS[0], subject_step, texture_step)
     revision = git_info()
     completion = read_json(SUBJECT_PARENT / 'monitor/status.json')
     if completion['status'] != 'completed' or completion['attempts']:
@@ -51,8 +54,8 @@ def prepare():
         source._merge(locks, data['source_locks'])
     for method in METHODS:
         for branch, root, step, training_git, recipe in (
-            ('subject', SUBJECT_ROOT, 1500, SUBJECT_GIT, subject_contract),
-            ('texture', source.TEXTURE_ROOT, 600, source.TEXTURE_GIT, shared.contract)):
+            ('subject', SUBJECT_ROOT, subject_step, SUBJECT_GIT, subject_contract),
+            ('texture', source.TEXTURE_ROOT, texture_step, source.TEXTURE_GIT, shared.contract)):
             item, selected = source._pair(root, branch, method, step, training_git,
                                            model['model'], recipe_contract=recipe)
             sources[branch][method] = item
@@ -61,16 +64,17 @@ def prepare():
         raise ValueError('inference checkout changed during preparation')
     return {'inference_git': revision, 'training_gits': {'subject': SUBJECT_GIT, 'texture': source.TEXTURE_GIT},
         'sources': sources, 'references': {'subject': subject_data['references'], 'texture': texture_data['references']},
-        'source_locks': locks, 'prompt': PROMPT, 'subject_images': 11, 'subject_step': 1500,
-        'texture_step': 600, 'texture_source': 'wood_spoon_texture'}
+        'source_locks': locks, 'prompt': PROMPT, 'subject_images': 11, 'subject_step': subject_step,
+        'texture_step': texture_step, 'texture_source': 'wood_spoon_texture'}
 
 
 def generate(audit, output, method, execute):
-    rows = prompt_rows(method)
+    subject_step, texture_step = audit['subject_step'], audit['texture_step']
+    rows = prompt_rows(method, subject_step, texture_step)
     output.mkdir(parents=True)
     refs, copies = review_helpers.references(audit, 'texture', output, subject_images=11)
     state = {'status': 'running' if execute else 'dry_run', 'method': method, 'branch': 'texture',
-        'literal_subject': False, 'subject_step': 1500, 'attribute_step': 600, 'subject_images': 11,
+        'literal_subject': False, 'subject_step': subject_step, 'attribute_step': texture_step, 'subject_images': 11,
         'texture_source': 'wood_spoon_texture', 'prompt': PROMPT, 'expected_images': len(rows),
         'generated_images': 0, 'sampling': {**shared.inference.SAMPLING, 'seeds': list(SEEDS)},
         'inference_git': audit['inference_git'], 'training_gits': audit['training_gits'],
@@ -115,7 +119,8 @@ def generate(audit, output, method, execute):
     return state
 
 
-def run(output, execute=False):
+def run(output, execute=False, *, subject_step=1500, texture_step=600):
+    prompt_rows(METHODS[0], subject_step, texture_step)
     output = resolve_run_dir(Path(output))
     if (output.exists() or output.is_relative_to(ROOT) or output.is_relative_to(SUBJECT_PARENT)
             or output.is_relative_to(source.TEXTURE_ROOT)):
@@ -124,16 +129,16 @@ def run(output, execute=False):
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     if execute:
         require_idle_gpu0()
-    audit = prepare()
+    audit = prepare(subject_step, texture_step)
     if execute:
         require_idle_gpu0()
     output.mkdir(parents=True)
     write(output / 'source_audit.json', audit)
     state = {'status': 'running' if execute else 'dry_run', 'git': audit['inference_git'],
-        'subject_step': 1500, 'texture_step': 600, 'subject': 'mailbox', 'texture_source': 'wood_spoon_texture',
+        'subject_step': subject_step, 'texture_step': texture_step, 'subject': 'mailbox', 'texture_source': 'wood_spoon_texture',
         'expected_images': 22, 'generated_images': 0, 'gpu': 0, 'methods': {}, 'retraining': False}
     write(output / 'status.json', state)
-    (output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><h1>SD2.1 Mailbox S1500 + wood T600</h1>'
+    (output / 'index.html').write_text(f'<!doctype html><meta charset="utf-8"><h1>SD2.1 Mailbox S{subject_step} + wood T{texture_step}</h1>'
         '<p>11 Subject images +16 wood Texture images; seed30–40; PNDM100/CFG3.5/512px.</p>'
         + ''.join(f'<p><a href="methods/{m}/index.html">{m}: results and actual training references</a></p>' for m in METHODS)
         + '<table><tr><th>seed</th><th>fullrank</th><th>LoRA rank64</th></tr>'
@@ -161,5 +166,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--execute', action='store_true')
+    parser.add_argument('--subject-step', type=int, choices=(1000, 1500), default=1500)
+    parser.add_argument('--texture-step', type=int, choices=(600, 1000), default=600)
     args = parser.parse_args()
-    run(args.output, args.execute)
+    run(args.output, args.execute, subject_step=args.subject_step, texture_step=args.texture_step)
