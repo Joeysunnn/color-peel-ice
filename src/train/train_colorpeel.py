@@ -17,7 +17,10 @@ from checkpoint_utils import (
     tracker_safe_config,
     validate_checkpoint_plan,
 )
-from initializer_token_utils import single_token_initializer_id
+from initializer_token_utils import (
+    initializer_vector_audit, load_initializer_manifest, single_token_initializer_id,
+    validate_initializer_training,
+)
 from instance_mask_utils import (
     load_latent_instance_mask,
     pair_instance_images_and_masks,
@@ -831,6 +834,8 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--initializer_token", type=str, default=None, help="A token to use as initializer word."
     )
+    parser.add_argument("--initializer_manifest", type=str, default=None,
+                        help="Opt in to a verified SD2.1 four-branch VLM initializer manifest.")
     parser.add_argument("--hflip", action="store_true", help="Apply horizontal flip data augmentation.")
     parser.add_argument(
         "--noaug",
@@ -1002,6 +1007,20 @@ def main(args):
     # Load the tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer", revision=args.revision, use_fast=False,)
 
+    initializer_manifest_data, initializer_branch, initializer_metadata = None, None, {}
+    if args.initializer_manifest is not None:
+        initializer_manifest_data = load_initializer_manifest(
+            args.initializer_manifest, tokenizer, args.pretrained_model_name_or_path,
+        )
+        initializer_branch = validate_initializer_training(args, initializer_manifest_data)
+        initializer_selection = initializer_manifest_data["branches"][initializer_branch]
+        initializer_metadata = {
+            "initializer_manifest": str(Path(args.initializer_manifest).resolve()),
+            "initializer_manifest_sha256": hashlib.sha256(Path(args.initializer_manifest).read_bytes()).hexdigest(),
+            "initializer_branch": initializer_branch, "initializer": initializer_selection["initializer"],
+            "initializer_token_id": initializer_selection["initializer_token_id"],
+        }
+
     # import correct text encoder class
     text_encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_model_name_or_path, args.revision)
 
@@ -1010,6 +1029,15 @@ def main(args):
     text_encoder = text_encoder_cls.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder", revision=args.revision)
     vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae", revision=args.revision)
     unet = UNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision)
+
+    if initializer_manifest_data is not None:
+        if (unet.config.cross_attention_dim != 1024 or not unet.config.use_linear_projection
+                or unet.config.sample_size != 64 or args.resolution != 512
+                or text_encoder.get_input_embeddings().weight.shape[1] != 1024):
+            raise ValueError("VLM initializer training requires the SD2.1-base512 architecture")
+        base_initializer_vector = text_encoder.get_input_embeddings().weight[
+            initializer_selection["initializer_token_id"]
+        ].detach().clone()
 
     # Adding a modifier token which is optimized ####
     # Code taken from https://github.com/huggingface/diffusers/blob/main/examples/textual_inversion/textual_inversion.py
@@ -1060,8 +1088,21 @@ def main(args):
 
         # Initialise the newly added placeholder token with the embeddings of the initializer token
         token_embeds = text_encoder.get_input_embeddings().weight.data
+        if initializer_manifest_data is not None:
+            if initializer_token_id != [[initializer_selection["initializer_token_id"]]]:
+                raise ValueError("initializer token ID changed after adding the learned token")
+            modifier_before_copy = token_embeds[modifier_token_id[0]].detach().clone()
         for x, y in zip(modifier_token_id, initializer_token_id):
             token_embeds[x] = token_embeds[y]
+        if initializer_manifest_data is not None and accelerator.is_main_process:
+            write_json(Path(args.output_dir) / "initializer_audit.json", {
+                **initializer_metadata, "modifier_token": args.modifier_token[0],
+                "modifier_token_id": modifier_token_id[0],
+                **initializer_vector_audit(
+                    base_initializer_vector, token_embeds[initializer_selection["initializer_token_id"]],
+                    modifier_before_copy, token_embeds[modifier_token_id[0]],
+                ),
+            })
         
         # Freeze all parameters except for the token embeddings in text encoder
         params_to_freeze = itertools.chain(
@@ -1127,6 +1168,8 @@ def main(args):
                              and args.subject_lora_mode == "token_local_kv")
                          or ((lora_token, lora_initializer) == ("<T*>", "texture")
                              and args.subject_lora_mode == "token_local_kv"))
+        if getattr(args, "initializer_manifest", None) is not None:
+            valid_concept = initializer_manifest_data is not None and initializer_branch is not None
         if (args.token_local_kv or args.perfusion_subject or args.enable_xformers_memory_efficient_attention
                 or args.freeze_model != "crossattn_kv" or not valid_concept or args.k_learning_rate is not None
                 or args.v_learning_rate is not None or args.subject_lora_rank < 1
@@ -1843,6 +1886,7 @@ def main(args):
                 "alpha": args.subject_lora_alpha,
                 "weight_name": SUBJECT_LORA_KV_WEIGHT_NAME,
                 "modifier_tokens": args.modifier_token,
+                **initializer_metadata,
             })
             torch.save(subject_lora_state_dict(unet), Path(args.output_dir) / SUBJECT_LORA_KV_WEIGHT_NAME)
         elif args.token_local_kv:

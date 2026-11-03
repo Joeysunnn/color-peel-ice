@@ -75,7 +75,7 @@ class ColorTokenLocalGuardTest(unittest.TestCase):
             with self.subTest(token=token):
                 args = SimpleNamespace(modifier_token=[token], subject_lora_mode='token_local_kv',
                                        subject_lora_rank=64, subject_lora_alpha=64)
-                metadata = eval(self.metadata, {'args': args,
+                metadata = eval(self.metadata, {'args': args, 'initializer_metadata': {},
                     'SUBJECT_LORA_KV_WEIGHT_NAME': 'pytorch_lora_kv_weights.bin'})
                 self.assertEqual(metadata['adaptation_mode'], expected)
                 self.assertEqual(metadata['modifier_tokens'], [token])
