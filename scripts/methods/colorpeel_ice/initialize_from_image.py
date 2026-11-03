@@ -1,4 +1,4 @@
-"""Identify four single-token initializers from one image with pinned local Qwen."""
+"""Identify four initializers with pinned Qwen and controlled two-axis Material selection."""
 
 import argparse
 from pathlib import Path

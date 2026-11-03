@@ -55,6 +55,14 @@ def prepare(output, manifest, tokenizer):
     if output.exists() or output.is_relative_to(Path(__file__).resolve().parents[2]):
         raise ValueError('require a fresh external dataset directory')
     inputs, locks = source_rows()
+    material_target = None
+    if manifest.get('schema') == 'colorpeel_vlm_initializers/v2':
+        from .material_target import audit_material_target
+        material_target = audit_material_target(manifest, inputs['material'], locks)
+        if material_target['training_blocked']:
+            output.mkdir(parents=True)
+            _write(output / 'material_target_consistency.json', material_target)
+            raise ValueError('high-confidence VLM/material target conflict; see material_target_consistency.json')
     approved = read_json(APPROVED_PATH)
     by_id = {row['id']: row for row in inputs['subject']}
     selected = []
@@ -69,6 +77,10 @@ def prepare(output, manifest, tokenizer):
         raise ValueError('require the unmodified base tokenizer for caption preflight')
     output.mkdir(parents=True)
     files, sections = {}, []
+    if material_target is not None:
+        report = output / 'material_target_consistency.json'
+        _write(report, material_target)
+        files[str(report)] = sha256(report)
     for branch in contract.BRANCHES:
         rows = []
         for index, source in enumerate(inputs[branch]):

@@ -18,11 +18,13 @@ class Tokenizer:
     all_special_ids = [98, 99]
 
     def get_vocab(self):
-        return {"mailbox": 10, "orange": 11, "glossy": 12, "plain": 13, "box": 14}
+        return {"mailbox": 10, "orange": 11, "glossy": 12, "plain": 13, "box": 14,
+                "material": 15, "metallic": 16, "matte": 17}
 
     def encode(self, word, add_special_tokens=False):
         return {"mailbox": [10], "orange": [11], "glossy": [12], "plain": [13],
-                "box": [14], "speckled": [20, 21], "letterbox": [22, 23]}.get(word, [99])
+                "box": [14], "material": [15], "metallic": [16], "matte": [17],
+                "speckled": [20, 21], "letterbox": [22, 23]}.get(word, [99])
 
 
 def response():
@@ -30,8 +32,10 @@ def response():
         "subject": {"category": "mailbox", "description": "Curved lid above a rectangular wall mounted box",
                     "confidence": "high", "candidates": ["box"]},
         "color": {"description": "Dominant orange foreground", "confidence": "high", "candidates": ["orange"]},
-        "material": {"substrate": "uncertain metal", "visible_finish": "glossy painted coating",
-                     "description": "Narrow bright highlights across the coating", "confidence": "medium", "candidates": ["glossy"]},
+        "material": {"metallicity": {"label": "dielectric", "confidence": "medium",
+                                     "evidence": "Visible coated surface without bare-metal reflection"},
+                     "roughness": {"label": "low", "confidence": "medium",
+                                   "evidence": "Narrow bright highlights across the coating"}},
         "texture": {"description": "No reliable visible spatial markings", "confidence": "low", "candidates": ["plain"]},
     }
 
@@ -54,9 +58,10 @@ class VlmInitializationTests(unittest.TestCase):
             with self.subTest(raw=raw), self.assertRaises(ValueError):
                 vlm.parse_response(raw)
 
-    def test_semantic_separation_rejects_reflection_texture_and_substrate_initializer(self):
+    def test_semantic_separation_rejects_reflection_texture_and_free_material_candidates(self):
         for branch, word in [("texture", "glossy"), ("texture", "rough"), ("texture", "smooth"),
-                             ("material", "wood"), ("material", "metal")]:
+                             ("material", "wood"), ("material", "metal"), ("material", "painted"),
+                             ("material", "glossy")]:
             value = response()
             value[branch]["candidates"] = [word]
             with self.subTest(branch=branch, word=word), self.assertRaises(ValueError):
@@ -100,8 +105,10 @@ class VlmInitializationTests(unittest.TestCase):
         self.assertEqual(subject["selection_candidates"], ["mailbox", "box"])
         self.assertEqual((subject["initializer"], subject["initializer_token_id"]), ("mailbox", 10))
         self.assertEqual(json.dumps(value), before)
-        for branch in ("color", "material", "texture"):
+        for branch in ("color", "texture"):
             self.assertEqual(branches[branch]["selection_candidates"], value[branch]["candidates"])
+        self.assertEqual(branches["material"]["selection_candidates"], ["glossy"])
+        self.assertNotIn("candidates", value["material"])
 
     def test_subject_multibpe_category_falls_back_and_multiword_category_is_not_inserted(self):
         for category, expected_candidates in (("letterbox", ["letterbox", "box"]), ("wall box", ["box"])):
@@ -139,13 +146,13 @@ class VlmInitializationTests(unittest.TestCase):
             self.assertNotIn(str((folder / "weights.safetensors").resolve()), receipt["metadata_files"])
             self.assertIn("not GPU", receipt["size_note"])
 
-    def _run_fixture(self, root, raw):
+    def _run_fixture(self, root, raw, runtime=None):
         image = root / "input.png"
         Image.new("RGB", (32, 24), (12, 34, 56)).save(image)
         sd = root / "sd"
         (sd / "tokenizer").mkdir(parents=True)
         (sd / "tokenizer/vocab.json").write_text("{}")
-        fake = SimpleNamespace(runtime={"dtype": "float16", "do_sample": False})
+        fake = SimpleNamespace(runtime={"dtype": "float16", "do_sample": False, **(runtime or {})})
         predictor = type("Predictor", (), {"runtime": fake.runtime, "__call__": lambda self, image: raw})()
         transformers = SimpleNamespace(CLIPTokenizer=SimpleNamespace(from_pretrained=lambda *a, **k: Tokenizer()))
         with patch.object(vlm, "model_receipt", return_value={"metadata_files": {}, "weights": []}), \
@@ -159,11 +166,14 @@ class VlmInitializationTests(unittest.TestCase):
             path = self._run_fixture(root, json.dumps(response()))
             self.assertEqual(path.name, "initializers.json")
             manifest = load_initializer_manifest(path, Tokenizer(), root / "sd")
+            self.assertEqual(manifest["schema"], "colorpeel_vlm_initializers/v2")
             self.assertEqual(manifest["subject_category"], "mailbox")
             self.assertEqual(manifest["branches"]["subject"]["initializer"], "mailbox")
             self.assertEqual(manifest["branches"]["subject"]["candidates"], ["box"])
             self.assertEqual(set(manifest["branches"]), set(vlm.TOKENS))
             self.assertEqual(manifest["response"], response())
+            self.assertEqual(manifest["branches"]["material"]["initializer"], "glossy")
+            self.assertFalse(manifest["branches"]["material"]["selection_policy"]["fallback"])
             (root / "input.png").write_bytes(b"changed")
             with self.assertRaises(ValueError):
                 load_initializer_manifest(path, Tokenizer(), root / "sd")
@@ -176,6 +186,17 @@ class VlmInitializationTests(unittest.TestCase):
             self.assertEqual((root / "output/raw_response.txt").read_text(), "incomplete JSON {")
             self.assertTrue((root / "output/model_receipt.json").is_file())
             self.assertTrue((root / "output/generation_receipt.json").is_file())
+            self.assertFalse((root / "output/initializers.json").exists())
+            self.assertEqual(json.loads((root / "output/status.json").read_text())["status"], "failed")
+
+    def test_token_limit_preserves_complete_looking_raw_without_publishing_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(response())
+            with self.assertRaisesRegex(ValueError, "token limit"):
+                self._run_fixture(root, raw, runtime={"reached_token_limit": True})
+            self.assertEqual((root / "output/raw_response.txt").read_text(), raw)
+            self.assertTrue(json.loads((root / "output/generation_receipt.json").read_text())["reached_token_limit"])
             self.assertFalse((root / "output/initializers.json").exists())
             self.assertEqual(json.loads((root / "output/status.json").read_text())["status"], "failed")
 

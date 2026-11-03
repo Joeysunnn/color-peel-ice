@@ -102,9 +102,10 @@ def load_initializer_manifest(path, tokenizer, model_root):
         if manifest != expected:
             raise ValueError("controlled Material initializer manifest differs from its verified parent or selection")
         return manifest
-    if (not isinstance(manifest, dict) or manifest.get("schema") != "colorpeel_vlm_initializers/v1"
+    if (not isinstance(manifest, dict) or manifest.get("schema") not in (
+            "colorpeel_vlm_initializers/v1", "colorpeel_vlm_initializers/v2")
             or manifest.get("status") != "verified"):
-        raise ValueError("require a verified colorpeel_vlm_initializers/v1 manifest")
+        raise ValueError("require a verified colorpeel_vlm_initializers/v1 or v2 manifest")
     locks = _checked_locks(manifest.get("source_locks"))
     source, vlm, text = (manifest.get(key, {}) for key in ("source", "vlm", "tokenizer"))
     if not all(isinstance(value, dict) for value in (source, vlm, text)):
@@ -136,6 +137,15 @@ def load_initializer_manifest(path, tokenizer, model_root):
     if (not isinstance(raw, dict) or set(raw) != set(BRANCH_TOKENS)
             or raw != response or raw != manifest.get("response")):
         raise ValueError("raw VLM response, parsed response and manifest response must agree")
+    if manifest['schema'] == 'colorpeel_vlm_initializers/v2':
+        from src.methods.colorpeel_ice.vlm_initialization import build_branches, parse_response
+        parsed = parse_response(response_paths[0].read_text(encoding='utf8'))
+        expected, failures = build_branches(parsed, tokenizer)
+        if failures or branches != expected:
+            raise ValueError('controlled initializer policy, semantic evidence or token audit differs')
+        if manifest.get('subject_category') != parsed['subject']['category']:
+            raise ValueError('subject_category differs from the locked VLM response')
+        return manifest
     for branch, token in BRANCH_TOKENS.items():
         entry = branches[branch]
         if (not isinstance(entry, dict) or entry.get("token") != token

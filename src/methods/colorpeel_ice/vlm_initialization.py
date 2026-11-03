@@ -1,6 +1,6 @@
 """Single-image semantic initialization, independent of historical CLEVR labels.
 
-Qwen supplies visible descriptions and ranked word candidates, not PBR numbers.
+Qwen supplies visible descriptions; Material uses controlled reflection classes, not PBR numbers.
 The diffusion tokenizer, rather than English word count, decides single-BPE fit.
 Heavy model imports occur only during an explicit run.
 """
@@ -12,16 +12,15 @@ import re
 
 from PIL import Image, ImageOps
 
+from .material_initialization import SCHEMA, select_material_initializer, validate_material
 
 MODEL_ID = "Qwen/Qwen3-VL-8B-Instruct"
 REVISION = "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b"
-MAX_NEW_TOKENS = 512
+MAX_NEW_TOKENS = 768
 TOKENS = {"subject": "<S*>", "color": "<C*>", "material": "<M*>", "texture": "<T*>"}
 CONFIDENCES = {"high", "medium", "low", "unknown"}
 REFLECTION_WORDS = {"glossy", "gloss", "rough", "roughness", "smooth", "matte", "shiny",
                     "polished", "reflective", "metallic", "specular", "lustrous"}
-SUBSTRATE_WORDS = {"wood", "metal", "plastic", "rubber", "glass", "ceramic", "leather",
-                   "fabric", "stone", "marble", "steel", "iron", "copper", "aluminum"}
 PROMPT = """Inspect this single image. Identify the main foreground object and describe only
 that same object's visible attributes. Ignore background walls, signs, lettering,
 and numbers. Do not infer an object's identity from text printed in the image.
@@ -29,27 +28,40 @@ Return one JSON object only, with exactly these four keys and nested fields:
 {
   "subject": {"category": "generic object category noun", "description": "brief visual identity evidence", "confidence": "high|medium|low|unknown", "candidates": ["word"]},
   "color": {"description": "dominant foreground color and visual evidence", "confidence": "high|medium|low|unknown", "candidates": ["word"]},
-  "material": {"substrate": "possible substrate, or unknown", "visible_finish": "observed reflection or finish", "description": "brief visible finish evidence", "confidence": "high|medium|low|unknown", "candidates": ["word"]},
+  "material": {
+    "metallicity": {"label": "metallic|dielectric|mixed|uncertain", "confidence": "high|medium|low", "evidence": "visible reflection evidence"},
+    "roughness": {"label": "low|medium|high|uncertain", "confidence": "high|medium|low", "evidence": "visible reflection evidence"}
+  },
   "texture": {"description": "visible spatial surface pattern and evidence", "confidence": "high|medium|low|unknown", "candidates": ["word"]}
 }
-Use short English phrases, at most twelve words per description. Each candidates
-list contains one to four ranked alternatives, each a SINGLE English word with
+Use short English phrases, at most twelve words per description or evidence.
+For Subject, Color and Texture, each candidates list contains one to four ranked
+alternatives, each a SINGLE English word with
 letters only: no spaces, hyphens, special tokens, or explanations. These words
 initialize four independent learned concepts; do not combine attributes.
 Subject candidates are object category nouns, not material or color words.
 Subject description must exclude color, material, texture and background; category
 is an ordinary English noun or short noun phrase using letters and spaces only.
 Color candidates are ordinary color names describing the object, not background.
-Material candidates are adjectives for the VISIBLE reflection or finish. Keep
-possible underlying substrate separate: a painted object does not establish
-bare-metal reflectance. Do not use substrate nouns as Material candidates.
+For Material return ONLY the two classifications above, never initializer words.
+Judge the VISIBLE surface reflection, not what the object is manufactured from.
+A coating over a metal object does not establish bare-metal reflectance.
+Metallic means conductor-like reflection; dielectric means nonmetallic reflection;
+mixed means visibly different surface types. Use uncertain when evidence is insufficient.
+Roughness low means sharp highlights/reflections, medium means intermediate or
+semi-gloss reflection, high means broad/diffuse reflections. It does not mean
+macroscopic bumps, grooves, texture patterns, or object shape. Separate lighting
+effects from surface properties as far as the image allows. Give each axis its own
+confidence and short evidence; do not infer one axis from the other.
 Do not estimate numerical roughness, metallic, or other physical parameters.
 Texture means a SPATIAL albedo pattern (marks, spots, stripes or grain), not
 glossiness, smoothness, roughness, reflectivity, shape edges, or illumination.
 Do not use glossy, rough, smooth, matte or similar reflection words as Texture
 candidates. For no visible spatial pattern use plain or uniform; do not invent
-grain. If an attribute cannot be determined, use confidence unknown and an empty
-candidates list. Confidence is your qualitative assessment, not a calibrated
+grain. If Subject, Color or Texture cannot be determined, use confidence unknown
+and an empty candidates list. For an undetermined Material axis, use label
+uncertain with confidence low and explain the missing evidence; never add candidates.
+Confidence is your qualitative assessment, not a calibrated
 probability. Return JSON without Markdown or surrounding commentary."""
 
 
@@ -81,7 +93,10 @@ def parse_response(raw):
         raise ValueError("Require exactly subject, color, material and texture")
     common = {"description", "confidence", "candidates"}
     for branch, value in response.items():
-        extra = {"category"} if branch == "subject" else {"substrate", "visible_finish"} if branch == "material" else set()
+        if branch == "material":
+            validate_material(value)
+            continue
+        extra = {"category"} if branch == "subject" else set()
         if not isinstance(value, dict) or set(value) != common | extra:
             raise ValueError(f"Unexpected {branch} response fields")
         for key in {"description"} | extra:
@@ -99,8 +114,6 @@ def parse_response(raw):
         lowered = {word.strip().lower() for word in candidates}
         if branch == "texture" and lowered & REFLECTION_WORDS:
             raise ValueError("Texture candidates contain reflection/roughness words")
-        if branch == "material" and lowered & SUBSTRATE_WORDS:
-            raise ValueError("Material candidates contain substrate nouns, not visible finish adjectives")
     return response
 
 
@@ -110,12 +123,15 @@ def build_branches(response, tokenizer):
     branches, failures = {}, []
     for branch, token in TOKENS.items():
         value = response[branch]
-        candidates = initializer_candidates(branch, value)
+        decision = select_material_initializer(value) if branch == "material" else None
+        candidates = [decision['initializer']] if decision else initializer_candidates(branch, value)
         word, token_id, audit = select_initializer(tokenizer, candidates)
         branches[branch] = {**value, "token": token, "initializer": word,
                             "selection_candidates": candidates,
                             "initializer_token_id": token_id, "candidate_audit": audit}
-        if value["confidence"] == "unknown":
+        if decision:
+            branches[branch]['selection_policy'] = decision
+        elif value["confidence"] == "unknown":
             failures.append(f"{branch}: unknown semantic confidence")
         if word is None:
             failures.append(f"{branch}: no valid single-BPE initializer")
@@ -199,7 +215,7 @@ def run(image_path, model_dir, sd_model_dir, output, device="cuda:0"):
     if output.exists() or any(output.is_relative_to(root) for root in (repo, model_dir, sd_model_dir)):
         raise ValueError("Require a fresh external output directory outside source/model directories")
     output.mkdir(parents=True)
-    status = {"schema": "colorpeel_vlm_initializers/v1", "status": "started", "source": {"image": str(image_path)}}
+    status = {"schema": SCHEMA, "status": "started", "source": {"image": str(image_path)}}
     try:
         source_sha = sha256(image_path)
         status["source"]["image_sha256"] = source_sha
@@ -216,6 +232,8 @@ def run(image_path, model_dir, sd_model_dir, output, device="cuda:0"):
         raw = predictor(image)
         (output / "raw_response.txt").write_text(raw, encoding="utf8")
         write_json(output / "generation_receipt.json", predictor.runtime)
+        if predictor.runtime.get('reached_token_limit'):
+            raise ValueError('Qwen response reached its token limit; raw output preserved')
         response = parse_response(raw)
         write_json(output / "response.json", response)
         from transformers import CLIPTokenizer
@@ -231,7 +249,7 @@ def run(image_path, model_dir, sd_model_dir, output, device="cuda:0"):
             locks[str(output / name)] = sha256(output / name)
         if any(sha256(path) != digest for path, digest in locks.items()):
             raise ValueError("Input or provenance changed during identification")
-        manifest = {"schema": "colorpeel_vlm_initializers/v1", "status": "verified",
+        manifest = {"schema": SCHEMA, "status": "verified",
                     "source": status["source"], "vlm": {"model_id": MODEL_ID, "revision": REVISION,
                     **predictor.runtime, "model_receipt": str(output / "model_receipt.json")},
                     "tokenizer": tokenizer_info, "source_locks": locks, "branches": branches,

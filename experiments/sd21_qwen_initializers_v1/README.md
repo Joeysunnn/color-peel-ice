@@ -1,5 +1,10 @@
 # Single-image Qwen initializers on SD2.1
 
+The current initializer entry defaults to the [controlled Material v2 policy](../sd21_controlled_material_v2/README.md).
+Material now supplies two reflection classifications rather than free-word candidates;
+the dataset preparation also audits the actual render M/R target. The original v1
+protocol and results below remain historical records, and old manifests stay loadable.
+
 The first input is the original orange Mailbox photo, SHA256 `ba9c6624d9998cdfcd16308b0cf8fd8f3778909d8655efe2ba9cebba370483d0`. All four training datasets originate from that photo. Earlier wood-spoon Texture weights and the TokenVerse-inspired loss are excluded.
 
 ## Whole-method audit
