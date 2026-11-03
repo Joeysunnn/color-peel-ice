@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from experiments.sd21_wood_branches_v1 import contract as original
 
 STUDY = 'sd21_texture_external_preserve_v1'
-ARMS = {'control': 0.0, 'preservation': 0.1}
+ARMS = {'control': 0.0, 'preservation': 10.0}
 STEPS, SEEDS = (500, 600), (31, 38)
 MODEL_DIR = original.MODEL_DIR
 

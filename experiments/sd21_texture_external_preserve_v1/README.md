@@ -43,9 +43,17 @@ the 200 continuation steps; step401 uses record0 and step600 uses record199.
 
 The planned comparison resumes the same original LoRA Texture T400 checkpoint
 to T600, preserving the original Texture16 foreground training data and recipe.
-It saves T500 and T600. The two arms use external preservation weights 0 and 0.1;
-this weight remains subject to the pre-training gradient probe. Both arms share
-the fixed external manifest and all other settings.
+It saves T500 and T600. The two arms use external preservation weights 0 and 10.
+Both arms share the fixed external manifest and all other settings.
+
+The initial T400 probe at weight0.1 passed the gradient and RNG checks, but its
+aggregate auxiliary gradient norm was approximately 0.0102% of the foreground
+norm; the largest per-group ratio (V_down) was 0.167%. Before viewing any
+generated evaluation images, that preliminary run was stopped and retained.
+The weight was adjusted once to10: the same probe predicts about1.02% aggregate
+and16.7% for V_down. The final comparison starts both arms fresh from T400 and
+repeats the probe. This is a conservative single-sample numerical calibration,
+not an optimal-weight claim or a guarantee about Adam update magnitudes.
 
 The new regularizer is teacher prediction consistency with the student's
 Texture K/V residual active on all 77 text positions for the external pass.

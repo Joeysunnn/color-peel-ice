@@ -27,7 +27,7 @@ class ExternalPreservationProtocolTests(unittest.TestCase):
 
     def test_exact56_cases_and_no_extra_concepts(self):
         rows = plan()
-        self.assertEqual(contract.ARMS, {'control': 0.0, 'preservation': 0.1})
+        self.assertEqual(contract.ARMS, {'control': 0.0, 'preservation': 10.0})
         self.assertEqual(contract.STEPS, (500, 600))
         self.assertEqual(contract.SEEDS, (31, 38))
         self.assertEqual(len(rows), 56)
@@ -89,7 +89,7 @@ class ExternalPreservationProtocolTests(unittest.TestCase):
         self.assertNotIn('texture_external_preservation_manifest', configs['control']['args'])
         self.assertEqual(configs['preservation']['args']['texture_external_preservation_manifest'], str(self.manifest))
         self.assertEqual(configs['control']['args']['texture_external_preservation_weight'], 0.0)
-        self.assertEqual(configs['preservation']['args']['texture_external_preservation_weight'], 0.1)
+        self.assertEqual(configs['preservation']['args']['texture_external_preservation_weight'], 10.0)
 
     def test_rejects_wrong_branch_method_model_resume_and_relative_manifest(self):
         with patch.object(contract.original, 'build_config', return_value=self.parent):
