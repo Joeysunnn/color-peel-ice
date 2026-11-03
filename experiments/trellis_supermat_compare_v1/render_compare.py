@@ -6,11 +6,13 @@ Use ordinary Python with --grid renders/manifest.json to assemble the PNG grid.
 """
 
 import argparse
+import hashlib
 import itertools
 import json
 import math
 import os
 from pathlib import Path
+import struct
 import sys
 from types import SimpleNamespace
 
@@ -21,6 +23,31 @@ from experiments.texture_material_disentangled_v1.render import sha256
 
 PROTOCOL = ROOT / "experiments/texture_material_disentangled_v1/protocol.json"
 METHODS = ("supermat", "trellis")
+
+
+def mask_pixel_sha256(path, bpy=None):
+    """Hash dimensions and exact top-down RGBA8 pixels, excluding PNG metadata."""
+    if bpy is None:
+        from PIL import Image
+        with Image.open(path) as opened:
+            image = opened.convert("RGBA")
+            width, height = image.size
+            pixels = image.tobytes()
+    else:
+        import numpy as np
+        image = bpy.data.images.load(str(path), check_existing=False)
+        try:
+            image.colorspace_settings.name = "Non-Color"
+            width, height = image.size
+            values = np.empty(width * height * 4, dtype=np.float32)
+            image.pixels.foreach_get(values)
+            if not np.isfinite(values).all():
+                raise ValueError("Nonfinite decoded mask pixels")
+            rgba = np.rint(np.clip(values, 0, 1) * 255).astype(np.uint8).reshape(height, width, 4)
+            pixels = rgba[::-1].tobytes()  # Blender stores rows from bottom to top.
+        finally:
+            bpy.data.images.remove(image)
+    return hashlib.sha256(b"RGBA8\0" + struct.pack(">II", width, height) + pixels).hexdigest()
 
 
 def read_material(path):
@@ -93,7 +120,7 @@ def configure_cpu_scene(profile, seed, condition):
 
 
 def verify_pair(first, second):
-    for key in ("shape", "color", "light", "seed", "camera", "lights", "mask_sha256",
+    for key in ("shape", "color", "light", "seed", "camera", "lights", "mask_pixel_sha256",
                 "uniform_base_color_linear_rgba", "world_strength", "object_scale",
                 "resolution", "cycles_samples", "color_management", "cycles_device"):
         if first[key] != second[key]:
@@ -144,6 +171,7 @@ def render(supermat, trellis, output, gpu=None):
             record = render_one(row, output, protocol, profile, bpy, backend, append_shape)
             scene = bpy.context.scene
             record.update(shader_audit(bpy, "material"), cycles_device=scene.cycles.device,
+                          mask_pixel_sha256=mask_pixel_sha256(record["mask"], bpy),
                           cpu_threads=scene.render.threads if gpu is None else None,
                           color_management={"display_device": scene.display_settings.display_device,
                               "view_transform": scene.view_settings.view_transform,
@@ -185,6 +213,9 @@ def make_grid(manifest_path, output=None):
     for index in range(0, len(records), 2):
         first, second = records[index:index + 2]
         verify_pair(first, second)
+        if any(sha256(row["mask"]) != row["mask_sha256"] or
+               mask_pixel_sha256(row["mask"]) != row["mask_pixel_sha256"] for row in (first, second)):
+            raise ValueError("Mask file or decoded pixels differ from the render receipt")
         y = (index // 2) * (tile + header)
         draw.text((8, y + 5), f"{first['shape']} / {first['color']} / {first['light']}", fill="black")
         for column, row in enumerate((first, second)):

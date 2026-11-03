@@ -41,12 +41,13 @@ def sheet(items, path, columns, crop=None):
     canvas.save(path)
 
 
-def build(run, output):
+def build(run, output, render_dir=None):
     run, output = Path(run).resolve(), Path(output).resolve()
     archive = output.with_name(output.name + '.zip')
     if output.exists() or archive.exists() or output == run or run.is_relative_to(output):
         raise ValueError('Require a fresh preview directory and ZIP separate from the run inputs')
-    maps, renders = read(run / 'maps/report.json'), read(run / 'renders/manifest.json')
+    render_dir = Path(render_dir).resolve() if render_dir else run / 'renders'
+    maps, renders = read(run / 'maps/report.json'), read(render_dir / 'manifest.json')
     records = renders['records']
     if (maps['status'] != 'ready_for_review' or renders['status'] != 'complete'
             or renders['expected_images'] != 16 or len(records) != 16
@@ -124,7 +125,8 @@ def build(run, output):
                 for row in records]
     sheet(rendered, output / 'render_grid.png', 4)
     summary = {'schema': 'trellis_supermat_preview/v1', 'status': 'ready_for_user_review', 'training': False,
-               'run': str(run), 'git': {'input': preparation['git'], 'renders': renders['git_commit'], 'report': report_git},
+               'run': str(run), 'render_dir': str(render_dir),
+               'git': {'input': preparation['git'], 'renders': renders['git_commit'], 'report': report_git},
                'materials': materials, 'coverage': maps['coverage'], 'camera_iou': maps['camera_iou'],
                'source': preparation, 'maps_report': maps, 'render_manifest': renders,
                'arm_crop': {'union_bbox': box, 'padding_pixels': 16, 'crop_bbox': crop,
@@ -173,5 +175,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--render-dir', type=Path)
     arguments = parser.parse_args()
-    print(json.dumps(build(arguments.run, arguments.output)))
+    print(json.dumps(build(arguments.run, arguments.output, arguments.render_dir)))

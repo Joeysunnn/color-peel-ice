@@ -63,3 +63,10 @@ command. Preserve exact executed commands, versions, input/model/code hashes,
 logs, masks and full-size outputs in the external run. Completion means an
 auditable comparison is available; neither method becomes physical truth or a
 new training default based on this single example.
+
+Paired masks are checked by exact decoded RGBA8 pixel hashes, while original
+PNG file hashes remain provenance. Blender embeds different timestamps and
+render durations even when every mask pixel is identical. The first attempt
+stopped on that metadata-only difference and is preserved; use a fresh render
+directory for the corrected check. `report --render-dir` explicitly selects
+that completed attempt without altering earlier files.
