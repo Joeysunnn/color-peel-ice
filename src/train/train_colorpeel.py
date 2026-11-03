@@ -42,6 +42,7 @@ from texture_background_preservation import (
     reference_prediction,
     validate_texture_background_preservation,
 )
+from texture_external_preservation import ExternalTexturePreservation, validate_texture_external_preservation
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -551,6 +552,11 @@ def parse_args(input_args=None):
         "--texture_background_preservation_weight", type=float, default=0.0,
         help="Opt-in Texture foreground-exterior consistency with the frozen base; zero preserves the old training path.",
     )
+    parser.add_argument("--texture_external_preservation_manifest", type=str, default=None)
+    parser.add_argument(
+        "--texture_external_preservation_weight", type=float, default=0.0,
+        help="Opt-in external beach-image adapter consistency; zero preserves the old training path.",
+    )
     parser.add_argument(
         "--num_class_images",
         type=int,
@@ -970,6 +976,9 @@ def main(args):
     if args.with_prior_preservation and args.joint_two_object_binding:
         raise ValueError("with_prior_preservation is only implemented for single-subject training")
     preserve_texture_background = validate_texture_background_preservation(args)
+    preserve_texture_external = validate_texture_external_preservation(args)
+    if preserve_texture_external and (accelerator.num_processes != 1 or accelerator.mixed_precision != "no"):
+        raise ValueError("external preservation requires one FP32 process")
 
     # Handle the repository creation
     if accelerator.is_main_process:
@@ -1366,6 +1375,16 @@ def main(args):
         if accelerator.is_main_process:
             write_json(Path(args.output_dir) / "texture_background_reference.json", texture_reference.audit())
 
+    texture_external = None
+    if preserve_texture_external:
+        # Ordinary teacher conditioning must be cached before restoring learned state.
+        texture_external = ExternalTexturePreservation(
+            args.texture_external_preservation_manifest, tokenizer, accelerator.unwrap_model(text_encoder),
+            modifier_token_id[0], initializer_token_id[0][0],
+        )
+        if accelerator.is_main_process:
+            write_json(Path(args.output_dir) / "texture_external_reference.json", texture_external.audit())
+
     # Observation-only audit state. This snapshots the full embedding table but
     # does not change the official full-parameter AdamW optimizer above.
     resume_plan = None
@@ -1605,6 +1624,19 @@ def main(args):
                 cross_object_leakage_value = leakage_mass.detach().float().item()
                 total_loss_value = loss.detach().float().item()
                 accelerator.backward(loss)
+                external_metrics = {}
+                if texture_external is not None:
+                    # Free the foreground graph before the extra pass; both gradients share one optimizer step.
+                    with texture_external.loss_context(
+                        unet, vae, noise_scheduler, global_step + 1, accelerator.device, weight_dtype,
+                    ) as (external_loss, external_metrics):
+                        external_weight = args.texture_external_preservation_weight
+                        weighted_external_loss = external_weight * external_loss
+                        accelerator.backward(weighted_external_loss)
+                        weighted_external_value = float(weighted_external_loss.detach())
+                        external_metrics.update(texture_external_preservation_weight=external_weight,
+                                                texture_external_preservation_weighted_loss=weighted_external_value)
+                        total_loss_value += weighted_external_value
 
                 # Zero out the gradients for all token embeddings except the newly added
                 # embeddings for the concept, as we only want to optimize the concept embeddings
@@ -1661,6 +1693,9 @@ def main(args):
                         logger.info(f"Saved state to {save_path}")
 
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+            if texture_external is not None:
+                logs["loss"] = total_loss_value
+                logs["texture_external_preservation_loss"] = external_metrics["texture_external_preservation_loss"]
             # logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "AttnLoss": attn_loss.item()}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
@@ -1685,7 +1720,7 @@ def main(args):
                     ) | (background_training_metrics(
                         texture_background_loss, args.texture_background_preservation_weight,
                         texture_background_region,
-                    ) if texture_reference is not None else {}),
+                    ) if texture_reference is not None else {}) | external_metrics,
                 )
 
             if global_step >= args.max_train_steps:
