@@ -22,6 +22,8 @@ The first real response identified the category as `mailbox` but proposed the br
 
 Material captions change from `made of <M*>` to `with a <M*> surface` to fit an adjective such as glossy. Subject category words use the Qwen category. These changes are explicit: this is an integration test, **not a pure initializer-only causal ablation**. It does not by itself solve the earlier background-binding failure.
 
+Token-local K/V gating restricts which **text positions** receive the residual; it does not restrict the affected **image positions**. Foreground-masked reconstruction alone therefore does not enforce background invariance. Semantic initialization cannot remove that architectural limitation. In the reviewed inputs, Subject synthetic objects remain low/cropped in the frame, and Texture cubes contain weak vertical brightness bands despite Qwen's `uniform` description of the original. Residual illumination in albedo is a possible explanation, not a verified diagnosis.
+
 ## Model and bounded protocol
 
 Use [Qwen3-VL-8B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct), local cached revision `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`, FP16/eager on V100, deterministic single-image generation. Record full weight hashes once and actual measured allocator memory. Weight file bytes are not a VRAM estimate. Use existing `ice-vlm` environment; leave `colorpeel017` untouched. [Official quickstart](https://github.com/QwenLM/Qwen3-VL#quickstart).
@@ -33,6 +35,8 @@ Four LoRA64/alpha64 branches, seed42, batch1, FP32, embedding LR1e-5, K/V LR5e-5
 Inference:112 images, seeds31/38, PNDM100,512px, FP16.96 images cover each branch's native/literal/learned controls on4 cases;16 cover midpoint/final SCMT on plain/street/snow/flowers. Color-only CFG6; other branches and SCMT CFG3.5. Preserve same-seed initial latents, prompt token gates, exact loaded sources and safety-filter flags. Visual quality requires inspection after technical checks.
 
 ## Entry points
+
+Set `COLORPEEL_RUN_ROOT=/home/r12user5/Documents/Jiawei/colorpeel-runs` for the shared launcher and keep all experiment outputs beneath it. No environment package changes are required.
 
 1. In `ice-vlm`: `python -B scripts/methods/colorpeel_ice/initialize_from_image.py --image ORIGINAL --model-dir PINNED_QWEN_SNAPSHOT --sd-model-dir PINNED_SD21 --output FRESH_VLM_DIR --device cuda:0`.
 2. In `colorpeel017`: `python -B -m experiments.sd21_qwen_initializers_v1.run --stage prepare --initializer-manifest FRESH_VLM_DIR/initializers.json --output FRESH_EXPERIMENT`.
