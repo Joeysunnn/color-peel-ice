@@ -13,10 +13,18 @@ from experiments.sd21_qwen_initializers_v1.run import ENVIRONMENT, execute, expo
 from experiments.sd21_qwen_midpoint_transfer_v1.protocol import plan
 from experiments.sd21_qwen_midpoint_transfer_v1.run import run_group, collect
 from experiments.subject_multicolor_multimaterial_b.training import _write
-from scripts.launch.colorpeel_run import git_info
+from scripts.launch.colorpeel_run import git_info, validate_run_id
 from src.methods.colorpeel_ice.material_initialization import SCHEMA
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def training_directory(output, config, revision):
+    run = config['run']
+    stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    path = output / 'training' / f'{stamp}__{run["study"]}__{run["variant"]}__{revision["commit"][:7]}__{run["seed"]}'
+    validate_run_id(path, config, revision['commit'])
+    return path
 
 
 def verify(experiment, gpu):
@@ -36,8 +44,7 @@ def verify(experiment, gpu):
         raise ValueError('Material startup uses the unchanged recipe GPU assignment')
     config = configs['material']
     _write(output / 'config.json', config)
-    stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    training = output / 'training' / f'{stamp}__controlled_material_smoke2__{git_info()["commit"][:7]}__42'
+    training = training_directory(output, config, audit['new_training_git'])
     command = [sys.executable, '-u', '-B', str(ROOT / 'scripts/launch/colorpeel_run.py'),
                '--config', str(output / 'config.json'), '--run-dir', str(training)]
     report = output / 'train_outputs'
