@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 
 from src.train.initializer_token_utils import (
-    BRANCH_TOKENS, initializer_vector_audit, load_initializer_manifest,
+    BRANCH_TOKENS, initializer_candidates, initializer_vector_audit, load_initializer_manifest,
     select_initializer, validate_initializer_training,
 )
 
@@ -24,16 +24,38 @@ class Tokenizer:
     unk_token_id = 2
 
     def get_vocab(self):
-        return {"mailbox": 11, "orange": 12, "glossy": 13, "smooth": 14, "<S*>": 100}
+        return {"mailbox": 11, "orange": 12, "glossy": 13, "smooth": 14, "box": 15, "<S*>": 100}
 
     def encode(self, word, add_special_tokens=False):
         if add_special_tokens:
             raise AssertionError("initializer encoding must exclude BOS/EOS")
-        return {"mailbox": [11], "orange": [12], "glossy": [13], "smooth": [14],
+        return {"mailbox": [11], "orange": [12], "glossy": [13], "smooth": [14], "box": [15],
                 "cyan": [20, 21], "bos": [0], "alien": [2], "learned": [100]}.get(word, [2])
 
 
 class CandidateTests(unittest.TestCase):
+    def test_subject_category_precedes_generic_candidates_without_changing_raw(self):
+        semantic = {"category": "mailbox", "candidates": ["box", "mailbox", "box"]}
+        selected = initializer_candidates("subject", semantic)
+        self.assertEqual(selected, ["mailbox", "box"])
+        self.assertEqual(select_initializer(Tokenizer(), selected)[:2], ("mailbox", 11))
+        self.assertEqual(semantic["candidates"], ["box", "mailbox", "box"])
+        for branch in ("color", "material", "texture"):
+            self.assertEqual(initializer_candidates(branch, semantic), semantic["candidates"])
+
+    def test_multiword_category_is_not_inserted(self):
+        semantic = {"category": "mail box", "candidates": ["box"]}
+        self.assertEqual(initializer_candidates("subject", semantic), ["box"])
+
+    def test_multibpe_category_rejection_retains_explicit_candidate_fallback(self):
+        # Toy tokenizer's cyan splits into two BPEs; this checks policy, not a real object label.
+        candidates = initializer_candidates("subject", {"category": "cyan", "candidates": ["box"]})
+        word, token_id, audit = select_initializer(Tokenizer(), candidates)
+        self.assertEqual((word, token_id), ("box", 15))
+        self.assertEqual(audit[0]["candidate"], "cyan")
+        self.assertEqual(audit[0]["reasons"], ["multiple_bpe"])
+        self.assertTrue(audit[1]["accepted"])
+
     def test_first_valid_word_is_selected_and_all_rejections_are_recorded(self):
         candidates = ["painted metal", "", "wood-grain", "cyan", "alien", "bos", "learned", " glossy ", "smooth"]
         word, token_id, audit = select_initializer(Tokenizer(), candidates)
@@ -86,14 +108,15 @@ class ManifestTests(unittest.TestCase):
             word, token_id, audit = select_initializer(Tokenizer(), [candidate])
             self.manifest["branches"][branch] = {
                 "token": token, "description": candidate, "initializer": word, "initializer_token_id": token_id,
-                "confidence": "low", "candidates": [candidate], "candidate_audit": audit,
+                "confidence": "low", "candidates": [candidate], "selection_candidates": [candidate],
+                "candidate_audit": audit,
             }
         self.manifest["branches"]["subject"]["category"] = "mailbox"
         self.manifest["branches"]["material"].update(substrate="painted metal", visible_finish="glossy")
         self.manifest["subject_category"] = "mailbox"
         self.manifest["response"] = {
             branch: {key: value for key, value in entry.items()
-                     if key not in ("token", "initializer", "initializer_token_id", "candidate_audit")}
+                     if key not in ("token", "initializer", "initializer_token_id", "candidate_audit", "selection_candidates")}
             for branch, entry in self.manifest["branches"].items()
         }
         for name in ("raw_response.txt", "response.json"):
@@ -168,6 +191,17 @@ class ManifestTests(unittest.TestCase):
                 return [77] if word == "glossy" else super().encode(word, add_special_tokens)
         with self.assertRaisesRegex(ValueError, "candidate audit"):
             self.load(tokenizer=DifferentTokenizer())
+
+    def test_effective_selection_candidates_are_required_and_recomputed(self):
+        for branch in BRANCH_TOKENS:
+            changed = copy.deepcopy(self.manifest)
+            changed["branches"][branch]["selection_candidates"] = ["box"]
+            with self.subTest(branch=branch), self.assertRaisesRegex(ValueError, "selection candidates"):
+                self.load(changed)
+        changed = copy.deepcopy(self.manifest)
+        changed["branches"]["subject"].pop("selection_candidates")
+        with self.assertRaisesRegex(ValueError, "selection candidates"):
+            self.load(changed)
 
     def test_weights_are_not_part_of_the_lightweight_intake_locks(self):
         changed = copy.deepcopy(self.manifest)

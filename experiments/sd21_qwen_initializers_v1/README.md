@@ -18,6 +18,8 @@ The first input is the original orange Mailbox photo, SHA256 `ba9c6624d9998cdfcd
 
 The initializer must be one *actual diffusion tokenizer token*, not merely one English word. No first-BPE truncation or averaging. Caption lists must be nonempty, contain exactly their own learned modifier once, and fit77 tokens without truncation. Qwen candidates/descriptions and rejection reasons are preserved. M/T are separated by observable reflection versus spatial albedo pattern; ambiguous `smooth` is rejected for Texture.
 
+The first real response identified the category as `mailbox` but proposed the broader candidate `box`. The selector therefore checks the VLM's own single-word category before its other Subject candidates. Multiword categories are not split; a single-word category that fails BPE validation can still fall back to the recorded candidate list. Raw candidates remain unchanged and the effective selection list is recorded separately. No image-specific answer is injected into the prompt or selector.
+
 Material captions change from `made of <M*>` to `with a <M*> surface` to fit an adjective such as glossy. Subject category words use the Qwen category. These changes are explicit: this is an integration test, **not a pure initializer-only causal ablation**. It does not by itself solve the earlier background-binding failure.
 
 ## Model and bounded protocol

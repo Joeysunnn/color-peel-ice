@@ -21,6 +21,18 @@ def single_token_initializer_id(tokenizer, initializer_token: str) -> int:
     return int(token_ids[0])
 
 
+def initializer_candidates(branch, semantic):
+    """Prefer Qwen's single-word Subject category without rewriting its raw candidates."""
+    if branch not in BRANCH_TOKENS:
+        raise ValueError("require a supported initializer branch")
+    candidates = list(semantic["candidates"])
+    category = semantic.get("category")
+    if (branch == "subject" and isinstance(category, str) and re.fullmatch(r"[A-Za-z]+", category)
+            and (not candidates or candidates[0] != category)):
+        return list(dict.fromkeys([category, *candidates]))
+    return candidates
+
+
 def select_initializer(tokenizer, candidates):
     """Audit every candidate; select the first ordinary, single-word, single-BPE word."""
     if not isinstance(candidates, list):
@@ -120,11 +132,6 @@ def load_initializer_manifest(path, tokenizer, model_root):
                 or not isinstance(entry.get("candidates"), list) or not entry["candidates"]
                 or not all(isinstance(value, str) for value in entry["candidates"])):
             raise ValueError(f"invalid or unknown initializer decision for {branch}")
-        word, token_id, audit = select_initializer(tokenizer, entry["candidates"])
-        if (word is None or entry.get("initializer") != word
-                or type(entry.get("initializer_token_id")) is not int or entry["initializer_token_id"] != token_id
-                or entry.get("candidate_audit") != audit):
-            raise ValueError(f"initializer choice or candidate audit differs for {branch}")
         semantic_fields = {"description", "confidence", "candidates"}
         if branch == "subject":
             semantic_fields.add("category")
@@ -133,6 +140,14 @@ def load_initializer_manifest(path, tokenizer, model_root):
         if (not isinstance(raw[branch], dict) or not semantic_fields.issubset(raw[branch])
                 or any(field not in entry or entry[field] != raw[branch][field] for field in semantic_fields)):
             raise ValueError(f"{branch} semantic fields differ from the locked VLM response")
+        candidates = initializer_candidates(branch, entry)
+        if entry.get("selection_candidates") != candidates:
+            raise ValueError(f"selection candidates differ from the category policy for {branch}")
+        word, token_id, audit = select_initializer(tokenizer, candidates)
+        if (word is None or entry.get("initializer") != word
+                or type(entry.get("initializer_token_id")) is not int or entry["initializer_token_id"] != token_id
+                or entry.get("candidate_audit") != audit):
+            raise ValueError(f"initializer choice or candidate audit differs for {branch}")
     if manifest.get("subject_category") != raw["subject"]["category"]:
         raise ValueError("subject_category differs from the locked VLM response")
     return manifest

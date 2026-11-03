@@ -105,13 +105,15 @@ def parse_response(raw):
 
 
 def build_branches(response, tokenizer):
-    from src.train.initializer_token_utils import select_initializer
+    from src.train.initializer_token_utils import initializer_candidates, select_initializer
 
     branches, failures = {}, []
     for branch, token in TOKENS.items():
         value = response[branch]
-        word, token_id, audit = select_initializer(tokenizer, value["candidates"])
+        candidates = initializer_candidates(branch, value)
+        word, token_id, audit = select_initializer(tokenizer, candidates)
         branches[branch] = {**value, "token": token, "initializer": word,
+                            "selection_candidates": candidates,
                             "initializer_token_id": token_id, "candidate_audit": audit}
         if value["confidence"] == "unknown":
             failures.append(f"{branch}: unknown semantic confidence")

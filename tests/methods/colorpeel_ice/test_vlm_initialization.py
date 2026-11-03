@@ -18,17 +18,17 @@ class Tokenizer:
     all_special_ids = [98, 99]
 
     def get_vocab(self):
-        return {"mailbox": 10, "orange": 11, "glossy": 12, "plain": 13}
+        return {"mailbox": 10, "orange": 11, "glossy": 12, "plain": 13, "box": 14}
 
     def encode(self, word, add_special_tokens=False):
         return {"mailbox": [10], "orange": [11], "glossy": [12], "plain": [13],
-                "speckled": [20, 21]}.get(word, [99])
+                "box": [14], "speckled": [20, 21], "letterbox": [22, 23]}.get(word, [99])
 
 
 def response():
     return {
         "subject": {"category": "mailbox", "description": "Curved lid above a rectangular wall mounted box",
-                    "confidence": "high", "candidates": ["mailbox"]},
+                    "confidence": "high", "candidates": ["box"]},
         "color": {"description": "Dominant orange foreground", "confidence": "high", "candidates": ["orange"]},
         "material": {"substrate": "uncertain metal", "visible_finish": "glossy painted coating",
                      "description": "Narrow bright highlights across the coating", "confidence": "medium", "candidates": ["glossy"]},
@@ -90,6 +90,32 @@ class VlmInitializationTests(unittest.TestCase):
         self.assertEqual(texture["candidate_audit"][0]["token_ids"], [20, 21])
         self.assertIn("multiple_bpe", texture["candidate_audit"][0]["reasons"])
 
+    def test_subject_category_precedes_generic_candidate_without_rewriting_raw(self):
+        value = response()
+        before = json.dumps(value)
+        branches, failures = vlm.build_branches(vlm.parse_response(before), Tokenizer())
+        subject = branches["subject"]
+        self.assertEqual(failures, [])
+        self.assertEqual(subject["candidates"], ["box"])
+        self.assertEqual(subject["selection_candidates"], ["mailbox", "box"])
+        self.assertEqual((subject["initializer"], subject["initializer_token_id"]), ("mailbox", 10))
+        self.assertEqual(json.dumps(value), before)
+        for branch in ("color", "material", "texture"):
+            self.assertEqual(branches[branch]["selection_candidates"], value[branch]["candidates"])
+
+    def test_subject_multibpe_category_falls_back_and_multiword_category_is_not_inserted(self):
+        for category, expected_candidates in (("letterbox", ["letterbox", "box"]), ("wall box", ["box"])):
+            value = response()
+            value["subject"]["category"] = category
+            branches, failures = vlm.build_branches(vlm.parse_response(json.dumps(value)), Tokenizer())
+            subject = branches["subject"]
+            self.assertEqual(failures, [])
+            self.assertEqual(subject["selection_candidates"], expected_candidates)
+            self.assertEqual((subject["initializer"], subject["initializer_token_id"]), ("box", 14))
+            if category == "letterbox":
+                self.assertEqual(subject["candidate_audit"][0]["token_ids"], [22, 23])
+                self.assertIn("multiple_bpe", subject["candidate_audit"][0]["reasons"])
+
     def test_schema_rejects_bad_category_confidence_and_candidate_count(self):
         mutations = [("subject", "category", "<S*> mailbox"), ("texture", "confidence", []),
                      ("color", "confidence", "certain"), ("color", "candidates", ["orange"] * 5),
@@ -134,6 +160,8 @@ class VlmInitializationTests(unittest.TestCase):
             self.assertEqual(path.name, "initializers.json")
             manifest = load_initializer_manifest(path, Tokenizer(), root / "sd")
             self.assertEqual(manifest["subject_category"], "mailbox")
+            self.assertEqual(manifest["branches"]["subject"]["initializer"], "mailbox")
+            self.assertEqual(manifest["branches"]["subject"]["candidates"], ["box"])
             self.assertEqual(set(manifest["branches"]), set(vlm.TOKENS))
             self.assertEqual(manifest["response"], response())
             (root / "input.png").write_bytes(b"changed")
