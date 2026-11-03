@@ -71,9 +71,10 @@ def execute(command, log, gpu):
                        stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT, check=True)
 
 
-def export(experiment, branch, run, output, smoke):
+def export(experiment, branch, run, output, smoke, *, experiment_contract=None):
     result = snapshots.audit_export(run, branch, 'lora_r64', output, smoke=smoke,
-                                    experiment_contract=contract.recipe(experiment, branch))
+                                    experiment_contract=(contract.recipe(experiment, branch)
+                                                         if experiment_contract is None else experiment_contract))
     audit = read_json(experiment / 'source_audit.json')
     selected = audit['initializers']['branches'][branch]
     path = Path(run) / 'checkpoints/initializer_audit.json'

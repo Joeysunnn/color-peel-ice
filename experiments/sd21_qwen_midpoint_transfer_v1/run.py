@@ -170,7 +170,7 @@ def gallery(output, rows, generated, state, group=None):
         'img{max-width:100%}small{display:block}</style>' + ''.join(body), encoding='utf8')
 
 
-def run_group(output, mode, rows, audit, gpu):
+def run_group(output, mode, rows, audit, gpu, *, render_gallery=gallery):
     import torch
     from experiments.sd21_wood_branches_v1 import inference as single
     from experiments.sd21_qwen_initializers_v1.attention import install_four_branch_lora
@@ -252,7 +252,7 @@ def run_group(output, mode, rows, audit, gpu):
         del pipe
         torch.cuda.empty_cache()
         _write(folder / 'status.json', state)
-        gallery(output, rows, generated, state, mode)
+        render_gallery(output, rows, generated, state, mode)
 
 
 def worker(output, gpu):
