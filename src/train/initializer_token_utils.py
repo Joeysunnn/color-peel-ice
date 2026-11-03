@@ -1,5 +1,6 @@
 """Validation helpers for textual-inversion initializer tokens."""
 
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -7,6 +8,8 @@ import re
 
 
 BRANCH_TOKENS = {"subject": "<S*>", "color": "<C*>", "material": "<M*>", "texture": "<T*>"}
+MATERIAL_ABLATION_SCHEMA = "colorpeel_material_initializer_ablation/v1"
+MATERIAL_ABLATION_INITIALIZERS = ("painted", "glossy", "material")
 
 
 def single_token_initializer_id(tokenizer, initializer_token: str) -> int:
@@ -90,6 +93,15 @@ def _checked_locks(files):
 def load_initializer_manifest(path, tokenizer, model_root):
     """Recheck the frozen four-branch VLM decision against actual SD2.1 tokenization."""
     manifest = json.loads(Path(path).read_bytes())
+    if isinstance(manifest, dict) and manifest.get("schema") == MATERIAL_ABLATION_SCHEMA:
+        if not isinstance(manifest.get("ablation"), dict) or not isinstance(manifest.get("parent_manifest"), str):
+            raise ValueError("controlled Material initializer requires a parent and explicit selection")
+        expected = build_material_ablation_manifest(
+            manifest["parent_manifest"], tokenizer, model_root, manifest["ablation"].get("initializer"),
+        )
+        if manifest != expected:
+            raise ValueError("controlled Material initializer manifest differs from its verified parent or selection")
+        return manifest
     if (not isinstance(manifest, dict) or manifest.get("schema") != "colorpeel_vlm_initializers/v1"
             or manifest.get("status") != "verified"):
         raise ValueError("require a verified colorpeel_vlm_initializers/v1 manifest")
@@ -153,10 +165,42 @@ def load_initializer_manifest(path, tokenizer, model_root):
     return manifest
 
 
+def build_material_ablation_manifest(parent_path, tokenizer, model_root, initializer):
+    """Record an explicit Material-only intervention without changing Qwen evidence."""
+    if initializer not in MATERIAL_ABLATION_INITIALIZERS:
+        raise ValueError("controlled Material initializer must be painted, glossy or material")
+    parent_path = Path(parent_path)
+    if not parent_path.is_absolute():
+        raise ValueError("controlled Material initializer requires an absolute parent manifest")
+    parent_path = parent_path.resolve()
+    parent_bytes = parent_path.read_bytes()
+    parent_record = json.loads(parent_bytes)
+    if (not isinstance(parent_record, dict)
+            or parent_record.get("schema") != "colorpeel_vlm_initializers/v1"):
+        raise ValueError("controlled Material initializer requires an original VLM-v1 parent")
+    parent = load_initializer_manifest(parent_path, tokenizer, model_root)
+    word, token_id, audit = select_initializer(tokenizer, [initializer])
+    if word != initializer:
+        raise ValueError("controlled Material initializer must be one ordinary tokenizer token")
+    parent_sha = hashlib.sha256(parent_bytes).hexdigest()
+    manifest = copy.deepcopy(parent)
+    manifest.update(schema=MATERIAL_ABLATION_SCHEMA, selection_origin="controlled_ablation",
+                    parent_manifest=str(parent_path), parent_manifest_sha256=parent_sha,
+                    ablation={"branch": "material", "initializer": initializer})
+    manifest["source_locks"][str(parent_path)] = parent_sha
+    manifest["branches"]["material"].update(
+        initializer=word, initializer_token_id=token_id,
+        selection_origin="controlled_ablation", selection_candidates=[initializer], candidate_audit=audit,
+    )
+    return manifest
+
+
 def validate_initializer_training(args, manifest):
     """Opt-in scope; callers with no manifest retain the historical trainer guards."""
     token, initializer = args.modifier_token, args.initializer_token
     branch = next((name for name, value in BRANCH_TOKENS.items() if value == token), None)
+    if manifest.get("schema") == MATERIAL_ABLATION_SCHEMA and branch != "material":
+        raise ValueError("controlled initializer ablation is restricted to the Material branch")
     if (branch is None or initializer != manifest["branches"][branch]["initializer"]
             or args.subject_lora_mode != "token_local_kv" or args.subject_lora_rank != 64
             or args.subject_lora_alpha != 64 or args.freeze_model != "crossattn_kv"

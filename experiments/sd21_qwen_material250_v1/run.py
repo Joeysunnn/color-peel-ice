@@ -26,20 +26,28 @@ SOURCE = midpoint.SOURCE
 STUDIES = {(250,): STUDY, (150, 200): 'sd21_qwen_material150_200_v1'}
 
 
-def build_config(source, gpu, steps=(250,)):
+def build_config(source, gpu, steps=(250,), *, initializer_manifest=None):
     study = STUDIES[steps]
     config = contract.build_config(source, 'material')
     config['args'].update(max_train_steps=steps[-1], checkpoint_steps=list(steps))
     config['run'].update(study=study, variant=f'material_fresh{steps[-1]}')
     config['environment']['CUDA_VISIBLE_DEVICES'] = str(gpu)
+    if initializer_manifest is not None:
+        if steps != (150, 200):
+            raise ValueError('initializer ablation requires checkpoints150/200')
+        manifest = read_json(initializer_manifest)
+        word = manifest['branches']['material']['initializer']
+        config['run'].update(study='sd21_material_initializer_ablation_v1', variant=word + '_fresh200')
+        config['args'].update(initializer_token=word, initializer_manifest=str(initializer_manifest))
+        config['data_lineage']['initializer_manifest'] = str(initializer_manifest)
     return config
 
 
-def recipe(source, gpu, steps=(250,)):
+def recipe(source, gpu, steps=(250,), *, initializer_manifest=None):
     def expected(branch, method, model_dir=contract.MODEL_DIR, smoke=False):
         if branch != 'material' or method != 'lora_r64' or Path(model_dir) != contract.MODEL_DIR or smoke:
             raise ValueError('only the declared fresh Material recipe is supported')
-        return build_config(source, gpu, steps)
+        return build_config(source, gpu, steps, initializer_manifest=initializer_manifest)
     return SimpleNamespace(BRANCHES=('material',), METHODS=('lora_r64',), STEPS=steps,
         TOKENS=contract.TOKENS, CONCEPT_IDS=contract.CONCEPT_IDS, build_config=expected,
         verify_dataset=lambda branch: data.verify_dataset(Path(source) / 'dataset', branch))
@@ -81,10 +89,10 @@ def inference_dir(output, steps, step):
     return output / 'inference' / f'step{step}' if len(steps) > 1 else output / 'inference'
 
 
-def prepare(source, output, gpu, steps=(250,)):
+def prepare(source, output, gpu, steps=(250,), *, initializer=None):
     from transformers import CLIPTokenizer
     from experiments.sd21_wood_branches_v1.prepare_model import verify_model
-    from src.train.initializer_token_utils import load_initializer_manifest
+    from src.train.initializer_token_utils import build_material_ablation_manifest, load_initializer_manifest
 
     source, output = Path(source).resolve(), resolve_run_dir(Path(output))
     if source != SOURCE.resolve() or output.exists() or any(
@@ -108,12 +116,20 @@ def prepare(source, output, gpu, steps=(250,)):
              **manifest['source_locks'], str(manifest_path): sha256(manifest_path),
              **{str(source / name): sha256(source / name) for name in ('source_audit.json', 'status.json')}}
     snapshots.check_locks(locks)
-    config = build_config(source, gpu, steps)
+    output.mkdir(parents=True)
+    ablation_path = None
+    if initializer is not None:
+        manifest = build_material_ablation_manifest(manifest_path, tokenizer, contract.MODEL_DIR, initializer)
+        ablation_path = output / 'initializers.json'
+        _write(ablation_path, manifest)
+        manifest = load_initializer_manifest(ablation_path, tokenizer, contract.MODEL_DIR)
+        manifest_path = ablation_path
+        locks.update({**manifest['source_locks'], str(manifest_path): sha256(manifest_path)})
+    config = build_config(source, gpu, steps, initializer_manifest=ablation_path)
     plans = {step: plan(manifest, step) for step in steps}
     if config['args']['lr_scheduler'] != 'constant' or config['args']['lr_warmup_steps'] != 0:
         raise ValueError('step-budget comparison requires the unchanged constant LR schedule')
-    output.mkdir(parents=True)
-    audit = {'study': STUDIES[steps], 'source_experiment': str(source), 'source_training_git': midpoint.SOURCE_GIT,
+    audit = {'study': config['run']['study'], 'source_experiment': str(source), 'source_training_git': midpoint.SOURCE_GIT,
         'new_training_git': revision, 'inference_git': revision, 'initializers': manifest,
         'initializer_manifest': str(manifest_path), 'dataset': dataset, 'base_model': model['model'],
         'source_locks': locks, 'fresh_training': True, 'old_weights_reused': False, 'gpu': gpu}
@@ -132,12 +148,14 @@ def prepare(source, output, gpu, steps=(250,)):
     return output, audit, config, plans
 
 
-def run(source, output, gpu, steps=(250,)):
+def run(source, output, gpu, steps=(250,), *, initializer=None):
     if steps not in STUDIES:
         raise ValueError('supported checkpoint plans are [250] or [150,200]')
+    if initializer is not None and (steps != (150, 200) or initializer not in ('painted', 'glossy', 'material')):
+        raise ValueError('only the requested three-initializer150/200 ablation is supported')
     os.environ.update(ENVIRONMENT, CUDA_VISIBLE_DEVICES=str(gpu))
     require_idle((gpu,))
-    output, audit, config, plans = prepare(source, output, gpu, steps)
+    output, audit, config, plans = prepare(source, output, gpu, steps, initializer=initializer)
     maximum, expected_images = steps[-1], 44 * len(steps)
     report = output / 'train_outputs'
     report.mkdir()
@@ -153,9 +171,11 @@ def run(source, output, gpu, steps=(250,)):
     (report / 'LOG.md').write_text('Training log: `../training.log`. Launcher details: `../training/`. '
         'Inference ledgers: beneath `../inference/`, separately for each saved step.\n', encoding='utf8')
     (report / 'SCIENTIFIC_CHANGELOG.md').write_text(f'Fresh Material{maximum}, save{list(steps)}; no other branch or objective. '
-        'Same8 Mailbox images, captions, painted initializer and LoRA64 recipe; no old weights reused.\n', encoding='utf8')
-    (report / 'COMPARABILITY_REPORT.md').write_text('Compared with Material500/1000: shorter training budget only. '
-        'Constant LR and warmup0 retain the same LR schedule; seed42, data, initialization and sampling unchanged. '
+        f'Same8 Mailbox images, captions and LoRA64 recipe; initializer={config["args"]["initializer_token"]}; no old weights reused.\n', encoding='utf8')
+    comparison = ('Only the user-selected initializer changes across the three fresh200 variants. '
+                  if initializer is not None else 'Compared with Material500/1000: shorter training budget only. ')
+    (report / 'COMPARABILITY_REPORT.md').write_text(comparison +
+        'Constant LR and warmup0 retain the same LR schedule; seed42, data and sampling unchanged. '
         'No claim of bitwise training equivalence. User performs manual visual review.\n', encoding='utf8')
     state = {'status': 'training', 'training_steps': maximum, 'max_steps': maximum, 'completed_steps': None,
              'stop_reason': None, 'checkpoint_steps': list(steps), 'training_run': str(train_run),
@@ -175,7 +195,8 @@ def run(source, output, gpu, steps=(250,)):
         state.update(status='exporting', completed_steps=maximum)
         save()
         result = export(output, 'material', train_run, output / 'ckpts', False,
-                        experiment_contract=recipe(source, gpu, steps))
+                        experiment_contract=recipe(source, gpu, steps,
+                            initializer_manifest=Path(audit['initializer_manifest']) if initializer is not None else None))
         audit['source_locks'].update(result['source_locks'])
         for selected in result['steps'].values():
             audit['source_locks'].update(selected['hashes'])
@@ -223,5 +244,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--gpu', type=int, choices=range(4), default=0)
     parser.add_argument('--checkpoint-steps', type=int, nargs='+', default=[250])
+    parser.add_argument('--initializer', choices=('painted', 'glossy', 'material'))
     args = parser.parse_args()
-    run(SOURCE, args.output, args.gpu, tuple(args.checkpoint_steps))
+    run(SOURCE, args.output, args.gpu, tuple(args.checkpoint_steps), initializer=args.initializer)
