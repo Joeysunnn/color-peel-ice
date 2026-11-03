@@ -43,6 +43,7 @@ from texture_background_preservation import (
     validate_texture_background_preservation,
 )
 from texture_external_preservation import ExternalTexturePreservation, validate_texture_external_preservation
+from concept_isolation import ConceptIsolation, validate_concept_isolation
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -219,7 +220,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     else:
         raise ValueError(f"{model_class} is not supported.")
 
-def collate_fn(examples, with_prior_preservation, modifier_token_ids=()):
+def collate_fn(examples, with_prior_preservation, modifier_token_ids=(), retain_instance_prompt=False):
     input_ids = [example["instance_prompt_ids"] for example in examples]
     pixel_values = [example["instance_images"] for example in examples]
     mask = [example["mask"] for example in examples]
@@ -233,6 +234,8 @@ def collate_fn(examples, with_prior_preservation, modifier_token_ids=()):
     if mask.ndim == 3:
         mask = mask.unsqueeze(1)
     batch = {"input_ids": input_ids, "pixel_values": pixel_values, "mask": mask}
+    if retain_instance_prompt:
+        batch["instance_prompt"] = [example["instance_prompt"] for example in examples]
     if with_prior_preservation:
         batch["class_input_ids"] = torch.cat([example["class_prompt_ids"] for example in examples], dim=0)
         batch["class_pixel_values"] = torch.stack([example["class_images"] for example in examples]).to(
@@ -284,6 +287,7 @@ class CustomDiffusionDataset(Dataset):
         hflip=False,
         aug=False,
         forbidden_tokens=(),
+        retain_instance_prompt=False,
     ):
         self.size = size
         self.mask_size = mask_size
@@ -291,6 +295,7 @@ class CustomDiffusionDataset(Dataset):
         self.tokenizer = tokenizer
         self.interpolation = Image.BILINEAR
         self.aug = aug
+        self.retain_instance_prompt = retain_instance_prompt
 
         self.instance_images_path = []
         self.class_images_path = []
@@ -413,8 +418,11 @@ class CustomDiffusionDataset(Dataset):
         example["instance_images"] = torch.from_numpy(instance_image).permute(2, 0, 1)
         example["mask"] = torch.from_numpy(mask)
 
+        selected_prompt = random.choice(instance_prompt)
+        if self.retain_instance_prompt:
+            example["instance_prompt"] = selected_prompt
         example["instance_prompt_ids"] = self.tokenizer(
-            random.choice(instance_prompt),
+            selected_prompt,
             truncation=True,
             padding="max_length",
             max_length=self.tokenizer.model_max_length,
@@ -557,6 +565,9 @@ def parse_args(input_args=None):
         "--texture_external_preservation_weight", type=float, default=0.0,
         help="Opt-in external beach-image adapter consistency; zero preserves the old training path.",
     )
+    parser.add_argument("--concept_isolation_manifest", type=str, default=None)
+    parser.add_argument("--concept_isolation_weight", type=float, default=0.0,
+                        help="Opt-in right-panel base-teacher consistency on half the training steps.")
     parser.add_argument(
         "--num_class_images",
         type=int,
@@ -979,6 +990,9 @@ def main(args):
     preserve_texture_external = validate_texture_external_preservation(args)
     if preserve_texture_external and (accelerator.num_processes != 1 or accelerator.mixed_precision != "no"):
         raise ValueError("external preservation requires one FP32 process")
+    use_concept_isolation = validate_concept_isolation(args)
+    if use_concept_isolation and (accelerator.num_processes != 1 or accelerator.mixed_precision != "no"):
+        raise ValueError("concept isolation requires one FP32 process")
 
     # Handle the repository creation
     if accelerator.is_main_process:
@@ -1254,6 +1268,7 @@ def main(args):
         hflip=args.hflip,
         forbidden_tokens=args.modifier_token or (),
         aug=not args.noaug,
+        retain_instance_prompt=use_concept_isolation,
     )
 
     train_dataloader = torch.utils.data.DataLoader(
@@ -1261,7 +1276,8 @@ def main(args):
         batch_size=args.train_batch_size,
         shuffle=False,
         collate_fn=lambda examples: collate_fn(
-            examples, args.with_prior_preservation, modifier_token_ids=modifier_token_id
+            examples, args.with_prior_preservation, modifier_token_ids=modifier_token_id,
+            retain_instance_prompt=use_concept_isolation,
         ),
         num_workers=args.dataloader_num_workers,
     )
@@ -1384,6 +1400,16 @@ def main(args):
         )
         if accelerator.is_main_process:
             write_json(Path(args.output_dir) / "texture_external_reference.json", texture_external.audit())
+
+    concept_isolation = None
+    if use_concept_isolation:
+        concept_isolation = ConceptIsolation(
+            args.concept_isolation_manifest, tokenizer, modifier_token_id[0], initializer_token_id[0][0],
+            [caption for record in train_dataset.instance_images_path for caption in record[1]],
+            args.max_train_steps, seed=args.seed,
+        )
+        concept_isolation.bind_text_encoder(accelerator.unwrap_model(text_encoder))
+        write_json(Path(args.output_dir) / "concept_isolation_audit.json", concept_isolation.audit())
 
     # Observation-only audit state. This snapshots the full embedding table but
     # does not change the official full-parameter AdamW optimizer above.
@@ -1638,6 +1664,24 @@ def main(args):
                                                 texture_external_preservation_weighted_loss=weighted_external_value)
                         total_loss_value += weighted_external_value
 
+                isolation_metrics = {}
+                if concept_isolation is not None:
+                    isolation_metrics = {"concept_isolation_applied": False, "concept_isolation_loss": 0.0,
+                                         "concept_isolation_weight": args.concept_isolation_weight,
+                                         "concept_isolation_weighted_loss": 0.0}
+                    if concept_isolation.enabled(global_step + 1):
+                        with concept_isolation.loss_context(
+                            unet, vae, accelerator.unwrap_model(text_encoder), noise_scheduler,
+                            batch["pixel_values"], batch["instance_prompt"][0], global_step + 1,
+                            accelerator.device, weight_dtype,
+                        ) as (isolation_loss, isolation_metrics):
+                            weighted_isolation_loss = args.concept_isolation_weight * isolation_loss
+                            accelerator.backward(weighted_isolation_loss)
+                            weighted_isolation_value = float(weighted_isolation_loss.detach())
+                            isolation_metrics.update(concept_isolation_weight=args.concept_isolation_weight,
+                                                     concept_isolation_weighted_loss=weighted_isolation_value)
+                            total_loss_value += weighted_isolation_value
+
                 # Zero out the gradients for all token embeddings except the newly added
                 # embeddings for the concept, as we only want to optimize the concept embeddings
                 if args.modifier_token is not None:
@@ -1696,6 +1740,9 @@ def main(args):
             if texture_external is not None:
                 logs["loss"] = total_loss_value
                 logs["texture_external_preservation_loss"] = external_metrics["texture_external_preservation_loss"]
+            if concept_isolation is not None:
+                logs["loss"] = total_loss_value
+                logs["concept_isolation_loss"] = isolation_metrics["concept_isolation_loss"]
             # logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "AttnLoss": attn_loss.item()}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
@@ -1720,7 +1767,7 @@ def main(args):
                     ) | (background_training_metrics(
                         texture_background_loss, args.texture_background_preservation_weight,
                         texture_background_region,
-                    ) if texture_reference is not None else {}) | external_metrics,
+                    ) if texture_reference is not None else {}) | external_metrics | isolation_metrics,
                 )
 
             if global_step >= args.max_train_steps:
@@ -1772,6 +1819,9 @@ def main(args):
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
         unet = unet.to(torch.float32)
+        if concept_isolation is not None:
+            write_json(Path(args.output_dir) / "concept_isolation_teacher_final.json",
+                       concept_isolation.verify_teacher(accelerator.unwrap_model(text_encoder)))
         if embedding_update_audit is not None:
             final_embedding_weight = (
                 accelerator.unwrap_model(text_encoder).get_input_embeddings().weight

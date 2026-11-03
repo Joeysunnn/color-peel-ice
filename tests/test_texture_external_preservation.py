@@ -63,14 +63,17 @@ class ConfigurationTests(unittest.TestCase):
         calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
         create = next(node for node in calls if isinstance(node.func, ast.Name) and node.func.id == "ExternalTexturePreservation")
         restore = next(node for node in calls if isinstance(node.func, ast.Attribute) and node.func.attr == "load_state")
-        backwards = sorted(node.lineno for node in calls if isinstance(node.func, ast.Attribute) and node.func.attr == "backward")
+        backwards = {node.args[0].id: node.lineno for node in calls
+                     if isinstance(node.func, ast.Attribute) and node.func.attr == "backward"
+                     and node.args and isinstance(node.args[0], ast.Name)
+                     and node.args[0].id in ("loss", "weighted_external_loss")}
         clip = next(node for node in calls if isinstance(node.func, ast.Attribute) and node.func.attr == "clip_grad_norm_")
         flag = next(node for node in calls if node.args and isinstance(node.args[0], ast.Constant)
                     and node.args[0].value == "--texture_external_preservation_weight")
         self.assertLess(create.lineno, restore.lineno)
-        self.assertEqual(len(backwards), 2)
-        self.assertLess(backwards[0], backwards[1])
-        self.assertLess(backwards[1], clip.lineno)
+        self.assertEqual(set(backwards), {"loss", "weighted_external_loss"})
+        self.assertLess(backwards["loss"], backwards["weighted_external_loss"])
+        self.assertLess(backwards["weighted_external_loss"], clip.lineno)
         self.assertEqual(next(item.value.value for item in flag.keywords if item.arg == "default"), 0.0)
 
 
