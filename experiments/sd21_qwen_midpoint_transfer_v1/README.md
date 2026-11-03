@@ -23,3 +23,5 @@ python -B -m experiments.sd21_qwen_midpoint_transfer_v1.run --output FRESH_OUTPU
 ```
 
 Output includes a browsable gallery, source audit, exact generation plan, per-group logs/ledgers, and aggregate verification. No training or environment changes.
+
+Completed run and visual observations: [RESULTS.md](RESULTS.md).
