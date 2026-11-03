@@ -1,6 +1,12 @@
-"""Read-only CLIP diagnostics for the two fixed prompt orders."""
+"""Read-only CLIP diagnostics for the fixed prefix or surface wording comparison."""
 
 import hashlib
+
+
+def surface_body(body):
+    if not body.endswith(' with <T*> texture'):
+        raise ValueError('surface comparison requires the original terminal with <T*> texture phrase')
+    return body.removesuffix('texture') + 'surface'
 
 
 def tensor_sha256(tensor):
@@ -29,9 +35,11 @@ def tokenize(pipe, prompt, tokens):
     return encoded, positions
 
 
-def diagnose(pipe, body, scenes, tokens):
+def diagnose(pipe, body, scenes, tokens, mode='prefix'):
     import torch
 
+    if mode not in ('prefix', 'surface'):
+        raise ValueError('mode must be prefix or surface')
     if pipe.tokenizer.model_max_length != 77 or pipe.text_encoder.training:
         raise ValueError('require the actual CLIP77 text encoder in evaluation mode')
     device = pipe.unet.device
@@ -43,7 +51,10 @@ def diagnose(pipe, body, scenes, tokens):
 
     prompts = {'body': body}
     prompts.update({f'P0_suffix/{scene}': body + ' ' + suffix for scene, suffix in scenes.items()})
-    prompts.update({f'P1_prefix/{scene}': suffix + ' ' + body for scene, suffix in scenes.items()})
+    if mode == 'prefix':
+        prompts.update({f'P1_prefix/{scene}': suffix + ' ' + body for scene, suffix in scenes.items()})
+    else:
+        prompts.update({f'P1_surface/{scene}': surface_body(body) + ' ' + suffix for scene, suffix in scenes.items()})
     hidden, inputs, positions, records = {}, {}, {}, {}
     initializers = initializer_ids(pipe.tokenizer)
     with torch.no_grad():
@@ -61,6 +72,9 @@ def diagnose(pipe, body, scenes, tokens):
                              'attention_mask': encoded.attention_mask.tolist(), 'modifier_positions': slots,
                              'hidden_shape': list(h.shape), 'hidden_dtype': str(h.dtype),
                              'hidden_sha256': tensor_sha256(h), 'pipeline_hidden_equal': True}
+            if mode == 'surface':
+                records[name].update(bpe_length_including_special_tokens=len(pipe.tokenizer.encode(prompt, add_special_tokens=True)),
+                                     bpe_tokens=pipe.tokenizer.convert_ids_to_tokens(encoded.input_ids[0].tolist()))
         suffix_changes, neutralized = {}, {}
         for scene in scenes:
             name = f'P0_suffix/{scene}'
@@ -83,13 +97,51 @@ def diagnose(pipe, body, scenes, tokens):
             else:
                 neutralized[scene] = {'status': 'skipped_multi_token_initializer', 'initializer_ids': initializers['ids']}
         negative = pipe.tokenizer('', padding='max_length', max_length=77, truncation=True, return_tensors='pt')
-    return {'prompts': records, 'suffix_modifier_hidden_max_abs_vs_body': suffix_changes,
+        surface_changes = {}
+        if mode == 'surface':
+            for scene in scenes:
+                p0, p1 = f'P0_suffix/{scene}', f'P1_surface/{scene}'
+                end = positions[p0]['texture'] + 1
+                if (positions[p0] != positions[p1]
+                        or not torch.equal(inputs[p0].input_ids[:, :end], inputs[p1].input_ids[:, :end])):
+                    raise ValueError('surface changed token IDs or modifier positions at/before Texture')
+                equal = {branch: torch.equal(hidden[p0][0, slot], hidden[p1][0, slot])
+                         for branch, slot in positions[p0].items()}
+                if not all(equal.values()):
+                    raise ValueError('surface changed a Subject/Color/Texture modifier hidden state')
+                changes = []
+                for slot in range(end, 77):
+                    id0, id1 = int(inputs[p0].input_ids[0, slot]), int(inputs[p1].input_ids[0, slot])
+                    delta = float((hidden[p0][0, slot].float() - hidden[p1][0, slot].float()).abs().max())
+                    if id0 != id1 or delta != 0:
+                        changes.append({'position': slot, 'suffix_id': id0, 'surface_id': id1,
+                                        'suffix_token': records[p0]['bpe_tokens'][slot],
+                                        'surface_token': records[p1]['bpe_tokens'][slot],
+                                        'suffix_attention_mask': int(inputs[p0].attention_mask[0, slot]),
+                                        'surface_attention_mask': int(inputs[p1].attention_mask[0, slot]),
+                                        'hidden_max_abs': delta})
+                surface_changes[scene] = {'ids_through_texture_equal': True, 'modifier_positions_equal': True,
+                                          'modifier_hidden_equal': equal,
+                                          'modifier_positions': positions[p0],
+                                          'suffix_bpe_length': records[p0]['bpe_length_including_special_tokens'],
+                                          'surface_bpe_length': records[p1]['bpe_length_including_special_tokens'],
+                                          'downstream_positional_changes': changes}
+    result = {'mode': mode, 'prompts': records, 'suffix_modifier_hidden_max_abs_vs_body': suffix_changes,
             'same_length_SC_initializer_counterfactual': neutralized, 'initializers': initializers,
             'negative_input_ids': negative.input_ids.tolist(), 'text_encoder_use_attention_mask': use_mask,
             'cross_attention_norms': {name: str(pipe.unet.get_submodule(name.removesuffix('.processor')).norm_cross)
                                       for name in pipe.unet.attn_processors if name.endswith('attn2.processor')},
             'interpretation': 'Observed token hidden differences; prompt order also changes position and syntax. '
                               'Unchanged modifier hidden does not prevent scene tokens from conditioning the UNet.'}
+    if mode == 'surface':
+        result.update(surface_after_texture_audit=surface_changes,
+                      interpretation='Only the ordinary word texture after <T*> changes to surface; IDs through <T*> '
+                      'and all three modifier hidden states are exactly equal. Downstream differences are positional '
+                      'and include ordinary, EOS and padding slots, not semantic alignment if BPE lengths differ. '
+                      'The direct conditioning difference enters through downstream ordinary context in base K/V; '
+                      'it can then affect later UNet computations, and does not establish branch independence '
+                      'or isolate the contribution of only the replaced word.')
+    return result
 
 
 def validate_gates(ids, gates, tokenizer, tokens):

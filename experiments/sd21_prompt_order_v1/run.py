@@ -1,4 +1,4 @@
-"""P0 suffix versus P1 same-word prefix; require six exact T400 screen baselines."""
+"""P0 suffix versus P1 prefix or surface wording; require six exact T400 baselines."""
 
 import argparse
 import html
@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from experiments.sd21_texture_repair_v1 import run as screen
+from .conditioning import surface_body
 
 sct = screen.sct
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,12 +16,17 @@ METHOD, SEEDS = 'lora_r64', (31, 38)
 STEPS = {'subject': 1000, 'color': 150, 'texture': 400}
 
 
-def plan():
+def plan(mode='prefix'):
+    if mode not in ('prefix', 'surface'):
+        raise ValueError('mode must be prefix or surface')
+    orders = ORDERS if mode == 'prefix' else ('P0_suffix', 'P1_surface')
+    changed_body = sct.PROMPT if mode == 'prefix' else surface_body(sct.PROMPT)
     return [{'id': f'{order}__{scene}__seed{seed}', 'condition': order, 'method': METHOD,
              'scene': scene, 'seed': seed, 'steps': STEPS.copy(),
-             'prompt': sct.PROMPT + ' ' + suffix if order == 'P0_suffix' else suffix + ' ' + sct.PROMPT,
+             'prompt': (sct.PROMPT + ' ' + suffix if order == 'P0_suffix' else
+                        suffix + ' ' + sct.PROMPT if mode == 'prefix' else changed_body + ' ' + suffix),
              'image_path': f'images/{scene}/{order}/seed{seed}.png'}
-            for order in ORDERS for scene, suffix in sct.SCENES.items() for seed in SEEDS]
+            for order in orders for scene, suffix in sct.SCENES.items() for seed in SEEDS]
 
 
 def screen_baselines(folder, ledger):
@@ -76,22 +82,25 @@ def require_baselines(records):
 
 def review(output, records, state):
     by_id = {row['id']: row for row in records}
+    mode = state.get('mode', 'prefix')
+    orders = ORDERS if mode == 'prefix' else ('P0_suffix', 'P1_surface')
     cells = []
     for scene in sct.SCENES:
         for seed in SEEDS:
             cells.append(f'<tr><th>{scene} / seed{seed}</th>')
-            for order in ORDERS:
+            for order in orders:
                 row = by_id.get(f'{order}__{scene}__seed{seed}')
                 cells.append('<td>pending</td>' if row is None else
                     f'<td><img width="320" src="{row["image_path"]}"><p>{html.escape(row["status"])}</p>'
                     f'<p>{html.escape(row["prompt"])}</p></td>')
             cells.append('</tr>')
     (output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><h1>SD2.1 T400 prompt order</h1>'
-        f'<p>{html.escape(state["status"])}; P0 verified {state["baseline_equal"]}/6; no retraining.</p>'
-        '<table><tr><th>Case</th><th>P0 suffix</th><th>P1 prefix</th></tr>' + ''.join(cells) + '</table>', encoding='utf8')
+        f'<p>{html.escape(state["status"])}; mode={mode}; P0 verified {state["baseline_equal"]}/6; no retraining.</p>'
+        f'<table><tr><th>Case</th><th>P0 suffix</th><th>P1 {mode}</th></tr>' + ''.join(cells) + '</table>', encoding='utf8')
 
 
-def run(output, screen_audit_path):
+def run(output, screen_audit_path, mode='prefix'):
+    rows, generated = plan(mode), []
     output, screen_audit_path = sct.st.resolve_run_dir(Path(output)), Path(screen_audit_path).resolve()
     roots = (ROOT, screen_audit_path.parent, sct.st.SUBJECT_PARENT, sct.st.source.TEXTURE_ROOT, sct.COLOR_ROOT)
     if output.exists() or any(output.is_relative_to(root) or root.is_relative_to(output) for root in roots):
@@ -102,9 +111,8 @@ def run(output, screen_audit_path):
     selected = screen.selections(audit, METHOD, 't400')
     sct.st.require_idle_gpu0()
     output.mkdir(parents=True)
-    rows, generated = plan(), []
     state = {'status': 'running', 'expected_images': 12, 'generated_images': 0, 'baseline_equal': 0,
-             'method': METHOD, 'steps': STEPS, 'gpu': 0, 'retraining': False,
+             'method': METHOD, 'steps': STEPS, 'gpu': 0, 'retraining': False, 'mode': mode,
              'sampling': {**sct.st.shared.inference.SAMPLING, 'seeds': list(SEEDS)},
              'inference_git': audit['inference_git'], 'screen_inference_git': audit['screen_inference_git']}
     for name, value in (('source_audit.json', audit), ('source_selection.json', selected), ('status.json', state)):
@@ -124,7 +132,7 @@ def run(output, screen_audit_path):
         for item in sources.values():
             pipe.load_textual_inversion(item['checkpoint'], weight_name=item['token'] + '.bin')
         pipe.set_progress_bar_config(disable=True)
-        sct.write(output / 'text_conditioning_audit.json', diagnose(pipe, sct.PROMPT, sct.SCENES, sct.TOKENS))
+        sct.write(output / 'text_conditioning_audit.json', diagnose(pipe, sct.PROMPT, sct.SCENES, sct.TOKENS, mode=mode))
         gates, recorded = {}, {}
         for prompt in dict.fromkeys(row['prompt'] for row in rows):
             encoded, positions = tokenize(pipe, prompt, sct.TOKENS)
@@ -137,7 +145,7 @@ def run(output, screen_audit_path):
         initial_inputs = {}
         with torch.no_grad(), (output / 'generation_status.jsonl').open('x', encoding='utf8') as ledger:
             for row in rows:
-                if row['condition'] == 'P1_prefix':
+                if row['condition'] != 'P0_suffix':
                     require_baselines(generated)
                 captured = {}
                 hook = capture_initial_input(pipe.unet, captured)
@@ -191,5 +199,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--screen-audit', required=True, type=Path)
+    parser.add_argument('--mode', choices=('prefix', 'surface'), default='prefix')
     args = parser.parse_args()
-    run(args.output, args.screen_audit)
+    run(args.output, args.screen_audit, mode=args.mode)
