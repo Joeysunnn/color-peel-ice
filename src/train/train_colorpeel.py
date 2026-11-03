@@ -12,6 +12,12 @@ import sys
 import warnings
 from pathlib import Path
 from typing import List, Tuple, Union
+
+# The launcher executes this file directly; shared initializer policies use the src package.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from checkpoint_utils import (
     should_save_checkpoint,
     tracker_safe_config,
