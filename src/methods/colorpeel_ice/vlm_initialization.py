@@ -48,6 +48,11 @@ Judge the VISIBLE surface reflection, not what the object is manufactured from.
 A coating over a metal object does not establish bare-metal reflectance.
 Metallic means conductor-like reflection; dielectric means nonmetallic reflection;
 mixed means visibly different surface types. Use uncertain when evidence is insufficient.
+Bright or sharp highlights also occur on glossy dielectrics: they are roughness
+evidence, not sufficient evidence of metallicity. Do not assign high-confidence
+metallic from highlight sharpness, brightness, or object category alone. Look for
+surface-wide conductor-like reflection versus a diffuse body with specular highlights;
+if that distinction is not visible, use uncertain rather than guessing metallicity.
 Roughness low means sharp highlights/reflections, medium means intermediate or
 semi-gloss reflection, high means broad/diffuse reflections. It does not mean
 macroscopic bumps, grooves, texture patterns, or object shape. Separate lighting
