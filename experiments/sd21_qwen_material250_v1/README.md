@@ -10,3 +10,13 @@ python -u -B -m experiments.sd21_qwen_material250_v1.run --output FRESH_EXPERIME
 ```
 
 Use the existing `colorpeel017` environment and a fresh reviewed Git checkout. The parent runs training, validates/exports the paired250 checkpoint, and then starts inference automatically. It records config/command/log/state in the experiment and `train_outputs/`, and creates `inference/index.html` plus the Material gallery. A failed stage prevents dependent stages; old source assets remain unchanged. Check GPU availability before launch. Only startup verification is requested: no ongoing agent supervision or visual review; the user reviews the outputs manually.
+
+## Requested150/200 checkpoint variant
+
+The same entrypoint also supports `--checkpoint-steps 150 200`. This starts one fresh200-step run, saving paired adapter/token snapshots at150 and200. The constant LR, data, initialization, training seed and all other scientific settings remain unchanged. Its study is `sd21_qwen_material150_200_v1`; default invocation remains the original250-step variant.
+
+After training, two fresh Material-only pipelines automatically generate44 images each, with the same four prompts and seeds30–40. Galleries are `inference/step150/index.html` and `inference/step200/index.html`, linked from `inference/index.html`; exports are `ckpts/step150` and `ckpts/step200`. Same-seed first denoiser inputs are checked across both checkpoints. No continuous agent supervision or visual review is requested.
+
+```sh
+python -u -B -m experiments.sd21_qwen_material250_v1.run --output FRESH_EXPERIMENT --gpu 0 --checkpoint-steps 150 200
+```
