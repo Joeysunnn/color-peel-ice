@@ -1,5 +1,9 @@
 # Single-image Qwen initializers on SD2.1
 
+For photographs without GT masks, the [multi-object intake](../sam_multi_object_intake_v1/README.md)
+discovers categories, segments separate SAM instances and initializes four concepts
+per object. It does not bypass this study's audited Mailbox data resolver.
+
 The current initializer entry defaults to the [controlled Material v2 policy](../sd21_controlled_material_v2/README.md).
 Material now supplies two reflection classifications rather than free-word candidates;
 the dataset preparation also audits the actual render M/R target. The original v1

@@ -174,12 +174,12 @@ def model_receipt(model_dir):
 
 
 class QwenPredictor:
-    def __init__(self, model_dir, device):
+    def __init__(self, model_dir, device, prompt=PROMPT):
         import torch
         import transformers
         from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 
-        self.torch, self.device = torch, device
+        self.torch, self.device, self.prompt = torch, device, prompt
         self.processor = AutoProcessor.from_pretrained(str(model_dir), local_files_only=True)
         self.model = Qwen3VLForConditionalGeneration.from_pretrained(
             str(model_dir), dtype=torch.float16, attn_implementation="eager",
@@ -195,7 +195,7 @@ class QwenPredictor:
 
     def __call__(self, image):
         messages = [{"role": "user", "content": [{"type": "image", "image": image},
-                                                   {"type": "text", "text": PROMPT}]}]
+                                                   {"type": "text", "text": self.prompt}]}]
         inputs = self.processor.apply_chat_template(messages, tokenize=True, add_generation_prompt=True,
                                                    return_dict=True, return_tensors="pt").to(self.device)
         if "pixel_values" in inputs:
