@@ -213,14 +213,22 @@ class QwenPredictor:
                                             clean_up_tokenization_spaces=False)[0]
 
 
-def run(image_path, model_dir, sd_model_dir, output, device="cuda:0"):
+def run(image_path, model_dir, sd_model_dir, output, device="cuda:0", selected_branches=None,
+        allow_partial=False):
+    from src.train.initializer_token_utils import SELECTED_SCHEMA
+    selected = list(TOKENS) if selected_branches is None else list(selected_branches)
+    if not selected or len(set(selected)) != len(selected) or any(name not in TOKENS for name in selected):
+        raise ValueError('select distinct known initializer branches')
+    schema = SCHEMA if selected_branches is None else SELECTED_SCHEMA
+    if allow_partial and selected_branches is None:
+        raise ValueError('partial initialization requires explicit selected branches')
     image_path, model_dir, sd_model_dir, output = [Path(path).resolve() for path in
                                                   (image_path, model_dir, sd_model_dir, output)]
     repo = Path(__file__).resolve().parents[3]
     if output.exists() or any(output.is_relative_to(root) for root in (repo, model_dir, sd_model_dir)):
         raise ValueError("Require a fresh external output directory outside source/model directories")
     output.mkdir(parents=True)
-    status = {"schema": SCHEMA, "status": "started", "source": {"image": str(image_path)}}
+    status = {"schema": schema, "status": "started", "source": {"image": str(image_path)}}
     try:
         source_sha = sha256(image_path)
         status["source"]["image_sha256"] = source_sha
@@ -229,41 +237,75 @@ def run(image_path, model_dir, sd_model_dir, output, device="cuda:0"):
             image.load()
             status["source"].update(original_size=list(opened.size), input_size=list(image.size),
                                       conversion="EXIF transpose, RGB; no crop or mask")
-        (output / "prompt.txt").write_text(PROMPT, encoding="utf8")
+        prompt = PROMPT
+        if selected_branches is not None:
+            prompt += ('\nRequested learning branches: ' + ', '.join(selected) +
+                '. Keep the complete four-key JSON schema. Embossed relief, grooves and bumps '
+                'are geometry, not spatial albedo pattern. If there are no visible albedo marks, '
+                'use plain or uniform for Texture. Provide multiple ranked semantic alternatives '
+                'when possible, because an English word may split into several diffusion tokens.')
+        (output / 'prompt.txt').write_text(prompt, encoding='utf8')
         receipt = model_receipt(model_dir)
         write_json(output / "model_receipt.json", receipt)
         tokenizer_info = tokenizer_receipt(sd_model_dir)
-        predictor = QwenPredictor(model_dir, device)
-        raw = predictor(image)
-        (output / "raw_response.txt").write_text(raw, encoding="utf8")
-        write_json(output / "generation_receipt.json", predictor.runtime)
-        if predictor.runtime.get('reached_token_limit'):
-            raise ValueError('Qwen response reached its token limit; raw output preserved')
-        response = parse_response(raw)
-        write_json(output / "response.json", response)
         from transformers import CLIPTokenizer
         tokenizer = CLIPTokenizer.from_pretrained(str(sd_model_dir), subfolder="tokenizer", local_files_only=True)
         if tokenizer.model_max_length != 77:
             raise ValueError("Require the SD2.1 CLIP tokenizer with model_max_length=77")
-        branches, failures = build_branches(response, tokenizer)
+        predictor = QwenPredictor(model_dir, device)
+        predictor.prompt = prompt
+        attempt_files = []
+        for attempt in range(1 if selected_branches is None else 2):
+            (output / 'prompt.txt').write_text(predictor.prompt, encoding='utf8')
+            raw = predictor(image)
+            (output / 'raw_response.txt').write_text(raw, encoding='utf8')
+            write_json(output / 'generation_receipt.json', predictor.runtime)
+            if selected_branches is not None:
+                folder = output / 'attempts' / str(attempt + 1)
+                folder.mkdir(parents=True)
+                for name in ('prompt.txt', 'raw_response.txt', 'generation_receipt.json'):
+                    (folder / name).write_bytes((output / name).read_bytes())
+                    attempt_files.append(folder / name)
+            if predictor.runtime.get('reached_token_limit'):
+                raise ValueError('Qwen response reached its token limit; raw output preserved')
+            response = parse_response(raw)
+            write_json(output / 'response.json', response)
+            branches, all_failures = build_branches(response, tokenizer)
+            failures = [reason for reason in all_failures if reason.split(':', 1)[0] in selected]
+            if not failures or any('unknown semantic' in reason for reason in failures):
+                break
+            predictor.prompt = prompt + ('\nA prior response failed diffusion token validation. '
+                'Reinspect the same image and return the complete JSON with alternative words '
+                'for these rejected decisions; do not change visual evidence just to pass. '
+                'If uncertain keep confidence unknown. Rejections: ' + json.dumps({
+                    key: branches[key]['candidate_audit'] for key in selected
+                    if branches[key]['initializer'] is None}))
         status.update(branches=branches, failures=failures)
-        if failures:
+        unavailable = {reason.split(':', 1)[0] for reason in failures}
+        available = [name for name in selected if name not in unavailable]
+        if failures and (not allow_partial or not available):
             raise ValueError("; ".join(failures))
         locks = {str(image_path): source_sha, **receipt["metadata_files"], **tokenizer_info["files"]}
         for name in ("prompt.txt", "raw_response.txt", "response.json", "model_receipt.json", "generation_receipt.json"):
             locks[str(output / name)] = sha256(output / name)
+        locks.update({str(path): sha256(path) for path in attempt_files})
         if any(sha256(path) != digest for path, digest in locks.items()):
             raise ValueError("Input or provenance changed during identification")
-        manifest = {"schema": SCHEMA, "status": "verified",
+        manifest = {"schema": schema, "status": "verified",
                     "source": status["source"], "vlm": {"model_id": MODEL_ID, "revision": REVISION,
                     **predictor.runtime, "model_receipt": str(output / "model_receipt.json")},
                     "tokenizer": tokenizer_info, "source_locks": locks, "branches": branches,
                     "subject_category": response["subject"]["category"], "response": response,
                     "scope": "Semantic initialization only; no new-image training dataset is claimed."}
+        if selected_branches is not None:
+            manifest['selected_branches'] = available
+            manifest['requested_branches'] = selected
+            manifest['unavailable_branches'] = failures
+            manifest['selection_attempts'] = len(attempt_files) // 3
         write_json(output / "initializers.json", manifest)
         from src.train.initializer_token_utils import load_initializer_manifest
         load_initializer_manifest(output / "initializers.json", tokenizer, sd_model_dir)
-        status.update(status="verified", manifest_path=str(output / "initializers.json"))
+        status.update(status="partial" if failures else "verified", manifest_path=str(output / "initializers.json"))
         return output / "initializers.json"
     except Exception as error:
         status.update(status="failed", error=f"{type(error).__name__}: {error}")

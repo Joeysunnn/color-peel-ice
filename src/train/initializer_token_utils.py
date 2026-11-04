@@ -8,6 +8,7 @@ import re
 
 
 BRANCH_TOKENS = {"subject": "<S*>", "color": "<C*>", "material": "<M*>", "texture": "<T*>"}
+SELECTED_SCHEMA = "colorpeel_vlm_initializers/selected-v1"
 MATERIAL_ABLATION_SCHEMA = "colorpeel_material_initializer_ablation/v1"
 MATERIAL_ABLATION_INITIALIZERS = ("painted", "glossy", "material")
 
@@ -103,9 +104,13 @@ def load_initializer_manifest(path, tokenizer, model_root):
             raise ValueError("controlled Material initializer manifest differs from its verified parent or selection")
         return manifest
     if (not isinstance(manifest, dict) or manifest.get("schema") not in (
-            "colorpeel_vlm_initializers/v1", "colorpeel_vlm_initializers/v2")
+            "colorpeel_vlm_initializers/v1", "colorpeel_vlm_initializers/v2", SELECTED_SCHEMA)
             or manifest.get("status") != "verified"):
-        raise ValueError("require a verified colorpeel_vlm_initializers/v1 or v2 manifest")
+        raise ValueError("require a verified supported VLM initializer manifest")
+    selected = manifest.get('selected_branches') if manifest['schema'] == SELECTED_SCHEMA else list(BRANCH_TOKENS)
+    if (not isinstance(selected, list) or not selected or len(selected) != len(set(selected))
+            or any(branch not in BRANCH_TOKENS for branch in selected)):
+        raise ValueError('selected initializer branches must be distinct known branches')
     locks = _checked_locks(manifest.get("source_locks"))
     source, vlm, text = (manifest.get(key, {}) for key in ("source", "vlm", "tokenizer"))
     if not all(isinstance(value, dict) for value in (source, vlm, text)):
@@ -137,11 +142,12 @@ def load_initializer_manifest(path, tokenizer, model_root):
     if (not isinstance(raw, dict) or set(raw) != set(BRANCH_TOKENS)
             or raw != response or raw != manifest.get("response")):
         raise ValueError("raw VLM response, parsed response and manifest response must agree")
-    if manifest['schema'] == 'colorpeel_vlm_initializers/v2':
+    if manifest['schema'] in ('colorpeel_vlm_initializers/v2', SELECTED_SCHEMA):
         from src.methods.colorpeel_ice.vlm_initialization import build_branches, parse_response
         parsed = parse_response(response_paths[0].read_text(encoding='utf8'))
         expected, failures = build_branches(parsed, tokenizer)
-        if failures or branches != expected:
+        active_failures = [reason for reason in failures if reason.split(':', 1)[0] in selected]
+        if active_failures or branches != expected:
             raise ValueError('controlled initializer policy, semantic evidence or token audit differs')
         if manifest.get('subject_category') != parsed['subject']['category']:
             raise ValueError('subject_category differs from the locked VLM response')
@@ -209,6 +215,8 @@ def validate_initializer_training(args, manifest):
     """Opt-in scope; callers with no manifest retain the historical trainer guards."""
     token, initializer = args.modifier_token, args.initializer_token
     branch = next((name for name, value in BRANCH_TOKENS.items() if value == token), None)
+    if manifest.get('schema') == SELECTED_SCHEMA and branch not in manifest['selected_branches']:
+        raise ValueError('training branch was not selected in this initializer manifest')
     if manifest.get("schema") == MATERIAL_ABLATION_SCHEMA and branch != "material":
         raise ValueError("controlled initializer ablation is restricted to the Material branch")
     if (branch is None or initializer != manifest["branches"][branch]["initializer"]
