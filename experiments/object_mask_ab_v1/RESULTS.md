@@ -55,10 +55,67 @@ Receipts within that root: `IMPLEMENTATION_RESULT.json`,
 `server_run/status.json`, `server_run/segmentation/objects.json`, and
 `server_run/initializers/object_003/status.json`.
 
-## B — pending execution
+## B — bounded Mailbox test completed 2026-11-04
 
-The candidate is ConceptExpress coarse-mask extraction followed by SAM point
-refinement, under the fixed protocol in [README.md](README.md). No B mask-quality
-result, comparison winner, or user acceptance is claimed here. Append the actual
-source commit, command, assets, output locations, failures and observations after
-the run; preserve A as the baseline.
+- Executed source: `3ef2ea6e6b6d3bda934702e0f9710c35040f7f2d`, fresh clean
+  checkout `object-mask-b-3ef2ea6`; upstream ConceptExpress
+  `db1dc61665866d208ba3a2e2152a83e7c6829e2f`, also clean.
+- Same source photograph and SHA as A; verified cached SD2.1 base and the same
+  SAM ViT-base revision. Seed 20, float32, physical GPU 0; no model downloads.
+- Execution **succeeded** with exit 0, two coarse masks and two SAM refinements,
+  no per-concept failures. No initializer step or training was run.
+- Local related suite: 19 passed, one torch-dependent test skipped; all 20 passed
+  on the server. Review found no blocking implementation defect. The initial
+  local test attempt hit Windows sandbox TEMP permissions and was rerun with a
+  writable external TEMP directory; no code workaround changed the algorithm.
+- GPUs had no compute processes before the run or after completion. Existing
+  non-training processes were left alone; source checkout remained clean.
+
+Pre-clustering counts were `1580, 554, 162, 49, 13, 6, 2`. The selected level had
+13 regions; EOT filtering kept five, and constrained post-clustering produced
+two concepts. Visual review identifies `concept_001` as the number-plate tiles
+and `concept_002` as the cylindrical mailbox body. Unlike A, this run does not
+produce the two narrow door-region candidates. Fewer masks alone do not prove
+more accurate or complete object discovery.
+
+The mailbox's upper decorative backplate is already absent from B's coarse
+mask and remains absent after SAM. All three sampled positive points lie on the
+mailbox body. SAM improves the outline but does not recover the missing part.
+The plate mask also excludes the surrounding wooden mounting frame; there is
+no reference annotation here to decide whether that grouping is desired.
+
+Historical Mailbox reference, read only after prediction:
+
+| Mask | IoU | Precision | Recall |
+| --- | ---: | ---: | ---: |
+| A mailbox | 0.960406 | 0.978324 | 0.981287 |
+| B coarse mailbox | 0.618261 | 0.872963 | 0.679387 |
+| B SAM mailbox | 0.657318 | 0.970037 | 0.670941 |
+
+These metrics describe one reference object, not dataset-wide quality. B does
+not improve mailbox completeness in this test and has not replaced A. No
+threshold/seed search or automatic quality acceptance followed. User acceptance
+remains pending; no four-branch checkpoint was produced by this mask test.
+
+The sampler and SAM candidate selection are our documented choices, not
+recovered official SAM settings. Upstream FINCH's optional `pynndescent` warning
+is non-blocking for this 4096-position exact-distance path. The SAM processor
+reported an ignored `point_pad_value` option; every prompt contains exactly
+three positive points, so no point-padding behavior is used.
+
+Server results and execution log:
+
+```text
+/home/r12user5/Documents/Jiawei/colorpeel-runs/object_mask_ab_v1/20261104__mailbox_B__3ef2ea6__20
+/home/r12user5/Documents/Jiawei/colorpeel-runs/object_mask_ab_v1/20261104__mailbox_B__3ef2ea6__20.log
+```
+
+Local evidence root:
+
+```text
+C:/Users/lenovo/.codex/visualizations/2026/11/04/01a1a4e9-817a-7d01-ae16-5db6ed9b42b7/object_mask_ab_v1_20261104
+```
+
+Contains `server_run/`, `execution.log`, `local_tests.txt`, `COMPARISON.json`,
+`AB_comparison.png`, and `repro_outputs/`. Nine downloaded artifact hashes
+(eight per-concept artifacts and the source image) match server receipts.

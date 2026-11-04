@@ -7,7 +7,7 @@ establish that arbitrary photographs can yet complete the derived-data pipeline.
 | Scheme | Discovery | Mask refinement | Status |
 | --- | --- | --- | --- |
 | A | Qwen3-VL whole-object categories, then all Grounding DINO boxes | SAM box prompts, followed by duplicate/containment suppression | Existing Mailbox result preserved; partial intake |
-| B | ConceptExpress SD2.1 self-attention clustering, EOT foreground filtering, constrained region merging | Three foreground points per coarse mask, then SAM | Candidate test; results recorded separately |
+| B | ConceptExpress SD2.1 self-attention clustering, EOT foreground filtering, constrained region merging | Three foreground points per coarse mask, then SAM | One Mailbox run completed; incomplete mailbox coverage, no quality acceptance |
 
 Scheme A's existing implementation and usage remain in
 [sam_multi_object_intake_v1](../sam_multi_object_intake_v1/README.md).
