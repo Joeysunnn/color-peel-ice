@@ -2,9 +2,10 @@
 
 `prepare_from_image.py` accepts one photograph without a GT mask:
 
-1. Pinned Qwen3-VL discovers whole-object categories in the EXIF-corrected photo.
+1. Pinned Qwen3-VL classifies visible entities as object/background/part/text,
+   with evidence; only whole-object categories proceed to detection.
 2. Grounding DINO locates instances; SAM independently segments every detection.
-3. Mask-IoU duplicate suppression (0.9) preserves distinct same-category objects.
+3. Mask overlap suppression removes duplicate and nested part candidates.
 4. Existing controlled-v2 S/C/M/T initialization runs separately on each instance.
 
 This is a source intake stage, **not yet a general image-to-checkpoint pipeline**.
@@ -22,7 +23,10 @@ count; SAM does not name objects. Qwen/DINO can miss or misidentify objects.
 Completion does not establish exhaustive discovery or mask quality.
 
 Each box receives its highest-predicted-IoU SAM candidate. Masks across all
-candidates with IoU >=0.9 are deduplicated by detection score; other overlaps are retained.
+candidates with IoU >=0.9 or intersection/min(area) >=0.9 are deduplicated by
+detection score; other overlaps are retained. The containment rule addresses
+whole-object/part duplicates, but may retain a higher-scored part instead of its
+whole object. It is a heuristic, not a guarantee of complete instance discovery.
 Masks are never unioned. Scores, rejected duplicates and failures are recorded.
 Predicted IoU is not measured accuracy.
 

@@ -102,6 +102,17 @@ class IntakeTests(unittest.TestCase):
             self.initializer_hook(object_id, manifest)
         self.write(destination / "initializers.json", manifest)
 
+    def test_interrupt_is_preserved_as_failed_without_starting_training(self):
+        def interrupt(_manifest):
+            raise KeyboardInterrupt()
+        self.discovery_hook = interrupt
+        with self.assertRaises(KeyboardInterrupt):
+            self.invoke()
+        status = intake.read_json(self.output / "status.json")
+        self.assertEqual(status["status"], "failed")
+        self.assertIn("KeyboardInterrupt", status["error"])
+        self.assertFalse(status["training_started"])
+
     def invoke(self):
         with patch.object(intake, "run_stage", side_effect=self.fake_stage), \
                 patch("scripts.launch.colorpeel_run.git_info", return_value={"commit": "a" * 40, "dirty": False}), \

@@ -58,14 +58,46 @@ class ObjectSegmentationTests(unittest.TestCase):
         self.assertEqual([row['category'] for row in manifest['objects']], ['cup'])
         self.assertEqual(manifest['rejected'][0]['reason'], 'duplicate_mask')
         self.assertEqual(manifest['rejected'][0]['mask_iou'], 1.0)
+        self.assertEqual(manifest['rejected'][0]['duplicate_criterion'], 'mask_iou')
 
-    def test_containment_alone_does_not_drop_an_instance(self):
+    def test_contained_lower_score_part_is_suppressed_with_overlap_evidence(self):
         outer = np.zeros((20, 30), dtype=bool)
         outer[2:18, 2:28] = True
         inner = np.zeros_like(outer)
         inner[5:10, 5:10] = True
-        manifest = self.run_stage(['mug'], lambda image, category: [candidate(outer), candidate(inner)])
+        manifest = self.run_stage(['mug'], lambda image, category:
+                                  [candidate(inner, score=0.6), candidate(outer, score=0.9)])
+        self.assertEqual(manifest['status'], 'succeeded')
+        self.assertEqual(len(manifest['objects']), 1)
+        self.assertEqual(manifest['objects'][0]['mask_pixels'], int(outer.sum()))
+        rejected = manifest['rejected'][0]
+        self.assertEqual(rejected['duplicate_criterion'], 'mask_overlap_min')
+        self.assertEqual(rejected['mask_overlap_min'], 1.0)
+        self.assertEqual(rejected['mask_pixels'], int(inner.sum()))
+        self.assertEqual(rejected['mask_intersection_pixels'], int(inner.sum()))
+        self.assertLess(rejected['mask_iou'], segmentation.DEDUPLICATION_IOU)
+        self.assertEqual(rejected['detection_score'], 0.6)
+
+    def test_lower_score_surrounding_region_is_suppressed_across_categories(self):
+        surrounding = np.ones((20, 30), dtype=bool)
+        object_mask = np.zeros_like(surrounding)
+        object_mask[5:15, 5:15] = True
+        manifest = self.run_stage(['door', 'mug'], lambda image, category:
+            [candidate(surrounding, category, 0.3)] if category == 'door'
+            else [candidate(object_mask, category, 0.8)])
+        self.assertEqual([row['category'] for row in manifest['objects']], ['mug'])
+        self.assertEqual(manifest['rejected'][0]['category'], 'door')
+        self.assertEqual(manifest['rejected'][0]['duplicate_criterion'], 'mask_overlap_min')
+
+    def test_separate_objects_with_small_mask_overlap_are_retained(self):
+        first = np.zeros((20, 30), dtype=bool)
+        second = first.copy()
+        first[3:15, 3:16] = True
+        second[3:15, 14:27] = True
+        manifest = self.run_stage(['mug'], lambda image, category: [candidate(first), candidate(second)])
+        self.assertEqual(manifest['status'], 'succeeded')
         self.assertEqual(len(manifest['objects']), 2)
+        self.assertEqual(manifest['rejected'], [])
 
     def test_crop_hides_other_objects_and_cutout_has_zero_transparent_rgb(self):
         mask = np.zeros((20, 30), dtype=bool)

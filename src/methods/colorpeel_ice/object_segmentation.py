@@ -17,6 +17,7 @@ from scripts.methods.colorpeel_ice.segment_grounded_sam import (
 
 SCHEMA = 'colorpeel_object_segmentation/v1'
 DEDUPLICATION_IOU = 0.9
+DEDUPLICATION_OVERLAP_MIN = 0.9
 GROUNDING_REVISION = 'a2bb814dd30d776dcf7e30523b00659f4f141c71'
 SAM_REVISION = '70c1a07f894ebb5b307fd9eaaee97b9dfc16068f'
 
@@ -127,7 +128,7 @@ def validate_candidate(candidate, category, size, candidate_id):
     if not 0 <= scores['detection_score'] <= 1:
         raise ValueError('detection_score must be between zero and one')
     return {'candidate_id': candidate_id, 'category': category, 'box': box.tolist(),
-            **scores, 'mask': mask}
+            **scores, 'mask_pixels': int(mask.sum()), 'mask_ratio': float(mask.mean()), 'mask': mask}
 
 
 def save_object(image, candidate, output, object_id):
@@ -181,7 +182,9 @@ def run(image_path, categories, output, device='cuda:0', segmenter=None):
                            'grounding_requested_revision': GROUNDING_REVISION,
                            'sam_requested_revision': SAM_REVISION,
                            'local_files_only': True, 'dtype': 'float32', 'device': device},
-                'deduplication_mask_iou': DEDUPLICATION_IOU, 'visual_quality_verified': False}
+                'deduplication_mask_iou': DEDUPLICATION_IOU,
+                'deduplication_mask_overlap_min': DEDUPLICATION_OVERLAP_MIN,
+                'visual_quality_verified': False}
     write_json(output / 'status.json', {'schema': SCHEMA, 'status': 'started'})
     try:
         source_hash = sha256(image_path)
@@ -217,14 +220,20 @@ def run(image_path, categories, output, device='cuda:0', segmenter=None):
             except Exception as error:
                 manifest['failures'].append({'category': category, 'reason': f'{type(error).__name__}:{error}'})
         selected = []
+        # Predicted masks can cover a whole object, a part, or surrounding pixels.
+        # Shared visible pixels suppress duplicate regions, not overlapping boxes.
+        # This heuristic does not guarantee whole objects or exhaustive discovery.
         for candidate in sorted(valid, key=lambda row: -row['detection_score']):
             duplicate = None
             for kept in selected:
-                iou = float(np.logical_and(candidate['mask'], kept['mask']).sum()
-                            / np.logical_or(candidate['mask'], kept['mask']).sum())
-                if iou >= DEDUPLICATION_IOU:
+                intersection = int(np.logical_and(candidate['mask'], kept['mask']).sum())
+                iou = intersection / (candidate['mask_pixels'] + kept['mask_pixels'] - intersection)
+                overlap_min = intersection / min(candidate['mask_pixels'], kept['mask_pixels'])
+                if iou >= DEDUPLICATION_IOU or overlap_min >= DEDUPLICATION_OVERLAP_MIN:
                     duplicate = {'reason': 'duplicate_mask', 'kept_candidate_id': kept['candidate_id'],
-                                 'mask_iou': iou}
+                                 'duplicate_criterion': 'mask_iou' if iou >= DEDUPLICATION_IOU else 'mask_overlap_min',
+                                 'mask_iou': iou, 'mask_overlap_min': overlap_min,
+                                 'mask_intersection_pixels': intersection, 'kept_mask_pixels': kept['mask_pixels']}
                     break
             if duplicate:
                 manifest['rejected'].append({key: value for key, value in candidate.items() if key != 'mask'}

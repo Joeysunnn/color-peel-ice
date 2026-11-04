@@ -133,7 +133,7 @@ def run(args):
         check_locks(state["source_locks"])
         if git_info() != revision:
             raise ValueError("Checkout changed during image intake")
-    except Exception as error:
+    except BaseException as error:
         state.update(status="failed", error=f"{type(error).__name__}: {error}")
         raise
     finally:
