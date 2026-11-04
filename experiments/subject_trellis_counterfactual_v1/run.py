@@ -31,6 +31,14 @@ def check_source_receipt(path):
     hashes = {str(value): sha256(value) for value in paths.values()}
     if any(hashes[str(value)] != record[name + '_sha256'] for name, value in paths.items()):
         raise ValueError('source receipt input hash mismatch')
+    for filename, expected in record.get('source_locks', {}).items():
+        locked = Path(filename)
+        if not locked.is_absolute():
+            raise ValueError('source lock paths must be absolute')
+        actual = hashes.get(str(locked)) or sha256(locked)
+        if actual != expected:
+            raise ValueError('source lock hash mismatch')
+        hashes[str(locked)] = actual
     with Image.open(paths['cutout']) as image, Image.open(paths['mask']) as mask:
         if image.mode != 'RGBA' or image.size != (512, 512) or mask.size != image.size:
             raise ValueError('require aligned RGBA512 cutout and mask')
