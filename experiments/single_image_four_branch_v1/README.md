@@ -68,8 +68,10 @@ be prepared before training it.
   letterbox them to 512 when needed. Original/recolored Subject photographs keep
   the scene; their reconstruction loss uses only the respective instance mask.
 - Subject geometry is newly sampled from each instance's original RGBA input.
-  The eight synthetic views use the fitted orientation, centered full geometry,
-  studio environment and blue/green x metallic 0/1 x roughness .15/.85. Photo
+  The eight synthetic views preserve the exact fitted source camera and crop,
+  with studio environment and blue/green x metallic 0/1 x roughness .15/.85. Both
+  review and actual-render source-mask IoU must reach 0.80; new edge clipping is
+  rejected. These checks block obvious mismatches, not certify 3D fidelity. Photo
   recolors use the established LCh blue240/green120 transformations. No historic
   pink mesh, reviewed center11 image or original TRELLIS material is reused.
 - C/M/T use an automatically eroded object ROI. Material medians are estimates,

@@ -1,7 +1,12 @@
+import copy
+from contextlib import nullcontext
 import json
 from pathlib import Path
+import sys
 import tempfile
+from types import ModuleType
 import unittest
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 from PIL import Image
@@ -102,6 +107,121 @@ class SingleImageSubjectTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'this instance'):
             subject.render_dataset(self.root / 'inputs', self.root / 'trellis', self.root / 'render', 'vase')
         self.assertFalse((self.root / 'render').exists())
+
+    def review(self, iou=.814):
+        return {'metrics': {'original512_mask_iou': iou}, 'camera': {
+            'extrinsics': [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 2.174], [0, 0, 0, 1]],
+            'intrinsics': [[1.374, 0, .543], [0, 1.374, .171], [0, 0, 1]],
+            'refinement_success': False, 'refinement_message': 'Maximum function evaluations exceeded.'}}
+
+    def trusted_asset_fixture(self, iou):
+        image_path, mask_path, _, _ = self.source()
+        receipt = subject.prepare_inputs(image_path, mask_path, self.root / 'inputs')
+        trellis = self.root / 'trellis'
+        (trellis / 'repro_outputs').mkdir(parents=True)
+        (trellis / 'review').mkdir()
+        (trellis / 'source_cutout512.png').write_bytes(Path(receipt['cutout_path']).read_bytes())
+        (trellis / 'native_asset.pt').write_bytes(b'fake asset for render-interface test')
+        (trellis / 'review/review.json').write_text(json.dumps(self.review(iou)))
+        (trellis / 'repro_outputs/status.json').write_text(json.dumps({
+            'status': 'generated_pending_user_review', 'generated_assets': 1,
+            'source_receipt': {'sha256': subject.sha256(self.root / 'inputs/source_receipt.json')}}))
+        return trellis
+
+    def test_saved_camera_preserves_source_frame_despite_optimizer_budget(self):
+        review = self.review()
+        original = copy.deepcopy(review)
+        camera, quality = subject.reviewed_source_camera(review)
+        self.assertEqual(camera['extrinsics'], original['camera']['extrinsics'])
+        self.assertEqual(camera['intrinsics'], original['camera']['intrinsics'])
+        self.assertEqual(camera['framing'], 'exact_saved_source_camera')
+        self.assertFalse(quality['refinement_success'])
+        self.assertTrue(quality['warnings'])
+        self.assertFalse(quality['quality_accepted_by_user'])
+        self.assertEqual(review, original)
+
+    def test_invalid_saved_projection_or_nonrigid_rotation_is_rejected(self):
+        for field, row, column, value in [('extrinsics', 0, 0, 2), ('intrinsics', 1, 1, .4),
+                                          ('extrinsics', 0, 3, float('nan'))]:
+            review = self.review()
+            review['camera'][field][row][column] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                subject.reviewed_source_camera(review)
+        review = self.review()
+        review['camera']['extrinsics'].pop()
+        with self.assertRaisesRegex(ValueError, 'shape'):
+            subject.reviewed_source_camera(review)
+
+    def test_known_bad_review_rejected_before_render_or_photo_generation(self):
+        from experiments.subject_trellis_counterfactual_v1.run import OFFICIAL
+        trellis = self.trusted_asset_fixture(.661872)
+        with patch.object(subject.subprocess, 'check_output', side_effect=[OFFICIAL, '']), \
+                patch.object(subject, 'check_locks'), patch.object(subject, 'photo_rows') as photos, \
+                self.assertRaisesRegex(ValueError, 'review mask IoU'):
+            subject.render_dataset(self.root / 'inputs', trellis, self.root / 'render', 'mail box')
+        photos.assert_not_called()
+        self.assertFalse((self.root / 'render').exists())
+
+    def test_source_border_crop_is_preserved_but_new_edges_are_rejected(self):
+        source = np.zeros((512, 512), dtype=bool)
+        source[300:, 100:400] = True
+        quality = subject.check_source_framing(source.copy(), source)
+        self.assertEqual(quality['source_mask_iou'], 1)
+        self.assertTrue(quality['render_border_contact']['bottom'])
+        for y, x in ((0, 200), (400, 0), (400, 511)):
+            rendered = source.copy()
+            rendered[y, x] = True  # IoU remains high; an unrelated clipping edge must still fail.
+            with self.subTest(edge=(y, x)), self.assertRaisesRegex(ValueError, 'border clipping'):
+                subject.check_source_framing(rendered, source)
+        rendered = source.copy()
+        source[-2:] = False
+        subject.check_source_framing(rendered, source)  # Two-pixel rasterization tolerance.
+        source[-3:] = False
+        with self.assertRaisesRegex(ValueError, 'border clipping'):
+            subject.check_source_framing(rendered, source)
+
+    def test_actual_render_iou_is_checked_even_when_review_reports_high_iou(self):
+        from experiments.subject_trellis_counterfactual_v1.run import OFFICIAL
+        trellis = self.trusted_asset_fixture(.95)
+
+        class Tensor:
+            def __init__(self, array, **kwargs): self.array = np.asarray(array)
+            def __len__(self): return len(self.array)
+            def cpu(self): return self
+            def numpy(self): return self.array
+            def new_tensor(self, array): return Tensor(array)
+
+        actual_mask = np.zeros((512, 512))
+        actual_mask[20:60, 20:60] = 1  # Nonempty and in-frame, but disjoint from the source object.
+        torch = ModuleType('torch')
+        torch.load = MagicMock(return_value={'vertices': Tensor(np.eye(3)), 'faces': Tensor([[0, 1, 2]])})
+        torch.zeros = MagicMock(return_value=Tensor([0]))
+        torch.tensor, torch.long = Tensor, 'long'
+        torch.inference_mode, torch.manual_seed = nullcontext, MagicMock()
+        cv2 = ModuleType('cv2')
+        cv2.IMREAD_UNCHANGED, cv2.COLOR_BGR2RGB = 1, 2
+        cv2.imread = MagicMock(return_value=np.ones((2, 2, 3)))
+        cv2.cvtColor = lambda array, _: array
+        mesh = ModuleType('trellis2.representations.mesh')
+        mesh.PbrMaterial, mesh.MeshWithPbrMaterial = MagicMock(), MagicMock()
+        renderers = ModuleType('trellis2.renderers')
+        renderers.EnvMap = MagicMock()
+        renderers.PbrMeshRenderer = MagicMock()
+        render = renderers.PbrMeshRenderer.return_value.render
+        render.return_value = {'mask': Tensor(actual_mask)}
+        modules = {'torch': torch, 'cv2': cv2, 'trellis2': ModuleType('trellis2'),
+                   'trellis2.representations': ModuleType('trellis2.representations'),
+                   'trellis2.representations.mesh': mesh, 'trellis2.renderers': renderers}
+        with patch.dict(sys.modules, modules), patch.object(sys, 'path', list(sys.path)), \
+                patch.dict(subject.os.environ), patch.object(subject, 'check_locks'), \
+                patch.object(subject.subprocess, 'check_output', side_effect=[OFFICIAL, '']), \
+                patch.object(subject, 'photo_rows') as photos, self.assertRaisesRegex(ValueError, 'actual Subject render'):
+            subject.render_dataset(self.root / 'inputs', trellis, self.root / 'render', 'mail box')
+        self.assertEqual(render.call_count, 1)
+        np.testing.assert_array_equal(render.call_args.args[1].array, self.review(.95)['camera']['extrinsics'])
+        np.testing.assert_array_equal(render.call_args.args[2].array, self.review(.95)['camera']['intrinsics'])
+        photos.assert_not_called()
+        self.assertFalse((self.root / 'render/subject.json').exists())
 
 
 if __name__ == '__main__':

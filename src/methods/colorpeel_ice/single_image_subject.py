@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[3]
 COLORS = {'blue': [.2, .35, .8], 'green': [.25, .65, .3]}
 RENDERER = {'near': .1, 'far': 100, 'ssaa': 1, 'peel_layers': 1, 'fov_degrees': 40}
 STUDIO_SHA = 'c36c7fd390b2cdf8693360cf3662cb1d710c95fa799d9f822f42997167839b56'
+MIN_SOURCE_IOU = 0.80  # Engineering guard; passing is not geometry-quality approval.
+BORDER_TOLERANCE = 2
 
 
 def check_locks(locks):
@@ -120,10 +122,57 @@ def photo_rows(receipt, output, category):
     return rows
 
 
+def reviewed_source_camera(review):
+    """Preserve the saved source framing; reject invalid projection or a poor fit."""
+    camera = review['camera']
+    extr, intr = [np.asarray(camera[key], dtype=np.float64) for key in ('extrinsics', 'intrinsics')]
+    if (extr.shape != (4, 4) or intr.shape != (3, 3)
+            or not np.isfinite(extr).all() or not np.isfinite(intr).all()):
+        raise ValueError('invalid saved source-camera matrix shape or values')
+    rotation = extr[:3, :3]
+    if (not np.allclose(extr[3], [0, 0, 0, 1], atol=1e-6, rtol=0)
+            or not np.allclose(rotation @ rotation.T, np.eye(3), atol=1e-5, rtol=0)
+            or not np.isclose(np.linalg.det(rotation), 1, atol=1e-5, rtol=0)):
+        raise ValueError('saved source-camera rotation must be rigid')
+    if (not np.allclose(intr[2], [0, 0, 1], atol=1e-6, rtol=0)
+            or not np.allclose([intr[0, 1], intr[1, 0]], 0, atol=1e-6, rtol=0)
+            or intr[0, 0] <= 0 or not np.isclose(intr[0, 0], intr[1, 1], atol=1e-6, rtol=0)):
+        raise ValueError('saved source-camera intrinsics require equal positive focal lengths')
+    iou = review['metrics']['original512_mask_iou']
+    if type(iou) not in (int, float) or not np.isfinite(iou) or not MIN_SOURCE_IOU <= iou <= 1:
+        raise ValueError(f'source-camera review mask IoU {iou!r} is below {MIN_SOURCE_IOU} or invalid')
+    quality = {'minimum_source_mask_iou': MIN_SOURCE_IOU, 'review_source_mask_iou': iou,
+        'refinement_success': camera.get('refinement_success'),
+        'refinement_message': camera.get('refinement_message'),
+        'warnings': ([] if camera.get('refinement_success') is True else
+                     ['Camera optimization did not report convergence; the actual render must pass the mask guard.']),
+        'quality_accepted_by_user': False}
+    return {**camera, 'framing': 'exact_saved_source_camera'}, quality
+
+
+def check_source_framing(rendered_mask, source_mask):
+    rendered_mask, source_mask = np.asarray(rendered_mask, dtype=bool), np.asarray(source_mask, dtype=bool)
+    if rendered_mask.shape != (512, 512) or source_mask.shape != (512, 512) or not rendered_mask.any() or not source_mask.any():
+        raise ValueError('source-framing check requires nonempty aligned 512 masks')
+    band = BORDER_TOLERANCE + 1
+    source_edges = {'top': bool(source_mask[:band].any()), 'bottom': bool(source_mask[-band:].any()),
+                    'left': bool(source_mask[:, :band].any()), 'right': bool(source_mask[:, -band:].any())}
+    rendered_edges = {'top': bool(rendered_mask[0].any()), 'bottom': bool(rendered_mask[-1].any()),
+                      'left': bool(rendered_mask[:, 0].any()), 'right': bool(rendered_mask[:, -1].any())}
+    unexpected = [edge for edge in rendered_edges if rendered_edges[edge] and not source_edges[edge]]
+    if unexpected:
+        raise ValueError(f'render introduces source-absent border clipping: {unexpected}')
+    iou = float((rendered_mask & source_mask).sum() / (rendered_mask | source_mask).sum())
+    if iou < MIN_SOURCE_IOU:
+        raise ValueError(f'actual Subject render source-mask IoU {iou:.6f} is below {MIN_SOURCE_IOU}')
+    return {'status': 'passed', 'source_mask_iou': iou, 'source_border_contact': source_edges,
+            'render_border_contact': rendered_edges, 'border_tolerance_pixels': BORDER_TOLERANCE}
+
+
 def render_dataset(inputs, trellis_run, output, category):
     """Use the newly sampled instance mesh; never resolve historical Mailbox assets."""
     from experiments.subject_trellis_counterfactual_v1.run import ASSETS, OFFICIAL
-    from experiments.subject_trellis_dataset_v1.build import camera, array_hash
+    from experiments.subject_trellis_dataset_v1.build import array_hash
 
     inputs, trellis_run = Path(inputs).resolve(), Path(trellis_run).resolve()
     receipt_path = inputs / 'source_receipt.json'
@@ -144,6 +193,9 @@ def render_dataset(inputs, trellis_run, output, category):
              str(asset): sha256(asset), str(review_path): sha256(review_path),
              str(state_path): sha256(state_path), str(light_path): STUDIO_SHA}
     check_locks(locks)
+    camera_receipt, quality = reviewed_source_camera(json.loads(review_path.read_text()))
+    with Image.open(receipt['mask_path']) as opened_mask:
+        source_mask = np.asarray(opened_mask) > 127
     output = fresh(output)
     os.environ.update(OPENCV_IO_ENABLE_OPENEXR='1',
         TORCH_EXTENSIONS_DIR=str(ASSETS / 'cache/torch_extensions'), TRITON_CACHE_DIR=str(output / 'triton_cache'))
@@ -153,15 +205,14 @@ def render_dataset(inputs, trellis_run, output, category):
     from trellis2.representations.mesh import MeshWithPbrMaterial, PbrMaterial
     from trellis2.renderers import EnvMap, PbrMeshRenderer
 
-    rows = photo_rows(receipt, output, category)
+    rows = []
     saved = torch.load(asset, map_location='cuda', weights_only=False)
     vertices, faces = saved['vertices'], saved['faces']
     geometry_hashes = {name: array_hash(saved[name].cpu().numpy()) for name in ('vertices', 'faces')}
     material = PbrMaterial()
     mesh = MeshWithPbrMaterial(vertices, faces, torch.zeros(len(faces), dtype=torch.long, device='cuda'),
                               torch.zeros((len(faces), 3, 2), device='cuda'), [material])
-    source_camera = json.loads(review_path.read_text())['camera']['parameters']
-    extr, intr, camera_receipt = camera(vertices, source_camera, 0, {'renderer': RENDERER})
+    extr, intr = [vertices.new_tensor(camera_receipt[key]) for key in ('extrinsics', 'intrinsics')]
     env = cv2.imread(str(light_path), cv2.IMREAD_UNCHANGED)
     if env is None or not np.isfinite(env).all():
         raise ValueError('invalid studio environment')
@@ -179,9 +230,9 @@ def render_dataset(inputs, trellis_run, output, category):
         if any(not np.isfinite(value).all() for value in arrays.values()):
             raise ValueError('nonfinite Subject render')
         inside = arrays['mask'] > .5
-        ys, xs = np.nonzero(inside)
-        if not len(xs) or min(xs.min(), ys.min()) < 20 or max(xs.max(), ys.max()) > 491:
-            raise ValueError('empty or clipped centered Subject render')
+        if baseline is None:
+            quality['actual_render'] = check_source_framing(inside, source_mask)
+            rows.extend(photo_rows(receipt, output, category))
         signatures = {'mask': array_hash(inside), 'normal': array_hash(arrays['normal'])}
         if baseline is not None and signatures != baseline:
             raise ValueError('geometry changes across appearance interventions')
@@ -200,10 +251,12 @@ def render_dataset(inputs, trellis_run, output, category):
     result = {'rows': rows, 'source_locks': locks, 'source_image_sha256': receipt['source_sha256'],
         'source_mask_sha256': receipt['original_mask_sha256'], 'counts': {'original': 1, 'recolor': 2, 'trellis': 8},
         'camera': camera_receipt, 'geometry_sha256': geometry_hashes, 'renderer': RENDERER,
+        'quality_check': quality,
         'source_receipt': str(receipt_path), 'native_asset': str(asset), 'quality_accepted_by_user': False,
         'limitations': ['New geometry is a generated estimate, not a geometry-quality acceptance.',
                        'Full-canvas photographs retain other objects; each loss uses only this instance mask.',
-                       'Synthetic renders use centered geometry; this does not repair reconstruction errors.']}
+                       'Synthetic renders retain the saved source framing and its original edge crops.',
+                       'The mask IoU guard is an engineering threshold, not proof of geometric fidelity.']}
     write_json(output / 'subject.json', result)
     return result
 

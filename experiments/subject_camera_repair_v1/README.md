@@ -26,3 +26,17 @@ The output includes source hashes, immutable geometry checks, all camera matrice
 mask extents, 18 clay images, a contact sheet and `status.json`. Existing inputs
 and results are preserved. Later repair decisions must be based on these views,
 not an assumption that the original orange photograph cannot work.
+
+The fixed-view probe confirmed elongated geometry in the current native asset.
+The next bounded attempt reconstructs exactly one new asset with `--seed 0`,
+using the same original-image receipt, Scheme A mask, pinned models and sampler
+settings. The legacy reconstruction command keeps its default seed 42. No pink
+input or historical mesh is substituted, and this attempt does not start training.
+
+Subject rendering now preserves the saved source camera matrices verbatim.
+Both the recorded source-review mask IoU and the first actual training-render
+mask IoU must be at least 0.80. Edge crops are allowed only on edges touched by
+the original mask within two pixels. A failed check leaves the branch unavailable;
+it does not automatically retry reconstruction. Optimizer termination is recorded
+as a warning because its success flag alone did not distinguish historical usable
+fits. These are engineering checks, not user approval or proof of 3D fidelity.

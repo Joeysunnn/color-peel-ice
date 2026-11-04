@@ -86,7 +86,9 @@ def model_bundle(output, pinned_revisions=None):
     return args, {'revisions': revisions, 'sha256': hashes}
 
 
-def run(output, encoder, *, source_receipt=None, model_revisions=None, export_glb=True):
+def run(output, encoder, *, source_receipt=None, model_revisions=None, export_glb=True, seed=42):
+    if type(seed) is not int or not 0 <= seed < 2**32:
+        raise ValueError('seed must be an integer in [0, 2**32)')
     output = resolve_run_dir(output)
     encoder = Path(encoder).resolve()
     source_receipt = Path(source_receipt).resolve() if source_receipt is not None else None
@@ -111,7 +113,7 @@ def run(output, encoder, *, source_receipt=None, model_revisions=None, export_gl
     output.mkdir(parents=True, exist_ok=False)
     report = output / 'repro_outputs'
     report.mkdir()
-    state = {'status': 'started', 'git': git, 'official_commit': OFFICIAL, 'seed': 42,
+    state = {'status': 'started', 'git': git, 'official_commit': OFFICIAL, 'seed': seed,
         'pipeline_type': '1024_cascade', 'input': inputs, 'encoder': str(encoder),
         'encoder_receipt_sha256': sha256(receipt_path), 'training': False,
         'counterfactual_expansion': False, 'generated_assets': 0, 'export_glb': export_glb}
@@ -175,7 +177,7 @@ def run(output, encoder, *, source_receipt=None, model_revisions=None, export_gl
             for name in ('sparse_structure', 'shape_slat', 'tex_slat')})
         write(report / 'status.json', state)
         started = time.time()
-        meshes = pipe.run(condition, seed=42, num_samples=1, preprocess_image=False,
+        meshes = pipe.run(condition, seed=seed, num_samples=1, preprocess_image=False,
                           pipeline_type='1024_cascade')
         if len(meshes) != 1:
             raise ValueError('expected exactly one asset')
@@ -229,7 +231,8 @@ if __name__ == '__main__':
     parser.add_argument('--source-receipt', type=Path)
     parser.add_argument('--model-revisions', type=Path)
     parser.add_argument('--skip-glb', action='store_true')
+    parser.add_argument('--seed', type=int, default=42)
     args = parser.parse_args()
     run(args.output, args.encoder.resolve(), source_receipt=args.source_receipt,
         model_revisions=json.loads(args.model_revisions.read_text()) if args.model_revisions else None,
-        export_glb=not args.skip_glb)
+        export_glb=not args.skip_glb, seed=args.seed)
