@@ -1,5 +1,7 @@
 # Historical pink reproduction, then current-SAM pink conditioning
 
+Completed outcomes and evidence paths are recorded in [RESULTS.md](RESULTS.md).
+
 The user authorized this bounded experiment on 2026-11-04 after the read-only
 provenance audit. It does not change the production pipeline's default input,
 train any branch, run transfer, alter masks or resume older paused studies.
