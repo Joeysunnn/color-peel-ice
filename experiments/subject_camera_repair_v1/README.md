@@ -40,3 +40,12 @@ the original mask within two pixels. A failed check leaves the branch unavailabl
 it does not automatically retry reconstruction. Optimizer termination is recorded
 as a warning because its success flag alone did not distinguish historical usable
 fits. These are engineering checks, not user approval or proof of 3D fidelity.
+
+The seed-0 sample's first source-camera fit reached IoU 0.722472 and exhausted
+the 350-evaluation optimization budget. One camera-only continuation is permitted
+from its saved best six parameters, with the same objective and bounds and at
+most 1000 Powell evaluations / 10 iterations. Keep the original baseline as a
+candidate and retain both reviews. Do not generate another mesh, add starting
+points, lower the 0.80 guard or extend the budget again. The continuation is an
+explicit diagnostic; the normal reconstruction command keeps its original fit
+budget until the result has been evaluated.

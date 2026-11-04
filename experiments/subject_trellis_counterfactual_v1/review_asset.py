@@ -9,12 +9,66 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+PARAMETERS = ('yaw_radians', 'pitch_radians', 'roll_radians', 'radius', 'cx', 'cy')
+BOUNDS = ((-2 * np.pi, 2 * np.pi), (-0.8, 1.1), (-.8, .8), (1.2, 5.5), (0.05, 0.95), (0.05, 0.95))
 
-def review(mesh, source_cutout_path, output, trellis_root):
+
+def validate_initial_parameters(parameters):
+    values = np.asarray(parameters, dtype=np.float64)
+    if values.shape != (6,) or not np.isfinite(values).all():
+        raise ValueError('initial camera requires six finite parameters')
+    if any(not low <= value <= high for value, (low, high) in zip(values, BOUNDS)):
+        raise ValueError('initial camera is outside the existing fit bounds')
+    return values.tolist()
+
+
+def read_initial_parameters(initial_review, asset, source):
+    asset, source, initial_review = [Path(path).resolve() for path in (asset, source, initial_review)]
+    if initial_review != asset.parent / 'review/review.json':
+        raise ValueError('initial review must be the existing review beside this asset')
+    if hashlib.sha256(source.read_bytes()).digest() != hashlib.sha256((asset.parent / 'source_cutout512.png').read_bytes()).digest():
+        raise ValueError('continuation source differs from the existing asset source cutout')
+    parameters = json.loads(initial_review.read_text())['camera']['parameters']
+    return validate_initial_parameters([parameters[name] for name in PARAMETERS])
+
+
+def fit_camera(objective, principal, initial_parameters=None):
+    """One optimizer call; optionally continue from a fixed previously evaluated camera."""
+    from scipy.optimize import minimize
+    evaluations = []
+
+    def evaluate(parameters):
+        loss = float(objective(parameters))
+        if not np.isfinite(loss):
+            raise ValueError('nonfinite camera-fit output')
+        evaluations.append((loss, list(map(float, parameters))))
+        return loss
+
+    if initial_parameters is None:
+        for yaw in np.linspace(-np.pi, np.pi, 8, endpoint=False):
+            for pitch in (-0.3, 0.2, 0.7):
+                for roll in (-.35, 0, .35):
+                    evaluate([yaw, pitch, roll, 2.8, *principal])
+        initial = min(evaluations)[1]
+        mode, budget = 'coarse72_then_powell', {'maxfev': 350, 'maxiter': 6}
+    else:
+        initial = validate_initial_parameters(initial_parameters)
+        evaluate(initial)  # Preserve this baseline even if the one refinement is worse.
+        mode, budget = 'single_warm_start_powell', {'maxfev': 1000, 'maxiter': 10}
+    fit = minimize(evaluate, initial, method='Powell', bounds=BOUNDS,
+                   options={**budget, 'xtol': 0.005, 'ftol': 0.001})
+    loss, parameters = min(evaluations)
+    metadata = {'fitting_mode': mode, 'optimizer_budget': budget,
+                'initial_parameters': dict(zip(PARAMETERS, initial))}
+    return loss, parameters, fit, evaluations, metadata
+
+
+def review(mesh, source_cutout_path, output, trellis_root, *, initial_parameters=None):
     """Fit a display camera only; never change the supplied mesh or its attributes."""
+    if initial_parameters is not None:
+        initial_parameters = validate_initial_parameters(initial_parameters)
     import cv2
     import torch
-    from scipy.optimize import minimize
     from trellis2.renderers import EnvMap, MeshRenderer, PbrMeshRenderer
     from trellis2.utils.render_utils import yaw_pitch_r_fov_to_extrinsics_intrinsics
 
@@ -36,7 +90,6 @@ def review(mesh, source_cutout_path, output, trellis_root):
                  float(1 - (target_y * target).sum() / target.sum())]
     raster = MeshRenderer({'resolution': 128, 'near': 0.1, 'far': 100,
                            'ssaa': 1, 'antialias': False})
-    evaluations = []
 
     def camera(parameters):
         yaw, pitch, roll, radius, cx, cy = map(float, parameters)
@@ -58,22 +111,9 @@ def review(mesh, source_cutout_path, output, trellis_root):
         overlap = (mask > 0.9) & (target > 0.9)
         mae = float(np.abs(color[overlap] - target_rgb[overlap]).mean()) if overlap.any() else 1.0
         loss = float(1 - intersection / max(float(union), 1) + 0.05 * mae)
-        if not np.isfinite(loss):
-            raise ValueError('nonfinite camera-fit output')
-        evaluations.append((loss, list(map(float, parameters))))
         return loss
 
-    # These are camera candidates for the same generated asset, never new assets.
-    for yaw in np.linspace(-np.pi, np.pi, 8, endpoint=False):
-        for pitch in (-0.3, 0.2, 0.7):
-            for roll in (-.35, 0, .35):
-                objective([yaw, pitch, roll, 2.8, *principal])
-    initial = min(evaluations)[1]
-    fit = minimize(objective, initial, method='Powell',
-                   bounds=[(-2 * np.pi, 2 * np.pi), (-0.8, 1.1), (-.8, .8), (1.2, 5.5),
-                           (0.05, 0.95), (0.05, 0.95)],
-                   options={'maxfev': 350, 'maxiter': 6, 'xtol': 0.005, 'ftol': 0.001})
-    loss, parameters = min(evaluations)
+    loss, parameters, fit, evaluations, fitting = fit_camera(objective, principal, initial_parameters)
     extr, intr = camera(parameters)
     environment = Path(trellis_root) / 'assets/hdri/forest.exr'
     env_rgb = cv2.imread(str(environment), cv2.IMREAD_UNCHANGED)
@@ -99,11 +139,15 @@ def review(mesh, source_cutout_path, output, trellis_root):
     union = np.logical_or(source_mask, fitted_mask).sum()
     iou = float(np.logical_and(source_mask, fitted_mask).sum() / max(int(union), 1))
     output.mkdir(parents=True)
+    trajectory_path = output / 'camera_fit_trajectory.json'
+    trajectory_path.write_text(json.dumps({**fitting, 'parameter_order': list(PARAMETERS),
+        'bounds': BOUNDS, 'evaluations': [{'loss': value, 'parameters': point} for value, point in evaluations]},
+        indent=2, allow_nan=False) + '\n', encoding='utf8')
     panels = {'source_rgb': rgba[..., :3] * rgba[..., 3:] + (127 / 255) * (1 - rgba[..., 3:]),
               'pbr': arrays['shaded'], 'clay': clay['shaded'].detach().cpu().numpy(),
               'base_color': arrays['base_color'], 'metallic': arrays['metallic'],
               'roughness': arrays['roughness'], 'normal': arrays['normal']}
-    artifacts = {}
+    artifacts = {'camera_fit_trajectory': str(trajectory_path)}
     sheet = Image.new('RGB', (2048, 1080), 'white')
     draw = ImageDraw.Draw(sheet)
     for index, (name, value) in enumerate(panels.items()):
@@ -128,7 +172,7 @@ def review(mesh, source_cutout_path, output, trellis_root):
     artifacts['contact_sheet'] = str(output / 'contact_sheet.png')
     record = {'status': 'pending_user_review', 'camera': {
         'status': 'estimated_from_original512_mask_and_weak_RGB_correspondence',
-        'parameters': dict(zip(['yaw_radians', 'pitch_radians', 'roll_radians', 'radius', 'cx', 'cy'], parameters)),
+        'parameters': dict(zip(PARAMETERS, parameters)), **fitting,
         'fov_degrees': 40, 'extrinsics': extr.detach().cpu().tolist(),
         'intrinsics': intr.detach().cpu().tolist(), 'fit_resolution': 128,
         'output_resolution': 512, 'objective': '1-soft_mask_IoU + 0.05*RGB_BaseColor_MAE',
@@ -159,7 +203,10 @@ if __name__ == '__main__':
     parser.add_argument('--asset', required=True, type=Path)
     parser.add_argument('--source', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--initial-review', type=Path, help='One bounded refinement of this asset\'s existing camera')
     args = parser.parse_args()
+    initial = (read_initial_parameters(args.initial_review, args.asset, args.source)
+               if args.initial_review is not None else None)
     git = git_info()
     output = resolve_run_dir(args.output)
     assets = Path('/var/tmp/colorpeel-r12user5/assets/trellis2_v1')
@@ -172,9 +219,11 @@ if __name__ == '__main__':
     saved = torch.load(args.asset, map_location='cuda', weights_only=False)
     saved['origin'] = saved['origin'].tolist()
     mesh = MeshWithVoxel(**saved)
-    record = review(mesh, args.source, output, assets / 'sources/TRELLIS.2')
+    record = review(mesh, args.source, output, assets / 'sources/TRELLIS.2', initial_parameters=initial)
     (output / 'saved_asset_source.json').write_text(json.dumps({'git': git,
         'asset': str(args.asset), 'asset_sha256': hashlib.sha256(args.asset.read_bytes()).hexdigest(),
         'source': str(args.source), 'source_sha256': hashlib.sha256(args.source.read_bytes()).hexdigest(),
+        'initial_review': str(args.initial_review.resolve()) if args.initial_review else None,
+        'initial_review_sha256': hashlib.sha256(args.initial_review.read_bytes()).hexdigest() if args.initial_review else None,
         'new_model_samples': 0, 'metrics': record['metrics']}, indent=2) + '\n')
     print(json.dumps(record['metrics']))
