@@ -1,5 +1,9 @@
 # Automatic multi-object image intake
 
+This pipeline is **Scheme A** in the [object-mask A/B comparison](../object_mask_ab_v1/README.md).
+Its recorded baseline is commit `4b537fac7d78946a0ffcf72c1c0d38e201b71ed7`;
+the [baseline results](../object_mask_ab_v1/RESULTS.md) retain its partial outcome.
+
 `prepare_from_image.py` accepts one photograph without a GT mask:
 
 1. Pinned Qwen3-VL classifies visible entities as object/background/part/text,
