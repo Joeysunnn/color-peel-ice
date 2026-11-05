@@ -56,7 +56,8 @@ def square_pair(image, mask):
         'rgb_resampling': 'LANCZOS', 'mask_resampling': 'NEAREST', 'padding_rgb': [127]*3}
 
 
-def prepare_inputs(image_path, mask_path, output):
+def prepare_inputs(image_path, mask_path, output, *,
+                   segmentation='supplied per-instance Scheme A binary SAM mask'):
     image_path, mask_path = Path(image_path).resolve(), Path(mask_path).resolve()
     locks = {str(path): sha256(path) for path in (image_path, mask_path)}
     with Image.open(image_path) as opened, Image.open(mask_path) as opened_mask:
@@ -75,7 +76,7 @@ def prepare_inputs(image_path, mask_path, output):
         'mask_path': str(output / 'mask512.png'), 'mask_sha256': locks[str(output / 'mask512.png')],
         'cutout_path': str(output / 'cutout512.png'), 'cutout_sha256': locks[str(output / 'cutout512.png')],
         'transform': transform, 'source_locks': locks, 'alpha_matches_mask': True,
-        'transparent_rgb_zero': True, 'segmentation': 'supplied per-instance Scheme A binary SAM mask'}
+        'transparent_rgb_zero': True, 'segmentation': segmentation}
     check_locks(locks)
     write_json(output / 'source_receipt.json', receipt)
     return receipt

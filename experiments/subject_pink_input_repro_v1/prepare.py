@@ -1,4 +1,4 @@
-"""Recolor only the TRELLIS condition; retain the original photo and SAM mask."""
+"""Recolor only the TRELLIS condition; retain the original photo and supplied mask."""
 
 import argparse
 import json
@@ -65,7 +65,7 @@ def prepare(source_receipt, output, hue_degrees=0.0):
             'method': (f'historical deterministic Lab/LCh hue={hue_degrees:g} with soft-alpha RGB blending'
                 + (' derived from conditioning_alpha>0; supplied conditioning alpha unchanged'
                    if conditioning_alpha else '')),
-            'hue_degrees': float(hue_degrees), 'mask_policy': 'unchanged supplied binary SAM mask; no mask repair',
+            'hue_degrees': float(hue_degrees), 'mask_policy': 'unchanged supplied binary mask; no mask repair',
             'parent_receipt_path': str(source_receipt), 'parent_receipt_sha256': parent_sha,
             'original_cutout_path': original['cutout_path'],
             'original_cutout_sha256': original['cutout_sha256'],

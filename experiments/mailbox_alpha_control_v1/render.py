@@ -1,4 +1,4 @@
-"""Render unchanged Mailbox meshes with one reference and three shared cameras."""
+"""Render one or more unchanged native meshes with one reference and three shared cameras."""
 
 import argparse
 import json
@@ -25,9 +25,9 @@ POSES = (('yaw0', 0.), ('yaw90', math.pi / 2), ('yaw_minus90', -math.pi / 2))
 def run(assets, labels, reference_review, output, gpu=0):
     assets = [Path(path).resolve() for path in assets]
     reference_review, output = Path(reference_review).resolve(), resolve_run_dir(Path(output))
-    if (len(assets) < 2 or len(assets) != len(labels) or len(set(labels)) != len(labels)
+    if (len(assets) < 1 or len(assets) != len(labels) or len(set(labels)) != len(labels)
             or any(not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', name) for name in labels)):
-        raise ValueError('require at least two assets and matching unique simple labels')
+        raise ValueError('require at least one asset and matching unique simple labels')
     if output.exists() or any(output.is_relative_to(path) or path.is_relative_to(output)
             for path in (ROOT, ASSETS, reference_review.parent, *(path.parent for path in assets))):
         raise ValueError('require a fresh external output separate from inputs and code')
