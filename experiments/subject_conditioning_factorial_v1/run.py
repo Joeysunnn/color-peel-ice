@@ -1,4 +1,4 @@
-"""Run the fixed two-object, eight-condition TRELLIS factorial without retries."""
+"""Run eight fixed TRELLIS conditions per supplied object, without retries."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,18 +21,22 @@ OBJECTS = {
     'wood_spoon': {
         'matte_receipt': RUN_ROOT / 'wood_spoon_soft_alpha_v1/20261105__sam_soft_pink__d5b9d15__42/trellis_alpha/source_receipt.json',
         'reference_review': RUN_ROOT / 'wood_spoon_soft_alpha_v1/20261105__sam_soft_original__d5b9d15__42/trellis/review/review.json'}}
-VARIANTS = {'__'.join(values) for values in product(('original', 'pink'), ('sam', 'biref'), ('sam', 'biref'))}
+VARIANT_ORDER = tuple('__'.join(values) for values in product(('original', 'pink'), ('sam', 'biref'), ('sam', 'biref')))
+VARIANTS = set(VARIANT_ORDER)
 MODEL_REVISIONS = ROOT / 'experiments/subject_trellis_spoons_v1/model_revisions.json'
 
 
-def run(output, gpus):
+def run(output, gpus, objects=None):
     from .prepare import prepare
     if not gpus or len(set(gpus)) != len(gpus) or any(type(gpu) is not int or gpu < 0 for gpu in gpus):
         raise ValueError('require distinct nonnegative physical GPUs')
+    objects = OBJECTS if objects is None else objects
+    if not objects:
+        raise ValueError('require at least one object or explicit blocked-object record')
     revision, output = git_info(), fresh(output)
     pinned = read(MODEL_REVISIONS)
     state = {'status': 'running', 'stage': 'prepare', 'git': revision, 'gpus': list(gpus), 'seed': 42,
-        'expected_jobs': 16, 'jobs': [], 'objects': {}, 'renders': [],
+        'expected_jobs': 8 * len(objects), 'jobs': [], 'objects': {}, 'renders': [],
         'source_locks': {str(MODEL_REVISIONS): sha256(MODEL_REVISIONS)},
         'automatic_retries': 0, 'training_started': False, 'quality_accepted_by_user': False}
     lock, configuration = Lock(), []
@@ -44,37 +48,61 @@ def run(output, gpus):
 
     try:
         write_json(output / 'status.json', state)
-        for name, sources in OBJECTS.items():
-            manifest = prepare(sources['matte_receipt'], output / name / 'inputs')
-            if manifest['git'] != revision or {row['name'] for row in manifest['variants']} != VARIANTS or len(manifest['variants']) != 8:
-                raise ValueError('preparation must produce the eight fixed variants under the same full Git')
-            manifest_path = output / name / 'prepare_manifest.json'
-            write_json(manifest_path, manifest)
-            state['source_locks'].update(manifest['source_locks'])
-            state['source_locks'].update({str(path): sha256(path) for path in (*sources.values(), manifest_path)})
-            state['objects'][name] = {'manifest': str(manifest_path), 'manifest_sha256': sha256(manifest_path),
-                'crop_policy': manifest['crop_policy'], 'reference_review': str(sources['reference_review'])}
-            for variant in manifest['variants']:
-                run_path = output / name / 'variants' / variant['name'] / 'trellis'
-                run_path.parent.mkdir(parents=True)
-                job = {'object': name, 'variant': variant['name'], 'stage': 'pending', 'status': 'pending',
+        for name, sources in objects.items():
+            reference = (Path(sources['reference_review']) if sources.get('reference_review') is not None else
+                         output / name / 'variants/original__biref__biref/trellis/review/review.json')
+            record = {'status': 'preparing', 'source_rgb': sources.get('source_rgb', False),
+                'reference_review': str(reference), 'reference_policy': ('supplied_frozen_review'
+                    if sources.get('reference_review') is not None else 'fixed_new_original__biref__biref')}
+            state['objects'][name] = record
+            jobs = []
+            for variant in VARIANT_ORDER:
+                run_path = output / name / 'variants' / variant / 'trellis'
+                job = {'object': name, 'variant': variant, 'stage': 'pending', 'status': 'pending',
                     'gpu': gpus[len(state['jobs']) % len(gpus)], 'trellis_run': str(run_path),
-                    'source_receipt': variant['source_receipt'], 'source_receipt_sha256': sha256(variant['source_receipt']),
-                    'expected_condition': variant['expected_condition'], 'expected_condition_sha256': sha256(variant['expected_condition']),
-                    'auto_crop_xyxy': variant['auto_crop_xyxy'],
                     'log': str(run_path.parent / 'generation.log')}
-                job['argv'] = [str(value) for value in [RUNTIME['trellis_python'], '-B', '-m',
-                    'experiments.subject_trellis_counterfactual_v1.run', '--output', run_path,
-                    '--source-receipt', job['source_receipt'], '--encoder', RUNTIME['trellis_encoder'],
-                    '--model-revisions', MODEL_REVISIONS, '--seed', '42', '--skip-glb']]
+                jobs.append(job)
                 state['jobs'].append(job)
+            try:
+                if sources.get('blocked_reason'):
+                    raise ValueError(sources['blocked_reason'])
+                manifest = prepare(sources['matte_receipt'], output / name / 'inputs',
+                                   source_rgb=record['source_rgb'])
+                if manifest['git'] != revision or {row['name'] for row in manifest['variants']} != VARIANTS or len(manifest['variants']) != 8:
+                    raise ValueError('preparation must produce the eight fixed variants under the same full Git')
+                manifest_path = output / name / 'prepare_manifest.json'
+                write_json(manifest_path, manifest)
+                state['source_locks'].update(manifest['source_locks'])
+                paths = [Path(sources['matte_receipt']), manifest_path]
+                if sources.get('reference_review') is not None:
+                    paths.append(reference)
+                state['source_locks'].update({str(path): sha256(path) for path in paths})
+                record.update(manifest=str(manifest_path), manifest_sha256=sha256(manifest_path),
+                              crop_policy=manifest['crop_policy'])
+                variants = {row['name']: row for row in manifest['variants']}
+                for job in jobs:
+                    variant, run_path = variants[job['variant']], Path(job['trellis_run'])
+                    run_path.parent.mkdir(parents=True)
+                    job.update(source_receipt=variant['source_receipt'], source_receipt_sha256=sha256(variant['source_receipt']),
+                        expected_condition=variant['expected_condition'], expected_condition_sha256=sha256(variant['expected_condition']),
+                        auto_crop_xyxy=variant['auto_crop_xyxy'])
+                    job['argv'] = [str(value) for value in [RUNTIME['trellis_python'], '-B', '-m',
+                        'experiments.subject_trellis_counterfactual_v1.run', '--output', run_path,
+                        '--source-receipt', job['source_receipt'], '--encoder', RUNTIME['trellis_encoder'],
+                        '--model-revisions', MODEL_REVISIONS, '--seed', '42', '--skip-glb']]
+                update(record, status='prepared')
+            except Exception as error:
+                reason = f'{type(error).__name__}: {error}'
+                for job in jobs:
+                    job.update(status='blocked', stage='prepare', error=reason)
+                update(record, status='blocked', error=reason)
         check_locks(state['source_locks'])
         if git_info() != revision:
             raise ValueError('checkout changed during preparation')
         update(state, stage='generate')
 
         def worker(gpu):
-            for job in (row for row in state['jobs'] if row['gpu'] == gpu):
+            for job in (row for row in state['jobs'] if row['gpu'] == gpu and row['status'] == 'pending'):
                 try:
                     update(job, status='running', stage='generate')
                     check_locks({job[key]: job[key + '_sha256'] for key in ('source_receipt', 'expected_condition')})
@@ -111,7 +139,7 @@ def run(output, gpus):
             for future in as_completed([pool.submit(worker, gpu) for gpu in gpus]):
                 future.result()
         update(state, stage='render')
-        for name, sources in OBJECTS.items():
+        for name, sources in objects.items():
             jobs = [job for job in state['jobs'] if job['object'] == name]
             view_output = output / name / 'geometry_views'
             row = {'object': name, 'stage': 'render', 'status': 'pending', 'gpu': gpus[0],
@@ -122,9 +150,15 @@ def run(output, gpus):
                 continue
             row['argv'] = [str(value) for value in [RUNTIME['trellis_python'], '-B', '-m',
                 'experiments.mailbox_alpha_control_v1.render', '--assets', *(job['native_asset'] for job in jobs),
-                '--labels', *(job['variant'] for job in jobs), '--reference-review', sources['reference_review'],
+                '--labels', *(job['variant'] for job in jobs), '--reference-review', state['objects'][name]['reference_review'],
                 '--output', view_output, '--gpu', gpus[0]]]
             try:
+                # A new reference camera is predetermined, but exists only after generation.
+                reference = state['objects'][name]['reference_review']
+                if reference not in state['source_locks']:
+                    state['source_locks'][reference] = sha256(reference)
+                check_locks({reference: state['source_locks'][reference]})
+                row.update(reference_review=reference, reference_review_sha256=state['source_locks'][reference])
                 update(row, status='running')
                 execute(row['argv'], Path(row['log']), gpus[0])
                 rendered = read(view_output / 'status.json')
@@ -138,7 +172,7 @@ def run(output, gpus):
         if git_info() != revision:
             raise ValueError('checkout changed during the experiment')
         state['generated_jobs'] = sum(job['status'] == 'generated' for job in state['jobs'])
-        complete = state['generated_jobs'] == 16 and all(row['status'] == 'completed' for row in state['renders'])
+        complete = state['generated_jobs'] == state['expected_jobs'] and all(row['status'] == 'completed' for row in state['renders'])
         update(state, status='completed_pending_user_review' if complete else 'partial', stage='completed')
         if not complete:
             raise RuntimeError('Factorial experiment is partial; failed/blocked evidence retained in status.json.')

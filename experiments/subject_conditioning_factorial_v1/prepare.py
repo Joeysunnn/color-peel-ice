@@ -15,13 +15,13 @@ from src.methods.colorpeel_ice.natural_subject_recolor_pilot import recolor
 from src.methods.colorpeel_ice.single_image_subject import check_locks, fresh, sha256, write_json
 
 
-def build_variants(rgb, sam, soft):
+def build_variants(rgb, sam, soft, source_rgb=False):
     if (rgb.dtype != np.uint8 or rgb.shape != (512, 512, 3)
             or any(array.dtype != np.uint8 or array.shape != (512, 512) for array in (sam, soft))
             or not set(np.unique(sam)) <= {0, 255} or not sam.any()
             or not ((soft > 0) & (soft < 255)).any()):
         raise ValueError('require RGB512, binary SAM and genuinely soft L512 alpha')
-    if ((sam > 0) & (soft == 0)).any() or (rgb[soft == 0] != 0).any():
+    if not source_rgb and (((sam > 0) & (soft == 0)).any() or (rgb[soft == 0] != 0).any()):
         raise ValueError('frozen matte RGB must cover all SAM pixels with transparent RGB zero')
     supports = {'sam': sam > 0, 'biref': soft > 0}
     colors, metrics = {}, {}
@@ -57,7 +57,7 @@ def expected_auto_condition(rgba):
     return Image.fromarray((pixels[..., :3] * pixels[..., 3:4] * 255).astype(np.uint8))
 
 
-def prepare(matte_receipt, output):
+def prepare(matte_receipt, output, source_rgb=False):
     matte_receipt, output = Path(matte_receipt).resolve(), Path(output).resolve()
     checked = check_source_receipt(matte_receipt)
     parent = json.loads(matte_receipt.read_text())
@@ -69,20 +69,35 @@ def prepare(matte_receipt, output):
         raise ValueError('new preparation must be separate from all input folders')
     with Image.open(parent['cutout_path']) as image, Image.open(parent['mask_path']) as mask:
         rgba, sam = np.array(image), np.array(mask)
+    rgb = rgba[..., :3]
+    if source_rgb:
+        rgb_source = Path(parent['image512_path'])
+        digest = parent['image512_sha256']
+        if (not rgb_source.is_absolute() or locks.get(str(rgb_source)) != digest
+                or sha256(rgb_source) != digest):
+            raise ValueError('source RGB512 requires its unchanged parent source lock')
+        with Image.open(rgb_source) as image:
+            if image.mode != 'RGB' or image.size != (512, 512):
+                raise ValueError('source RGB512 must be RGB mode on the unchanged 512 canvas')
+            rgb = np.array(image)
     revision = git_info()
-    variants = build_variants(rgba[..., :3], sam, rgba[..., 3])
+    variants = build_variants(rgb, sam, rgba[..., 3], source_rgb=source_rgb)
     output = fresh(output)
     rgb_path = output / 'frozen_base_rgb512.png'
-    Image.fromarray(rgba[..., :3]).save(rgb_path)
+    Image.fromarray(rgb).save(rgb_path)
     locks = {**locks, str(rgb_path): sha256(rgb_path)}
     manifest = {'git': revision, 'source_locks': locks, 'matte_receipt': str(matte_receipt),
         'seed': 42, 'crop_policy': 'official automatic crop from each geometry alpha > 204',
-        'variants': [], 'expected_meshes': 8,
+        'variants': [], 'expected_meshes': 8, 'source_rgb': source_rgb,
         'scope_semantics': 'Recolor only. Original and all pixels outside pink support retain frozen base RGB.',
-        'rgb_preprocessing': 'Frozen uncolored BiRefNet joint-RGBA-resize RGB512, identical for every factor cell; no new resizing.',
+        'rgb_preprocessing': ('Frozen original image512 RGB from independent RGB LANCZOS and full-canvas letterbox; '
+            'identical for every factor cell, no alpha-dependent RGB resizing or new resizing.' if source_rgb else
+            'Frozen uncolored BiRefNet joint-RGBA-resize RGB512, identical for every factor cell; no new resizing.'),
         'alpha_serialization': 'Pre-alpha RGB is saved separately; final RGBA zeros RGB only where selected geometry alpha is zero.',
         'original_scope_pairs_expected_identical': True,
         'training_started': False, 'production_defaults_changed': False, 'quality_accepted_by_user': False}
+    if source_rgb:
+        manifest.update(frozen_rgb_source=str(rgb_source), frozen_rgb_source_sha256=digest)
     for variant in variants:
         folder = output / variant['name']
         folder.mkdir()
@@ -96,7 +111,7 @@ def prepare(matte_receipt, output):
         diagnostic = {key: value for key, value in variant.items() if key not in ('rgba', 'pre_alpha_rgb')}
         diagnostic.update(pre_alpha_rgb_path=str(files['pre_alpha_rgb']),
                           pre_alpha_rgb_sha256=generated_locks[str(files['pre_alpha_rgb'])],
-                          scope_semantics=manifest['scope_semantics'])
+                          scope_semantics=manifest['scope_semantics'], rgb_preprocessing=manifest['rgb_preprocessing'])
         receipt = {**parent, 'source_locks': {**locks, **generated_locks},
             'alpha_matches_mask': variant['geometry_alpha'] == 'sam',
             'soft_alpha': variant['geometry_alpha'] == 'biref', 'diagnostic': diagnostic,

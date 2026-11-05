@@ -79,6 +79,35 @@ class SubjectConditioningFactorialTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'cover all SAM'):
             experiment.build_variants(rgb, sam, soft)
 
+    def test_source_rgb_keeps_sam_pixels_missing_from_soft_support(self):
+        rgb, sam, soft = self.inputs()
+        rgb[:] = [180, 110, 40]  # A complete original RGB canvas, including background.
+        soft[300, 200] = 0
+        before = (rgb.copy(), sam.copy(), soft.copy())
+        with patch.object(experiment, 'derive_repaired_alpha', side_effect=feather_fixture):
+            rows = {row['name']: row for row in experiment.build_variants(rgb, sam, soft, source_rgb=True)}
+        for actual, expected in zip((rgb, sam, soft), before):
+            np.testing.assert_array_equal(actual, expected)
+        for scope in ('sam', 'biref'):
+            np.testing.assert_array_equal(rows[f'original__{scope}__sam']['rgba'][300, 200], [180, 110, 40, 255])
+            np.testing.assert_array_equal(rows[f'original__{scope}__biref']['rgba'][300, 200], [0, 0, 0, 0])
+        for row in rows.values():
+            if row['color'] == 'original':
+                np.testing.assert_array_equal(row['pre_alpha_rgb'], rgb)
+            else:
+                support = sam > 0 if row['recolor_support'] == 'sam' else soft > 0
+                np.testing.assert_array_equal(row['pre_alpha_rgb'][~support], rgb[~support])
+            geometry = sam if row['geometry_alpha'] == 'sam' else soft
+            np.testing.assert_array_equal(row['rgba'][..., 3], geometry)
+        for alpha in ('sam', 'biref'):
+            np.testing.assert_array_equal(rows[f'original__sam__{alpha}']['rgba'],
+                                          rows[f'original__biref__{alpha}']['rgba'])
+
+    def test_source_rgb_still_requires_genuinely_soft_alpha(self):
+        rgb, sam, _ = self.inputs()
+        with self.assertRaisesRegex(ValueError, 'genuinely soft'):
+            experiment.build_variants(rgb, sam, sam.copy(), source_rgb=True)
+
     def test_prepare_receipts_lock_parent_and_keep_semantic_sam(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -106,6 +135,46 @@ class SubjectConditioningFactorialTests(unittest.TestCase):
             parent.write_text('{}')
             with self.assertRaisesRegex(ValueError, 'source lock hash mismatch'):
                 check_source_receipt(manifest['variants'][0]['source_receipt'])
+
+    def test_source_rgb_prepare_freezes_locked_original_instead_of_matte_rgb(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs = root / 'inputs'
+            inputs.mkdir()
+            rgb, sam, soft = self.inputs()
+            soft[300, 200] = 0
+            matte = np.dstack([np.where(soft[..., None] > 0, rgb, 0), soft])
+            source_rgb = np.full_like(rgb, [130, 150, 170])
+            paths = {name: inputs / (name + '.png') for name in
+                     ('source', 'image512', 'mask', 'cutout', 'conditioning_alpha')}
+            values = {'source': source_rgb, 'image512': source_rgb, 'mask': sam,
+                      'cutout': matte, 'conditioning_alpha': soft}
+            receipt = {'conditioning_alpha': {'method': 'pinned_BiRefNet_full_native_RGBA_then_joint_LANCZOS/v1'},
+                       'source_locks': {}}
+            for name, path in paths.items():
+                Image.fromarray(values[name]).save(path)
+                receipt[name + '_path'], receipt[name + '_sha256'] = str(path), experiment.sha256(path)
+                receipt['source_locks'][str(path)] = receipt[name + '_sha256']
+            parent = inputs / 'receipt.json'
+            parent.write_text(json.dumps(receipt))
+            with patch.object(experiment, 'derive_repaired_alpha', side_effect=feather_fixture), \
+                    patch.object(experiment, 'git_info', return_value={'commit': 'fixture'}):
+                manifest = experiment.prepare(parent, root / 'prepared', source_rgb=True)
+                self.assertTrue(manifest['source_rgb'])
+                self.assertIn('independent RGB', manifest['rgb_preprocessing'])
+                self.assertEqual(manifest['frozen_rgb_source_sha256'], receipt['image512_sha256'])
+                with Image.open(root / 'prepared/frozen_base_rgb512.png') as frozen:
+                    np.testing.assert_array_equal(np.asarray(frozen), source_rgb)
+                with Image.open(root / 'prepared/original__sam__sam/cutout512.png') as cutout:
+                    np.testing.assert_array_equal(np.asarray(cutout)[300, 200], [130, 150, 170, 255])
+                for row in manifest['variants']:
+                    checked = check_source_receipt(row['source_receipt'])
+                    self.assertEqual(checked['sha256'][str(paths['image512'])], receipt['image512_sha256'])
+                # A claimed RGB hash without a parent source lock is not sufficient.
+                del receipt['source_locks'][str(paths['image512'])]
+                parent.write_text(json.dumps(receipt))
+                with self.assertRaisesRegex(ValueError, 'parent source lock'):
+                    experiment.prepare(parent, root / 'unlocked', source_rgb=True)
 
 
 if __name__ == '__main__':
