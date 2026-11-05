@@ -37,3 +37,5 @@ correct instance separation for all scenes.
 The failed attempt, native alpha and traceback are retained under:
 `/home/r12user5/Documents/Jiawei/colorpeel-runs/mailbox_soft_alpha_v1/20261105__sam_soft_pink__d5b9d15__42/`.
 Subsequent execution uses a new run directory; no failed evidence is overwritten.
+
+Completed pink preview and limitations: [RESULTS.md](RESULTS.md).

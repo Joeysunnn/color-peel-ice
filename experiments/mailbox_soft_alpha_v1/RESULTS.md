@@ -3,12 +3,12 @@
 2026-11-05. The requested preview completed one fresh seed42 mesh from current
 Mailbox SAM plus BiRefNet soft alpha, recolored pink. Producer:
 `87efe3a87d6cb20f4b181523ba45e82bc66e0cf2` in a new clean GitHub checkout.
-All12 alpha-association tests passed on the server without skips.
+All 12 alpha-association tests passed on the server without skips.
 
 The initial `d5b9d15` attempt stopped at overly strict component association,
-before mesh generation. Its alpha and error remain intact. The fixed1% overlap
-rule ignores the43-pixel weak door contact for ownership, retaining the entire
-44831-pixel Mailbox alpha component and100% of its42397-pixel SAM support. It
+before mesh generation. Its alpha and error remain intact. The fixed 1% overlap
+rule ignores the 43-pixel weak door contact for ownership, retaining the entire
+44831-pixel Mailbox alpha component and 100% of its 42397-pixel SAM support. It
 removes the separate number-plate component whole; no alpha normalization,
 hard-SAM clipping or manual pixel editing is performed.
 
@@ -18,13 +18,13 @@ hard-SAM clipping or manual pixel editing is performed.
 | Faces | 2067646 |
 | Review silhouette IoU against soft alpha | 0.8288188416 |
 | Saved native silhouette IoU against SAM | 0.8190070199995758 |
-| Camera refinement | Not converged,422 evaluations |
+| Camera refinement | Not converged, 422 evaluations |
 
 The native silhouette measurement above is from the saved review mask, not the
 new selector's separately rendered opaque geometry mask. Do not mix the two.
-Source-view overlap passes0.80, but inspection still shows a substantially
+Source-view overlap passes 0.80, but inspection still shows a substantially
 different backplate/tube relationship from the photograph. This is an example
-of why silhouette overlap alone cannot establish correct3D geometry. The user
+of why silhouette overlap alone cannot establish correct 3D geometry. The user
 has been shown the input, PBR and clay panels; quality is not marked accepted.
 
 Server output:

@@ -57,3 +57,5 @@ export COLORPEEL_OUTPUT_ROOT="$COLORPEEL_RUN_ROOT"
 Use a tested, pushed clean checkout with full SHA verification and check GPU
 occupancy/ownership first. Model files stay pinned and offline. The real new
 input preparation and both meshes must share that checkout revision.
+
+Completed production-helper verification: [RESULTS.md](RESULTS.md).
