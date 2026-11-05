@@ -93,6 +93,12 @@ be prepared before training it.
   texture and allows at most one candidate-repair generation for invalid token
   choices. Unknown confidence is not forced to a guess. Both attempts and hashes
   are preserved. Old v1/v2 manifest behavior is unchanged.
+- Qwen category discovery and initialization observe a separate copy capped at
+  1024 pixels on its longest edge, preserving aspect ratio with LANCZOS and no
+  crop/upscale. Smaller images keep identical pixels. Qwen generation receipts
+  record original/observed sizes and the processor's actual `image_grid_thw`.
+  The source photograph, native-resolution SAM input/masks and shared512 data
+  preparation are unchanged by this observation-only memory bound.
 - A failed object/branch remains failed or blocked while independent usable
   branches proceed. Technical completion does not establish full-object masks,
   geometry quality, four-attribute disentanglement or background compliance.

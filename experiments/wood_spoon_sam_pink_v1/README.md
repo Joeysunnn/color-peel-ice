@@ -13,6 +13,8 @@ RGB 2560x2560, containing the bowl, full handle and hanging hole.
 
 1. Qwen whole-object discovery, Grounding DINO boxes and SAM masks run fresh
    through the current Scheme A workers, with the existing duplicate policy.
+   Qwen alone observes a full-frame copy capped at longest edge1024; its actual
+   processor grid is recorded. Original source and SAM input remain2560x2560.
 2. Original RGB and binary instance mask are mapped together to the 512 canvas,
    without object cropping or aspect-ratio stretching.
 3. LCh hue0 recoloring with historical gamut/soft-RGB rules changes only the
@@ -39,3 +41,9 @@ From a reviewed clean GitHub checkout, with both output-root variables set:
 Each subprocess checks GPU occupancy and uses offline cached assets. Outputs are
 fresh and outside Git; raw discovery, segmentation scores/overlays, source and
 pink receipts, commands and failed evidence are retained.
+
+The first attempt at `c780516` failed during Qwen discovery: eager vision
+attention on the full2560 image requested19.53GiB with14.09GiB free. It produced
+no SAM masks or native meshes. That run is retained. The observation-size fix
+is a preprocessing change for Qwen, not a new mask rule or TRELLIS color search;
+one corrected run uses a new output and fresh checkout.

@@ -173,6 +173,18 @@ def model_receipt(model_dir):
             "size_note": "File bytes are disk sizes, not GPU memory requirements."}
 
 
+QWEN_MAX_IMAGE_EDGE = 1024
+
+
+def qwen_observation(image):
+    """Bound only the VLM observation; never crop, upscale or mutate its source."""
+    if max(image.size) <= QWEN_MAX_IMAGE_EDGE:
+        return image.copy()
+    scale = QWEN_MAX_IMAGE_EDGE / max(image.size)
+    size = tuple(max(1, round(length * scale)) for length in image.size)
+    return image.resize(size, Image.Resampling.LANCZOS)
+
+
 class QwenPredictor:
     def __init__(self, model_dir, device, prompt=PROMPT):
         import torch
@@ -194,10 +206,17 @@ class QwenPredictor:
             self.runtime["gpu_name"] = torch.cuda.get_device_name(device)
 
     def __call__(self, image):
-        messages = [{"role": "user", "content": [{"type": "image", "image": image},
+        observed = qwen_observation(image)
+        self.runtime["image_observation"] = {
+            "original_size": list(image.size), "observed_size": list(observed.size),
+            "longest_edge_limit": QWEN_MAX_IMAGE_EDGE, "resized": observed.size != image.size,
+            "resize_policy": "LANCZOS; preserve aspect ratio; no crop or upscale; source unchanged"}
+        messages = [{"role": "user", "content": [{"type": "image", "image": observed},
                                                    {"type": "text", "text": self.prompt}]}]
         inputs = self.processor.apply_chat_template(messages, tokenize=True, add_generation_prompt=True,
                                                    return_dict=True, return_tensors="pt").to(self.device)
+        grid = inputs.get("image_grid_thw")
+        self.runtime["image_grid_thw"] = grid.detach().cpu().tolist() if grid is not None else None
         if "pixel_values" in inputs:
             inputs["pixel_values"] = inputs["pixel_values"].to(dtype=self.torch.float16)
         if str(self.device).startswith("cuda"):
