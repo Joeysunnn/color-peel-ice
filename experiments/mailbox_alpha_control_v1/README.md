@@ -1,7 +1,7 @@
 # Mailbox alpha-only diagnostic
 
-Authorized 2026-11-05 after the soft-alpha pink preview changed shape. This is
-a bounded two-run control, not a production default change or training job.
+Authorized 2026-11-05 after the soft-alpha pink preview changed shape. Start
+with two controlled runs; no production default change or training job.
 
 1. Replay the previous five-color hard-SAM pink (`6726dab`) with its exact RGB,
    binary alpha, fixed crop `[145,254,439,548]`, seed42 and pinned inference.
@@ -30,3 +30,10 @@ Use identical saved-reference and common centered cameras for geometry-only
 comparison in `render.py`, alongside each run's separately fitted review.
 Different native tensors alone prove different geometry, not worse geometry.
 Results apply to this image and seed; no automatic acceptance or retries.
+
+Completed: [RESULTS.md](RESULTS.md). Alpha replacement did not reproduce the
+severe relative-structure failure. Two bounded follow-ups therefore completed
+the soft-alpha RGB x crop comparison: old RGB/new crop and new RGB/old crop.
+The existing new RGB/new crop result supplies the fourth cell, with its older
+generation commit explicitly recorded. Four new meshes total; no further
+seed, alpha, color or camera optimization sweep was performed.
