@@ -47,3 +47,5 @@ attention on the full2560 image requested19.53GiB with14.09GiB free. It produced
 no SAM masks or native meshes. That run is retained. The observation-size fix
 is a preprocessing change for Qwen, not a new mask rule or TRELLIS color search;
 one corrected run uses a new output and fresh checkout.
+
+Completed mesh preview, evidence and remaining limitations: [RESULTS.md](RESULTS.md).
