@@ -25,7 +25,7 @@ def validate_selection(selection):
     for row in objects:
         sample, mask = row['sample_id'], row['mask_id']
         if (type(sample) is not int or type(mask) is not int or min(sample, mask) < 0
-                or row['object_key'] != f'image_{sample:03d}__mask_{mask}'
+                or row['object_key'] != f'image_{sample:03d}__mask_{mask:03d}'
                 or row['stable_id'] != f'D1GT:{sample}/{mask}.png'):
             raise ValueError('GT object identity differs from its sample/mask mapping')
         for kind, name in (('image', 'img.jpg'), ('mask', f'{mask}.png')):

@@ -18,7 +18,7 @@ class ICBenchGTMeshTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.selection = {'schema': 'icbench_gt36_selection/v1', 'objects': []}
         for index in range(36):
-            sample, mask = index % 29, index + 100
+            sample, mask = index % 29, index + 1
             folder = self.root / 'sources' / str(sample)
             folder.mkdir(parents=True, exist_ok=True)
             image_path, mask_path = folder / 'img.jpg', folder / f'{mask}.png'
@@ -30,7 +30,7 @@ class ICBenchGTMeshTests(unittest.TestCase):
             alpha[490:500, 490:500] = 255  # Retain a disconnected GT component.
             Image.fromarray(alpha).save(mask_path)
             self.selection['objects'].append({'sample_id': sample, 'mask_id': mask,
-                'object_key': f'image_{sample:03d}__mask_{mask}', 'stable_id': f'D1GT:{sample}/{mask}.png',
+                'object_key': f'image_{sample:03d}__mask_{mask:03d}', 'stable_id': f'D1GT:{sample}/{mask}.png',
                 'image': {'path': str(image_path), 'sha256': batch.sha256(image_path)},
                 'mask': {'path': str(mask_path), 'sha256': batch.sha256(mask_path)}})
 
@@ -123,7 +123,7 @@ class ICBenchGTMeshTests(unittest.TestCase):
             self.assertNotIn('--fixed-crop', command)
         for command in renders:
             self.assertEqual(command.index('--labels') - command.index('--assets'), 2)
-        self.assertIn('image_000__mask_100', (output / 'index.html').read_text(encoding='utf8'))
+        self.assertIn('image_000__mask_001', (output / 'index.html').read_text(encoding='utf8'))
 
 
 if __name__ == '__main__':
