@@ -31,3 +31,31 @@ new clay/normal previews before drawing a quality conclusion. A completed run,
 unchanged mask, or silhouette IoU is not user acceptance of mesh quality.
 
 The completed seed42 integration verification is recorded in [RESULTS.md](RESULTS.md).
+
+## Original-color control with the same new alpha
+
+To isolate conditioning color, reuse `trellis_alpha/source_receipt.json` from
+the completed run, before the pink stage. Use its clean producer checkout
+`d5b9d15f845e13b2ef26e09e01481b46f5a52559`; check GPU availability and all source
+locks first. Do not rerun segmentation, substitute the historical receipt,
+change production defaults, or reuse an existing output directory.
+
+```bash
+PINK_RUN="$COLORPEEL_RUN_ROOT/wood_spoon_soft_alpha_v1/20261105__sam_soft_pink__d5b9d15__42"
+CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+/var/tmp/colorpeel-r12user5/assets/trellis2_v1/env/bin/python -u -B \
+  -m experiments.subject_trellis_counterfactual_v1.run \
+  --source-receipt "$PINK_RUN/trellis_alpha/source_receipt.json" \
+  --output "$COLORPEEL_RUN_ROOT/wood_spoon_soft_alpha_v1/NEW_ORIGINAL/trellis" \
+  --encoder /var/tmp/colorpeel-r12user5/assets/trellis2_v1/dino_timm_v2/model \
+  --model-revisions experiments/subject_trellis_spoons_v1/model_revisions.json \
+  --seed 42 --skip-glb
+```
+
+After generation completes, `experiments.subject_pink_input_repro_v1.compare`
+can compare the actual conditioning pixels, model/sampler settings and all five
+native arrays against the historical mesh and the pink control. Its output must
+be a new JSON path outside the compared mesh directories. This does not train
+or expand any branch dataset.
+
+Completed original-color control: [ORIGINAL_RESULT.md](ORIGINAL_RESULT.md).
