@@ -111,7 +111,22 @@ def model_bundle(output, pinned_revisions=None):
     return args, {'revisions': revisions, 'sha256': hashes}
 
 
-def run(output, encoder, *, source_receipt=None, model_revisions=None, export_glb=True, seed=42):
+def fixed_crop_condition(source, crop):
+    """Diagnostic-only crop override; retain official float32 RGB*alpha and padding."""
+    import numpy as np
+    from PIL import Image
+    if (source.mode != 'RGBA' or source.size != (512, 512) or len(crop) != 4
+            or any(type(value) is not int for value in crop)):
+        raise ValueError('fixed crop requires RGBA512 and four integer coordinates')
+    x0, y0, x1, y1 = crop
+    if not 0 < x1 - x0 == y1 - y0 <= 512:
+        raise ValueError('fixed crop must be a positive square no larger than512')
+    rgba = np.asarray(source.crop(crop)).astype(np.float32) / 255
+    return Image.fromarray((rgba[..., :3] * rgba[..., 3:4] * 255).astype(np.uint8))
+
+
+def run(output, encoder, *, source_receipt=None, model_revisions=None, export_glb=True, seed=42,
+        fixed_crop=None):
     if type(seed) is not int or not 0 <= seed < 2**32:
         raise ValueError('seed must be an integer in [0, 2**32)')
     output = resolve_run_dir(output)
@@ -125,6 +140,12 @@ def run(output, encoder, *, source_receipt=None, model_revisions=None, export_gl
 
     git, inputs = git_info(), verify_inputs()
     cutout = SOURCE / 'source/pink/cutout512.png' if source_receipt is None else Path(inputs['cutout_path'])
+    if fixed_crop is not None:
+        from PIL import Image
+        if source_receipt is None:
+            raise ValueError('diagnostic fixed crop requires an explicit source receipt')
+        with Image.open(cutout) as source:
+            fixed_crop_condition(source, fixed_crop)  # Validate before loading models.
     if source_receipt is not None and any(output.is_relative_to(path.parent) for path in
             (source_receipt, *(Path(inputs[name + '_path']) for name in ('cutout', 'source', 'mask')))):
         raise ValueError('new output must be outside the supplied source directories')
@@ -142,6 +163,8 @@ def run(output, encoder, *, source_receipt=None, model_revisions=None, export_gl
         'pipeline_type': '1024_cascade', 'input': inputs, 'encoder': str(encoder),
         'encoder_receipt_sha256': sha256(receipt_path), 'training': False,
         'counterfactual_expansion': False, 'generated_assets': 0, 'export_glb': export_glb}
+    if fixed_crop is not None:
+        state['diagnostic_fixed_crop_xyxy'] = list(fixed_crop)
     if source_receipt is not None:
         provenance = output / 'provenance'
         provenance.mkdir()
@@ -196,7 +219,8 @@ def run(output, encoder, *, source_receipt=None, model_revisions=None, export_gl
         pipe.cuda()
         shutil.copyfile(cutout, output / 'source_cutout512.png')
         with Image.open(output / 'source_cutout512.png') as source:
-            condition = pipe.preprocess_image(source)
+            condition = (pipe.preprocess_image(source) if fixed_crop is None
+                         else fixed_crop_condition(source, fixed_crop))
         condition.save(output / 'actual_condition.png')
         state.update(stage='single_asset_generation', sampling={name: args[name + '_sampler']['params']
             for name in ('sparse_structure', 'shape_slat', 'tex_slat')})
@@ -257,7 +281,8 @@ if __name__ == '__main__':
     parser.add_argument('--model-revisions', type=Path)
     parser.add_argument('--skip-glb', action='store_true')
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--fixed-crop', type=int, nargs=4, help='Diagnostic XYXY override; no automatic alpha bbox')
     args = parser.parse_args()
     run(args.output, args.encoder.resolve(), source_receipt=args.source_receipt,
         model_revisions=json.loads(args.model_revisions.read_text()) if args.model_revisions else None,
-        export_glb=not args.skip_glb, seed=args.seed)
+        export_glb=not args.skip_glb, seed=args.seed, fixed_crop=args.fixed_crop)
