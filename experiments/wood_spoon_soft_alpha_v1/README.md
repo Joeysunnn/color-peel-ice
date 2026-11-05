@@ -29,3 +29,5 @@ export COLORPEEL_OUTPUT_ROOT="$COLORPEEL_RUN_ROOT"
 Inspect `input_comparison.json`, the semantic and conditioning receipts, and the
 new clay/normal previews before drawing a quality conclusion. A completed run,
 unchanged mask, or silhouette IoU is not user acceptance of mesh quality.
+
+The completed seed42 integration verification is recorded in [RESULTS.md](RESULTS.md).

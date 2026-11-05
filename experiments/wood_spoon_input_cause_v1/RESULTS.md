@@ -81,6 +81,10 @@ intervention. Further mask/crop/RGB trials stopped once the isolated operation
 reproduced the target symptom. Production pink default remains unchanged;
 no training, S11 expansion, geometry smoothing or quality acceptance occurred.
 
+Follow-up: the separately recorded [soft-alpha integration verification](../wood_spoon_soft_alpha_v1/RESULTS.md)
+now implements this separation and tests one fresh pink-conditioned spoon mesh.
+The diagnostic runs and conclusions above remain the historical record.
+
 ## Evidence and validation
 
 Server root:
