@@ -26,6 +26,11 @@ def check_source_receipt(path):
     path = Path(path).resolve()
     record = json.loads(path.read_text())
     paths = {name: Path(record[name + '_path']) for name in ('cutout', 'source', 'mask')}
+    alpha_fields = ('conditioning_alpha_path', 'conditioning_alpha_sha256')
+    if any(key in record for key in alpha_fields):
+        if not all(key in record for key in alpha_fields):
+            raise ValueError('conditioning alpha requires both path and sha256')
+        paths['conditioning_alpha'] = Path(record['conditioning_alpha_path'])
     if any(not value.is_absolute() for value in paths.values()):
         raise ValueError('source receipt paths must be absolute')
     hashes = {str(value): sha256(value) for value in paths.values()}
@@ -42,12 +47,24 @@ def check_source_receipt(path):
     with Image.open(paths['cutout']) as image, Image.open(paths['mask']) as mask:
         if image.mode != 'RGBA' or image.size != (512, 512) or mask.size != image.size:
             raise ValueError('require aligned RGBA512 cutout and mask')
-        if image.getchannel('A').tobytes() != mask.convert('L').tobytes():
+        cutout_alpha = image.getchannel('A').tobytes()
+        mask_bytes = mask.convert('L').tobytes()
+        alpha_matches_mask = cutout_alpha == mask_bytes
+        if 'conditioning_alpha' in paths:
+            if mask.mode != 'L' or not set(mask_bytes) <= {0, 255} or not any(mask_bytes):
+                raise ValueError('conditioning alpha requires a nonempty binary semantic mask')
+            with Image.open(paths['conditioning_alpha']) as alpha:
+                if alpha.mode != 'L' or alpha.size != (512, 512):
+                    raise ValueError('require L512 conditioning alpha')
+                if cutout_alpha != alpha.tobytes():
+                    raise ValueError('cutout alpha differs from conditioning alpha')
+        elif not alpha_matches_mask:
             raise ValueError('cutout alpha differs from receipt mask')
         if any(a == 0 and (r or g or b) for r, g, b, a in image.getdata()):
             raise ValueError('transparent cutout RGB must be zero')
     hashes[str(path)] = sha256(path)
-    return {'status': 'passed', 'sha256': hashes, 'alpha_matches_mask': True,
+    return {'status': 'passed', 'sha256': hashes, 'alpha_matches_mask': alpha_matches_mask,
+            **({'alpha_matches_conditioning_alpha': True} if 'conditioning_alpha' in paths else {}),
             'transparent_rgb_zero': True, 'source_receipt': str(path),
             **{name + '_path': str(value) for name, value in paths.items()}}
 

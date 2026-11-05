@@ -68,18 +68,25 @@ be prepared before training it.
   letterbox them to 512 when needed. Original/recolored Subject photographs keep
   the scene; their reconstruction loss uses only the respective instance mask.
 - Subject geometry is newly sampled from each instance's **pink-conditioned**
-  RGBA input (temporary default: historical Lab/LCh hue 0). Only conditioning
-  RGB changes; binary SAM alpha is retained exactly, with no historical mask
-  repair. `trellis_input/source_receipt.json` binds the original input receipt
-  and the new condition. Original photo anchors, Qwen initialization and C/M/T
-  still use the original photograph. This default applies to every instance;
-  no color search or automatic retry is performed.
+  RGBA input (temporary default: historical Lab/LCh hue 0). The semantic SAM
+  mask remains binary and unchanged. A fresh pinned BiRefNet inference supplies
+  separate soft alpha: complete nonzero-alpha connected regions are associated
+  to SAM instances, preserving all selected opacity values and their halos.
+  A region shared by multiple instances, or less than 80% SAM coverage, fails
+  Subject preparation explicitly; there is no hard-mask clipping or fallback.
+  `trellis_alpha` preserves full-native RGBA then jointly resizes it with
+  LANCZOS. `trellis_input/source_receipt.json` binds that matting receipt and
+  the pink condition, whose alpha is byte-identical to the matting alpha.
+  Canonical `mask_path`/`image512_path` remain the original SAM mask/photo;
+  `conditioning_alpha_path` is used only for TRELLIS. Original photo anchors,
+  Qwen initialization and C/M/T still use the original photograph. This applies
+  to every instance; no color search or automatic retry is performed.
   Exact-white foreground pixels are retained as neutral white without changing
-  the SAM alpha; an all-white condition is explicitly recorded as unchanged.
+  either mask; an all-white condition is explicitly recorded as unchanged.
   The eight synthetic views preserve the exact fitted source camera and crop,
   with studio environment and blue/green x metallic 0/1 x roughness .15/.85. Both
-  review and actual-render source-mask IoU must reach 0.80; new edge clipping is
-  rejected. These checks block obvious mismatches, not certify 3D fidelity. Photo
+  review (conditioning alpha) and actual-render (SAM) IoU must reach 0.80; new
+  edge clipping is rejected. These checks block obvious mismatches, not certify 3D fidelity. Photo
   recolors use the established LCh blue240/green120 transformations. No historic
   pink mesh, reviewed center11 image or original TRELLIS material is reused.
 - C/M/T use an automatically eroded object ROI. Material medians are estimates,
@@ -106,7 +113,7 @@ be prepared before training it.
 ## Outputs
 
 Preparation: discovery, instance masks/crops, isolated initialization receipts,
-per-object pink TRELLIS conditioning receipt and new asset, SuperMat maps, ROI
+per-object soft-alpha and pink TRELLIS conditioning receipts and new asset, SuperMat maps, ROI
 evidence and C/S/M/T dataset records. The prepared/object manifests record the
 conditioning policy and receipt hash.
 All artifacts have source hashes; arbitrary images cannot attach old Mailbox data.

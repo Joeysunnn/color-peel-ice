@@ -193,6 +193,26 @@ class SingleImageSubjectTests(unittest.TestCase):
 
         actual_mask = np.zeros((512, 512))
         actual_mask[20:60, 20:60] = 1  # Nonempty and in-frame, but disjoint from the source object.
+        # A mesh can align with geometry alpha while failing the semantic SAM guard.
+        receipt_path = self.root / 'inputs/source_receipt.json'
+        receipt = json.loads(receipt_path.read_text())
+        soft_path = self.root / 'inputs/conditioning_alpha.png'
+        soft = (actual_mask * 230).astype(np.uint8)
+        Image.fromarray(soft).save(soft_path)
+        rgba = np.zeros((512, 512, 4), dtype=np.uint8)
+        rgba[actual_mask > 0, :3] = [180, 100, 40]
+        rgba[..., 3] = soft
+        Image.fromarray(rgba).save(receipt['cutout_path'])
+        receipt.update(conditioning_alpha_path=str(soft_path), conditioning_alpha_sha256=subject.sha256(soft_path),
+                       cutout_sha256=subject.sha256(receipt['cutout_path']))
+        receipt['source_locks'].update({str(soft_path): subject.sha256(soft_path),
+                                       receipt['cutout_path']: receipt['cutout_sha256']})
+        subject.write_json(receipt_path, receipt)
+        (trellis / 'source_cutout512.png').write_bytes(Path(receipt['cutout_path']).read_bytes())
+        state_path = trellis / 'repro_outputs/status.json'
+        state = json.loads(state_path.read_text())
+        state['source_receipt']['sha256'] = subject.sha256(receipt_path)
+        subject.write_json(state_path, state)
         torch = ModuleType('torch')
         torch.load = MagicMock(return_value={'vertices': Tensor(np.eye(3)), 'faces': Tensor([[0, 1, 2]])})
         torch.zeros = MagicMock(return_value=Tensor([0]))

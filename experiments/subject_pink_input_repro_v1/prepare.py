@@ -31,11 +31,20 @@ def prepare(source_receipt, output, hue_degrees=0.0):
         rgb, mask = np.asarray(image), np.asarray(mask_image)
     if not set(np.unique(mask)) <= {0, 255} or not mask.any():
         raise ValueError('require an unchanged nonempty binary mask')
+    conditioning_alpha = 'conditioning_alpha_path' in original
+    if conditioning_alpha:
+        # Matting RGB includes its RGBA resize; never replace it with image512 RGB.
+        with Image.open(original['cutout_path']) as image:
+            rgba = np.asarray(image)
+        rgb, alpha = rgba[..., :3], rgba[..., 3]
+        locks[original['conditioning_alpha_path']] = original['conditioning_alpha_sha256']
+    else:
+        alpha = mask
     # This helper derives alpha only. Never call the historical mask-repair function.
-    soft_alpha, alpha_parameters = derive_repaired_alpha(mask > 0)
+    soft_alpha, alpha_parameters = derive_repaired_alpha(alpha > 0)
     # Exact white is neutral; Lab matrix roundoff otherwise puts its L above100.
-    # Exclude it from RGB editing only, never from the binary segmentation alpha.
-    editable = (mask > 0) & np.any(rgb != 255, axis=-1)
+    # Exclude it from RGB editing only, never from the supplied alpha.
+    editable = (alpha > 0) & np.any(rgb != 255, axis=-1)
     if editable.any():
         colored, metrics, _ = recolor(rgb, editable.astype(np.uint8) * 255,
             np.where(editable, soft_alpha, 0).astype(np.uint16), hue_degrees)
@@ -45,20 +54,25 @@ def prepare(source_receipt, output, hue_degrees=0.0):
         metrics = {'status': 'unchanged_all_foreground_exact_white', 'object_pixel_count': 0,
             'outside_mask_changed_pixel_count': 0, 'rgb_clipping_pixel_count': 0, 'soft_edge_pixel_count': 0}
     metrics.update(source_mask_pixel_count=int((mask > 0).sum()),
-                   pure_white_support_pixels_preserved=int(((mask > 0) & ~editable).sum()))
+                   pure_white_support_pixels_preserved=int(((alpha > 0) & ~editable).sum()))
     output = fresh(output)
     cutout = output / 'cutout512.png'
-    Image.fromarray(np.dstack([np.where(mask[..., None] > 0, colored, 0), mask])).save(cutout)
+    Image.fromarray(np.dstack([np.where(alpha[..., None] > 0, colored, 0), alpha])).save(cutout)
     locks[str(cutout)] = sha256(cutout)
     receipt = {**original, 'cutout_path': str(cutout), 'cutout_sha256': locks[str(cutout)],
         'source_locks': locks, 'conditioning_recolor': {
             'scope': 'TRELLIS conditioning only; original photo anchors and C/M/T inputs unchanged',
-            'method': f'historical deterministic Lab/LCh hue={hue_degrees:g} with soft-alpha RGB blending',
+            'method': (f'historical deterministic Lab/LCh hue={hue_degrees:g} with soft-alpha RGB blending'
+                + (' derived from conditioning_alpha>0; supplied conditioning alpha unchanged'
+                   if conditioning_alpha else '')),
             'hue_degrees': float(hue_degrees), 'mask_policy': 'unchanged supplied binary SAM mask; no mask repair',
             'parent_receipt_path': str(source_receipt), 'parent_receipt_sha256': parent_sha,
             'original_cutout_path': original['cutout_path'],
             'original_cutout_sha256': original['cutout_sha256'],
             'soft_alpha_parameters': alpha_parameters, 'recolor_metrics': metrics}}
+    if conditioning_alpha:
+        receipt.update(alpha_matches_mask=bool(np.array_equal(alpha, mask)),
+                       alpha_matches_conditioning_alpha=True)
     check_locks(locks)
     write_json(output / 'source_receipt.json', receipt)
     check_source_receipt(output / 'source_receipt.json')

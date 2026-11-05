@@ -171,12 +171,13 @@ def check_source_framing(rendered_mask, source_mask):
 
 def render_dataset(inputs, trellis_run, output, category):
     """Use the newly sampled instance mesh; never resolve historical Mailbox assets."""
-    from experiments.subject_trellis_counterfactual_v1.run import ASSETS, OFFICIAL
+    from experiments.subject_trellis_counterfactual_v1.run import ASSETS, OFFICIAL, check_source_receipt
     from experiments.subject_trellis_dataset_v1.build import array_hash
 
     inputs, trellis_run = Path(inputs).resolve(), Path(trellis_run).resolve()
     receipt_path = inputs / 'source_receipt.json'
     receipt = json.loads(receipt_path.read_text())
+    check_source_receipt(receipt_path)
     state_path = trellis_run / 'repro_outputs/status.json'
     state = json.loads(state_path.read_text())
     if (state.get('status') != 'generated_pending_user_review' or state.get('generated_assets') != 1
@@ -194,6 +195,9 @@ def render_dataset(inputs, trellis_run, output, category):
              str(state_path): sha256(state_path), str(light_path): STUDIO_SHA}
     check_locks(locks)
     camera_receipt, quality = reviewed_source_camera(json.loads(review_path.read_text()))
+    quality['review_mask_reference'] = ('conditioning_alpha' if 'conditioning_alpha_path' in receipt
+                                        else 'receipt_mask')
+    quality['actual_render_mask_reference'] = 'semantic_SAM_mask'
     with Image.open(receipt['mask_path']) as opened_mask:
         source_mask = np.asarray(opened_mask) > 127
     output = fresh(output)

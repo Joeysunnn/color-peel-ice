@@ -195,7 +195,7 @@ class SingleImagePipelineTests(unittest.TestCase):
         self.assertFalse(any('trellis' in ' '.join(command).lower() for command in calls))
         self.assertFalse(any('run_supermat_batch' in ' '.join(command) for command in calls))
 
-    def test_subject_uses_pink_receipt_while_color_keeps_original_input(self):
+    def test_subject_uses_soft_alpha_pink_while_color_keeps_original_input(self):
         from PIL import Image, ImageDraw
         from experiments.subject_pink_input_repro_v1.prepare import prepare as prepare_pink
         sources = self.root / 'sources'
@@ -210,16 +210,40 @@ class SingleImagePipelineTests(unittest.TestCase):
         output = self.root / 'prepare'
         folder = output / 'objects/object_001'
         original_receipt = folder / 'input/source_receipt.json'
+        matte_receipt = folder / 'trellis_alpha/source_receipt.json'
         pink_receipt = folder / 'trellis_input/source_receipt.json'
         stages = []
 
         def execute(command, log, gpu):
             command = [str(value) for value in command]
             target = Path(command[command.index('--output') + 1])
-            if 'experiments.subject_pink_input_repro_v1.prepare' in command:
+            if 'src.methods.colorpeel_ice.subject_alpha' in command:
+                self.assertEqual(command[0], pipeline.RUNTIME['trellis_python'])
                 self.assertEqual(Path(command[command.index('--source-receipt') + 1]), original_receipt)
+                self.assertEqual(Path(command[command.index('--objects-json') + 1]), output / 'segmentation/objects.json')
+                self.assertEqual(command[command.index('--object-id') + 1], 'object_001')
+                target.mkdir()
+                soft = alpha.point(lambda value: 254 if value else 0)
+                soft_path, cutout = target / 'alpha512.png', target / 'cutout512.png'
+                soft.save(soft_path)
+                with Image.open(image) as opened:
+                    rgba = opened.convert('RGBA')
+                    rgba.putalpha(soft)
+                    rgba.paste((0, 0, 0, 0), (0, 0, 512, 512), soft.point(lambda value: 0 if value else 255))
+                    rgba.save(cutout)
+                receipt = pipeline.read(original_receipt)
+                locks = {**receipt['source_locks'], str(original_receipt): pipeline.sha256(original_receipt),
+                         str(soft_path): pipeline.sha256(soft_path), str(cutout): pipeline.sha256(cutout)}
+                self.write(matte_receipt, {**receipt, 'source_locks': locks,
+                    'cutout_path': str(cutout), 'cutout_sha256': locks[str(cutout)],
+                    'conditioning_alpha_path': str(soft_path), 'conditioning_alpha_sha256': locks[str(soft_path)],
+                    'semantic_receipt_path': str(original_receipt), 'semantic_receipt_sha256': locks[str(original_receipt)]})
+                stages.append('matte')
+                return
+            if 'experiments.subject_pink_input_repro_v1.prepare' in command:
+                self.assertEqual(Path(command[command.index('--source-receipt') + 1]), matte_receipt)
                 self.assertEqual(command[command.index('--hue-degrees') + 1], '0')
-                prepare_pink(original_receipt, target, 0)
+                prepare_pink(matte_receipt, target, 0)
                 stages.append('pink')
                 return
             target.mkdir(parents=True)
@@ -259,9 +283,9 @@ class SingleImagePipelineTests(unittest.TestCase):
             result = pipeline.prepare(image, output, ['subject', 'color'], 0, pipeline.RUNTIME)
         state = pipeline.read(result)
         self.assertEqual(state['status'], 'prepared', state['objects'][0]['failures'])
-        self.assertEqual(stages, ['pink', 'trellis', 'subject', 'color_original'])
+        self.assertEqual(stages, ['matte', 'pink', 'trellis', 'subject', 'color_original'])
         self.assertFalse(state['training_started'])
-        self.assertEqual(state['subject_conditioning_policy'], 'pink_hue0_for_trellis/v1')
+        self.assertEqual(state['subject_conditioning_policy'], 'sam_semantics_biref_soft_alpha_pink/v1')
         conditioning = state['objects'][0]['trellis_conditioning']
         self.assertEqual(conditioning['source_receipt_sha256'], pipeline.sha256(pink_receipt))
         self.assertEqual(conditioning['source_receipt'], str(pink_receipt))
@@ -269,6 +293,9 @@ class SingleImagePipelineTests(unittest.TestCase):
         self.assertNotEqual(original['cutout_sha256'], pink['cutout_sha256'])
         for key in ('image512_path', 'image512_sha256', 'mask_path', 'mask_sha256'):
             self.assertEqual(original[key], pink[key])
+        with Image.open(pink['cutout_path']) as opened, Image.open(pink['conditioning_alpha_path']) as soft:
+            self.assertEqual(opened.getchannel('A').tobytes(), soft.tobytes())
+            self.assertNotEqual(opened.getchannel('A').tobytes(), alpha.tobytes())
         self.assertEqual({path: path.read_bytes() for path in original_bytes}, original_bytes)
 
 

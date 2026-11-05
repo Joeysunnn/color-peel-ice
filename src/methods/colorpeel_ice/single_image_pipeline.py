@@ -31,7 +31,7 @@ RUNTIME = {
 }
 OFFLINE = {'PYTHONDONTWRITEBYTECODE': '1', 'HF_HUB_OFFLINE': '1',
            'TRANSFORMERS_OFFLINE': '1', 'DIFFUSERS_OFFLINE': '1'}
-SUBJECT_CONDITIONING_POLICY = 'pink_hue0_for_trellis/v1'
+SUBJECT_CONDITIONING_POLICY = 'sam_semantics_biref_soft_alpha_pink/v1'
 
 
 def read(path):
@@ -103,14 +103,23 @@ def prepare(image, output, branches, gpu, runtime):
                     item['failures'][branch] = 'initializer unavailable: ' + '; '.join(initialized['unavailable_branches'])
                 if 'subject' in available:
                     try:
+                        matte_input = folder / 'trellis_alpha'
+                        stage([runtime['trellis_python'], '-B', '-m', 'src.methods.colorpeel_ice.subject_alpha',
+                            '--source-receipt', folder / 'input/source_receipt.json',
+                            '--objects-json', output / 'segmentation/objects.json', '--object-id', record['id'],
+                            '--output', matte_input], record['id'] + '_trellis_alpha')
                         trellis_input = folder / 'trellis_input'
                         stage([runtime['python'], '-B', '-m', 'experiments.subject_pink_input_repro_v1.prepare',
-                            '--source-receipt', folder / 'input/source_receipt.json',
+                            '--source-receipt', matte_input / 'source_receipt.json',
                             '--output', trellis_input, '--hue-degrees', '0'], record['id'] + '_trellis_input')
                         conditioning_receipt = trellis_input / 'source_receipt.json'
+                        condition = read(conditioning_receipt)
                         item['trellis_conditioning'] = {'policy': SUBJECT_CONDITIONING_POLICY,
                             'hue_degrees': 0.0, 'source_receipt': str(conditioning_receipt),
-                            'source_receipt_sha256': sha256(conditioning_receipt)}
+                            'source_receipt_sha256': sha256(conditioning_receipt),
+                            'semantic_receipt_path': condition['semantic_receipt_path'],
+                            'conditioning_alpha_path': condition['conditioning_alpha_path'],
+                            'conditioning_alpha_sha256': condition['conditioning_alpha_sha256']}
                         stage([runtime['trellis_python'], '-B', '-m', 'experiments.subject_trellis_counterfactual_v1.run',
                             '--output', folder / 'trellis', '--encoder', runtime['trellis_encoder'],
                             '--source-receipt', conditioning_receipt, '--model-revisions',
