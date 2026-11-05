@@ -71,3 +71,10 @@ Local comparison and full mesh review:
 `C:/Users/lenovo/.codex/visualizations/2026/11/04/01a1a4e9-817a-7d01-ae16-5db6ed9b42b7/wood_spoon_soft_original_20261105/index.html`.
 Downloaded archive SHA256:
 `a33eeaad0793f5148e805b4eb5075ec696e813721fed96f929d06c9f8ea6c0f9`.
+
+## Subsequent user review, 2026-11-05
+
+The user visually prefers **new soft alpha + original** over pink for this
+wood spoon. This is a relative mesh-quality judgment, not blanket acceptance
+of downstream learning. The contrasting Mailbox preference and color/alpha
+observation are preserved in [the cross-subject user record](../trellis_conditioning_observations.md).

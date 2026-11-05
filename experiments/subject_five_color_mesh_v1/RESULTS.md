@@ -88,3 +88,10 @@ Local review root:
 
 Both GPU jobs ended and GPU occupancy was checked afterward. Existing source
 assets/checkpoints and other tasks were preserved; no model download occurred.
+
+## Subsequent user review, 2026-11-05
+
+The user judges the Mailbox original-color mesh poor and the pink result better,
+while preferring original over pink for the wood spoon. See [the cross-subject
+user record](../trellis_conditioning_observations.md). This review is retained
+separately from the measured IoUs and unchanged Subject guard above.
