@@ -56,3 +56,6 @@ one frozen reference camera plus three common canonical views per object.
 Also retain independently fitted PBR/clay/normal previews, clearly labeled
 as different fitted cameras. A silhouette score or completed run is not user
 acceptance of identity, surface quality, hidden geometry or downstream learning.
+
+Completed16-run results, exact duplicate/baseline checks and gallery locations:
+[RESULTS.md](RESULTS.md).
