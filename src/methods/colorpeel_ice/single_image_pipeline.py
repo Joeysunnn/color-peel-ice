@@ -31,7 +31,7 @@ RUNTIME = {
 }
 OFFLINE = {'PYTHONDONTWRITEBYTECODE': '1', 'HF_HUB_OFFLINE': '1',
            'TRANSFORMERS_OFFLINE': '1', 'DIFFUSERS_OFFLINE': '1'}
-SUBJECT_CONDITIONING_POLICY = 'sam_semantics_biref_soft_alpha_pink/v1'
+SUBJECT_CONDITIONING_POLICY = 'sam_semantics_biref_soft_alpha_original_pink_selection/v1'
 
 
 def read(path):
@@ -56,8 +56,73 @@ def execute(command, log, gpu):
             env={**os.environ, **OFFLINE, 'CUDA_VISIBLE_DEVICES': str(gpu)})
 
 
+def prepare_subject_geometry(folder, objects_json, object_id, runtime, stage):
+    """Generate two fixed candidates independently and bind the selected receipt/run pair."""
+    from .single_image_subject import check_locks
+    folder = Path(folder).resolve()
+    semantic = folder / 'input/source_receipt.json'
+    matte, pink = folder / 'trellis_alpha', folder / 'trellis_input'
+    candidates = folder / 'trellis_candidates'
+    candidates.mkdir(parents=True, exist_ok=False)
+    attempts_path = candidates / 'attempts.json'
+    stage([runtime['trellis_python'], '-B', '-m', 'src.methods.colorpeel_ice.subject_alpha',
+        '--source-receipt', semantic, '--objects-json', objects_json, '--object-id', object_id,
+        '--output', matte], object_id + '_trellis_alpha')
+    receipts = {'original': matte / 'source_receipt.json', 'pink': pink / 'source_receipt.json'}
+    attempts = {name: {'source_receipt': str(path), 'trellis_run': str(candidates / name), 'status': 'pending'}
+                for name, path in receipts.items()}
+    try:
+        stage([runtime['python'], '-B', '-m', 'experiments.subject_pink_input_repro_v1.prepare',
+            '--source-receipt', receipts['original'], '--output', pink, '--hue-degrees', '0'],
+            object_id + '_trellis_input')
+    except Exception as error:
+        attempts['pink'].update(status='input_failed', error=f'{type(error).__name__}: {error}')
+    write_json(attempts_path, attempts)
+    for name, receipt in receipts.items():
+        if attempts[name]['status'] == 'input_failed':
+            continue
+        try:
+            stage([runtime['trellis_python'], '-B', '-m', 'experiments.subject_trellis_counterfactual_v1.run',
+                '--output', candidates / name, '--encoder', runtime['trellis_encoder'],
+                '--source-receipt', receipt, '--model-revisions',
+                ROOT / 'experiments/subject_trellis_spoons_v1/model_revisions.json', '--seed', '42', '--skip-glb'],
+                object_id + '_trellis_' + name)
+            attempts[name]['status'] = 'completed'
+        except Exception as error:
+            attempts[name].update(status='generation_failed', error=f'{type(error).__name__}: {error}')
+        write_json(attempts_path, attempts)
+    selection_path = folder / 'trellis_selection/selection.json'
+    stage([runtime['trellis_python'], '-B', '-m', 'src.methods.colorpeel_ice.subject_mesh_selection',
+        '--semantic-receipt', semantic, '--candidate', f'original={candidates / "original"}',
+        '--candidate', f'pink={candidates / "pink"}', '--object-id', object_id, '--seed', '42',
+        '--output', selection_path.parent], object_id + '_trellis_selection')
+    selection = read(selection_path)
+    selected = selection['selected']
+    if selected is None:
+        raise ValueError(f'No eligible Subject mesh; selection is blocked: {selection_path}')
+    row = next(item for item in selection['candidates'] if item['name'] == selected)
+    if (selected not in receipts or not row['eligible']
+            or Path(row['source_receipt']).resolve() != receipts[selected]
+            or Path(row['trellis_run']).resolve() != candidates / selected
+            or attempts[selected]['status'] != 'completed'):
+        raise ValueError('Subject selector returned an inconsistent receipt/run pair')
+    receipt = receipts[selected]
+    condition = read(receipt)
+    locks = {**selection['source_locks'], str(selection_path): sha256(selection_path),
+             str(attempts_path): sha256(attempts_path)}
+    check_locks(locks)
+    return {'policy': SUBJECT_CONDITIONING_POLICY, 'selected': selected, 'seed': 42,
+        'source_receipt': str(receipt), 'source_receipt_sha256': sha256(receipt),
+        'trellis_run': str(candidates / selected), 'selection_path': str(selection_path),
+        'selection_sha256': locks[str(selection_path)], 'source_locks': locks,
+        'semantic_receipt_path': condition['semantic_receipt_path'],
+        'semantic_receipt_sha256': condition['semantic_receipt_sha256'],
+        'conditioning_alpha_path': condition['conditioning_alpha_path'],
+        'conditioning_alpha_sha256': condition['conditioning_alpha_sha256']}
+
+
 def prepare(image, output, branches, gpu, runtime):
-    from .single_image_subject import prepare_inputs
+    from .single_image_subject import check_locks, prepare_inputs
     revision = git_info()
     image, output = Path(image).resolve(), fresh(output)
     state = {'schema': 'colorpeel_single_image_prepared/v1', 'status': 'preparing',
@@ -103,33 +168,21 @@ def prepare(image, output, branches, gpu, runtime):
                     item['failures'][branch] = 'initializer unavailable: ' + '; '.join(initialized['unavailable_branches'])
                 if 'subject' in available:
                     try:
-                        matte_input = folder / 'trellis_alpha'
-                        stage([runtime['trellis_python'], '-B', '-m', 'src.methods.colorpeel_ice.subject_alpha',
-                            '--source-receipt', folder / 'input/source_receipt.json',
-                            '--objects-json', output / 'segmentation/objects.json', '--object-id', record['id'],
-                            '--output', matte_input], record['id'] + '_trellis_alpha')
-                        trellis_input = folder / 'trellis_input'
-                        stage([runtime['python'], '-B', '-m', 'experiments.subject_pink_input_repro_v1.prepare',
-                            '--source-receipt', matte_input / 'source_receipt.json',
-                            '--output', trellis_input, '--hue-degrees', '0'], record['id'] + '_trellis_input')
-                        conditioning_receipt = trellis_input / 'source_receipt.json'
-                        condition = read(conditioning_receipt)
-                        item['trellis_conditioning'] = {'policy': SUBJECT_CONDITIONING_POLICY,
-                            'hue_degrees': 0.0, 'source_receipt': str(conditioning_receipt),
-                            'source_receipt_sha256': sha256(conditioning_receipt),
-                            'semantic_receipt_path': condition['semantic_receipt_path'],
-                            'conditioning_alpha_path': condition['conditioning_alpha_path'],
-                            'conditioning_alpha_sha256': condition['conditioning_alpha_sha256']}
-                        stage([runtime['trellis_python'], '-B', '-m', 'experiments.subject_trellis_counterfactual_v1.run',
-                            '--output', folder / 'trellis', '--encoder', runtime['trellis_encoder'],
-                            '--source-receipt', conditioning_receipt, '--model-revisions',
-                            ROOT / 'experiments/subject_trellis_spoons_v1/model_revisions.json', '--skip-glb'],
-                            record['id'] + '_trellis')
+                        condition = prepare_subject_geometry(folder, output / 'segmentation/objects.json',
+                                                             record['id'], runtime, stage)
+                        item['trellis_conditioning'] = condition
                         stage([runtime['trellis_python'], '-B', '-m', 'src.methods.colorpeel_ice.single_image_subject',
-                            '--stage', 'render', '--inputs', trellis_input, '--trellis-run', folder / 'trellis',
+                            '--stage', 'render', '--inputs', Path(condition['source_receipt']).parent,
+                            '--trellis-run', condition['trellis_run'],
                             '--output', folder / 'subject', '--category', initialized['subject_category']],
                             record['id'] + '_subject11')
-                        item['datasets']['subject'] = read(folder / 'subject/subject.json')
+                        subject_data = read(folder / 'subject/subject.json')
+                        subject_data['source_locks'].update(condition['source_locks'])
+                        check_locks(subject_data['source_locks'])
+                        subject_data['trellis_selection'] = {key: condition[key]
+                            for key in ('selected', 'selection_path', 'selection_sha256')}
+                        write_json(folder / 'subject/subject.json', subject_data)
+                        item['datasets']['subject'] = subject_data
                     except Exception as error:
                         item['failures']['subject'] = f'{type(error).__name__}: {error}'
                 cmt = [branch for branch in available if branch != 'subject']
@@ -312,8 +365,8 @@ def train(prepared_path, output, plan, gpus, runtime):
         f"- {job['object_id']}/{job['branch']}: {job['status']}; "
         f"log: {job.get('output', 'not started')}/training.log" for job in state['jobs']) + '\n', encoding='utf8')
     (output / 'train_outputs/SCIENTIFIC_CHANGELOG.md').write_text(
-        'New per-instance Scheme A masks, fresh TRELLIS geometry from pink hue0 conditioning '
-        'with unchanged SAM alpha, automatic eroded ROI and '
+        'New per-instance Scheme A masks, fresh TRELLIS geometry selected from original/pink hue0 '
+        'candidates sharing BiRefNet soft alpha, unchanged SAM semantic masks, automatic eroded ROI and '
         'fresh SuperMat-derived targets replace historical reviewed Mailbox assets for this run. '
         'Original photo anchors, Qwen inputs and C/M/T inputs retain the original photograph. '
         'Selected-v1 initialization preserves raw evidence and permits at most one token repair. '

@@ -67,20 +67,31 @@ be prepared before training it.
 - Preserve the full EXIF-corrected source canvas and each native SAM mask; pair
   letterbox them to 512 when needed. Original/recolored Subject photographs keep
   the scene; their reconstruction loss uses only the respective instance mask.
-- Subject geometry is newly sampled from each instance's **pink-conditioned**
-  RGBA input (temporary default: historical Lab/LCh hue 0). The semantic SAM
+- Subject geometry is newly sampled from **original and pink** RGBA candidates
+  sharing one soft alpha (pink: historical Lab/LCh hue 0). The semantic SAM
   mask remains binary and unchanged. A fresh pinned BiRefNet inference supplies
   separate soft alpha: complete nonzero-alpha connected regions are associated
   to SAM instances, preserving all selected opacity values and their halos.
-  A region shared by multiple instances, or less than 80% SAM coverage, fails
-  Subject preparation explicitly; there is no hard-mask clipping or fallback.
+  Ownership requires intersection divided by the smaller component/SAM area
+  to reach 1%; weaker contacts are recorded and ignored only for ownership.
+  A region with multiple owners, or less than 80% SAM coverage, fails Subject
+  preparation explicitly; there is no hard-mask clipping or fallback.
   `trellis_alpha` preserves full-native RGBA then jointly resizes it with
   LANCZOS. `trellis_input/source_receipt.json` binds that matting receipt and
   the pink condition, whose alpha is byte-identical to the matting alpha.
   Canonical `mask_path`/`image512_path` remain the original SAM mask/photo;
   `conditioning_alpha_path` is used only for TRELLIS. Original photo anchors,
   Qwen initialization and C/M/T still use the original photograph. This applies
-  to every instance; no color search or automatic retry is performed.
+  to every instance. Exactly two seed42 meshes are retained under
+  `trellis_candidates/{original,pink}`; one failure does not prevent trying the
+  other. `trellis_selection/selection.json` records native checks, saved-camera
+  opaque SAM silhouette IoU and normalized symmetric mean boundary distance.
+  Among candidates passing the existing guards, maximize IoU minus distance;
+  when both differences are within 0.01 and 0.005 respectively, use a recorded,
+  per-instance seeded random choice. All-invalid blocks Subject. See the
+  [selection protocol](../subject_dual_color_selection_v1/README.md).
+  No extra color/seed search or automatic retry is performed. The chosen
+  receipt/mesh pair is used directly; the other candidate remains available.
   Exact-white foreground pixels are retained as neutral white without changing
   either mask; an all-white condition is explicitly recorded as unchanged.
   The eight synthetic views preserve the exact fitted source camera and crop,

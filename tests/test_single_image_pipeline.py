@@ -195,7 +195,7 @@ class SingleImagePipelineTests(unittest.TestCase):
         self.assertFalse(any('trellis' in ' '.join(command).lower() for command in calls))
         self.assertFalse(any('run_supermat_batch' in ' '.join(command) for command in calls))
 
-    def test_subject_uses_soft_alpha_pink_while_color_keeps_original_input(self):
+    def subject_candidate_fixture(self, selected, failed_candidate=None):
         from PIL import Image, ImageDraw
         from experiments.subject_pink_input_repro_v1.prepare import prepare as prepare_pink
         sources = self.root / 'sources'
@@ -263,12 +263,38 @@ class SingleImagePipelineTests(unittest.TestCase):
                 else:
                     self.fail('unexpected training worker')
             elif 'experiments.subject_trellis_counterfactual_v1.run' in command:
-                self.assertEqual(Path(command[command.index('--source-receipt') + 1]), pink_receipt)
-                stages.append('trellis')
+                name = target.name
+                self.assertIn(name, ('original', 'pink'))
+                expected = matte_receipt if name == 'original' else pink_receipt
+                self.assertEqual(Path(command[command.index('--source-receipt') + 1]), expected)
+                self.assertEqual(command[command.index('--seed') + 1], '42')
+                self.assertIn('--skip-glb', command)
+                stages.append('trellis_' + name)
+                if name == failed_candidate:
+                    log.write_text('retained generation failure')
+                    self.write(target / 'repro_outputs/status.json', {'status': 'failed', 'error': 'fixture failure'})
+                    raise subprocess.CalledProcessError(1, command)
+            elif 'src.methods.colorpeel_ice.subject_mesh_selection' in command:
+                self.assertEqual(Path(command[command.index('--semantic-receipt') + 1]), original_receipt)
+                self.assertEqual(command[command.index('--object-id') + 1], 'object_001')
+                self.assertEqual(command[command.index('--seed') + 1], '42')
+                candidates = [command[i + 1] for i, flag in enumerate(command) if flag == '--candidate']
+                self.assertEqual(candidates, [f'{name}={folder / "trellis_candidates" / name}'
+                                              for name in ('original', 'pink')])
+                self.write(target / 'selection.json', {'selected': selected,
+                    'status': 'blocked' if selected is None else 'selected',
+                    'source_locks': {str(original_receipt): pipeline.sha256(original_receipt)},
+                    'candidates': [{'name': name, 'trellis_run': str(folder / 'trellis_candidates' / name),
+                        'source_receipt': str(matte_receipt if name == 'original' else pink_receipt),
+                        'eligible': selected is not None and name != failed_candidate}
+                        for name in ('original', 'pink')]})
+                stages.append('selection')
             elif 'src.methods.colorpeel_ice.single_image_subject' in command:
-                self.assertEqual(Path(command[command.index('--inputs') + 1]), pink_receipt.parent)
-                self.assertEqual(Path(command[command.index('--trellis-run') + 1]), folder / 'trellis')
-                self.write(target / 'subject.json', {'rows': []})
+                self.assertIsNotNone(selected)
+                expected = matte_receipt if selected == 'original' else pink_receipt
+                self.assertEqual(Path(command[command.index('--inputs') + 1]), expected.parent)
+                self.assertEqual(Path(command[command.index('--trellis-run') + 1]), folder / 'trellis_candidates' / selected)
+                self.write(target / 'subject.json', {'rows': [], 'source_locks': {}})
                 stages.append('subject')
             else:
                 self.assertIn('single_image_cmt', ' '.join(command))
@@ -282,13 +308,34 @@ class SingleImagePipelineTests(unittest.TestCase):
         with patch.object(pipeline, 'execute', side_effect=execute):
             result = pipeline.prepare(image, output, ['subject', 'color'], 0, pipeline.RUNTIME)
         state = pipeline.read(result)
-        self.assertEqual(state['status'], 'prepared', state['objects'][0]['failures'])
-        self.assertEqual(stages, ['matte', 'pink', 'trellis', 'subject', 'color_original'])
+        self.assertEqual(state['status'], 'partial' if selected is None else 'prepared', state['objects'][0]['failures'])
+        expected_stages = ['matte', 'pink', 'trellis_original', 'trellis_pink', 'selection']
+        if selected is not None:
+            expected_stages.append('subject')
+        self.assertEqual(stages, expected_stages + ['color_original'])
         self.assertFalse(state['training_started'])
-        self.assertEqual(state['subject_conditioning_policy'], 'sam_semantics_biref_soft_alpha_pink/v1')
-        conditioning = state['objects'][0]['trellis_conditioning']
-        self.assertEqual(conditioning['source_receipt_sha256'], pipeline.sha256(pink_receipt))
-        self.assertEqual(conditioning['source_receipt'], str(pink_receipt))
+        self.assertEqual(state['subject_conditioning_policy'], 'sam_semantics_biref_soft_alpha_original_pink_selection/v1')
+        if selected is not None:
+            conditioning = state['objects'][0]['trellis_conditioning']
+            expected = matte_receipt if selected == 'original' else pink_receipt
+            self.assertEqual(conditioning['selected'], selected)
+            self.assertEqual(conditioning['source_receipt_sha256'], pipeline.sha256(expected))
+            self.assertEqual(conditioning['source_receipt'], str(expected))
+            selection_path = folder / 'trellis_selection/selection.json'
+            data = state['objects'][0]['datasets']['subject']
+            self.assertEqual(data['source_locks'][str(selection_path)], pipeline.sha256(selection_path))
+            self.assertEqual(pipeline.read(folder / 'subject/subject.json'), data)
+            self.assertEqual(data['trellis_selection']['selected'], selected)
+        else:
+            self.assertEqual(set(state['objects'][0]['datasets']), {'color'})
+            self.assertIn('No eligible Subject mesh', state['objects'][0]['failures']['subject'])
+            self.assertEqual(pipeline.read(folder / 'trellis_selection/selection.json')['status'], 'blocked')
+            self.assertFalse((folder / 'subject').exists())
+        if failed_candidate:
+            attempt = pipeline.read(folder / 'trellis_candidates/attempts.json')[failed_candidate]
+            self.assertEqual(attempt['status'], 'generation_failed')
+            self.assertIn('CalledProcessError', attempt['error'])
+            self.assertEqual((output / f'object_001_trellis_{failed_candidate}.log').read_text(), 'retained generation failure')
         original, pink = pipeline.read(original_receipt), pipeline.read(pink_receipt)
         self.assertNotEqual(original['cutout_sha256'], pink['cutout_sha256'])
         for key in ('image512_path', 'image512_sha256', 'mask_path', 'mask_sha256'):
@@ -297,6 +344,18 @@ class SingleImagePipelineTests(unittest.TestCase):
             self.assertEqual(opened.getchannel('A').tobytes(), soft.tobytes())
             self.assertNotEqual(opened.getchannel('A').tobytes(), alpha.tobytes())
         self.assertEqual({path: path.read_bytes() for path in original_bytes}, original_bytes)
+
+    def test_original_candidate_selection_keeps_receipt_and_mesh_paired(self):
+        self.subject_candidate_fixture('original')
+
+    def test_pink_candidate_selection_keeps_semantic_color_inputs_unchanged(self):
+        self.subject_candidate_fixture('pink')
+
+    def test_failed_original_generation_keeps_evidence_and_continues_pink(self):
+        self.subject_candidate_fixture('pink', failed_candidate='original')
+
+    def test_no_eligible_candidate_blocks_subject_but_color_continues(self):
+        self.subject_candidate_fixture(None)
 
 
 if __name__ == '__main__':
