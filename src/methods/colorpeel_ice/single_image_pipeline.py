@@ -31,6 +31,7 @@ RUNTIME = {
 }
 OFFLINE = {'PYTHONDONTWRITEBYTECODE': '1', 'HF_HUB_OFFLINE': '1',
            'TRANSFORMERS_OFFLINE': '1', 'DIFFUSERS_OFFLINE': '1'}
+SUBJECT_CONDITIONING_POLICY = 'pink_hue0_for_trellis/v1'
 
 
 def read(path):
@@ -62,6 +63,7 @@ def prepare(image, output, branches, gpu, runtime):
     state = {'schema': 'colorpeel_single_image_prepared/v1', 'status': 'preparing',
         'git': revision, 'source': str(image), 'source_sha256': sha256(image),
         'scheme': 'A', 'branches': list(branches), 'runtime': runtime,
+        'subject_conditioning_policy': SUBJECT_CONDITIONING_POLICY,
         'objects': [], 'commands': [], 'training_started': False, 'quality_accepted_by_user': False}
 
     def stage(command, name):
@@ -101,13 +103,21 @@ def prepare(image, output, branches, gpu, runtime):
                     item['failures'][branch] = 'initializer unavailable: ' + '; '.join(initialized['unavailable_branches'])
                 if 'subject' in available:
                     try:
+                        trellis_input = folder / 'trellis_input'
+                        stage([runtime['python'], '-B', '-m', 'experiments.subject_pink_input_repro_v1.prepare',
+                            '--source-receipt', folder / 'input/source_receipt.json',
+                            '--output', trellis_input, '--hue-degrees', '0'], record['id'] + '_trellis_input')
+                        conditioning_receipt = trellis_input / 'source_receipt.json'
+                        item['trellis_conditioning'] = {'policy': SUBJECT_CONDITIONING_POLICY,
+                            'hue_degrees': 0.0, 'source_receipt': str(conditioning_receipt),
+                            'source_receipt_sha256': sha256(conditioning_receipt)}
                         stage([runtime['trellis_python'], '-B', '-m', 'experiments.subject_trellis_counterfactual_v1.run',
                             '--output', folder / 'trellis', '--encoder', runtime['trellis_encoder'],
-                            '--source-receipt', folder / 'input/source_receipt.json', '--model-revisions',
+                            '--source-receipt', conditioning_receipt, '--model-revisions',
                             ROOT / 'experiments/subject_trellis_spoons_v1/model_revisions.json', '--skip-glb'],
                             record['id'] + '_trellis')
                         stage([runtime['trellis_python'], '-B', '-m', 'src.methods.colorpeel_ice.single_image_subject',
-                            '--stage', 'render', '--inputs', folder / 'input', '--trellis-run', folder / 'trellis',
+                            '--stage', 'render', '--inputs', trellis_input, '--trellis-run', folder / 'trellis',
                             '--output', folder / 'subject', '--category', initialized['subject_category']],
                             record['id'] + '_subject11')
                         item['datasets']['subject'] = read(folder / 'subject/subject.json')
@@ -293,8 +303,10 @@ def train(prepared_path, output, plan, gpus, runtime):
         f"- {job['object_id']}/{job['branch']}: {job['status']}; "
         f"log: {job.get('output', 'not started')}/training.log" for job in state['jobs']) + '\n', encoding='utf8')
     (output / 'train_outputs/SCIENTIFIC_CHANGELOG.md').write_text(
-        'New per-instance Scheme A masks, fresh TRELLIS geometry, automatic eroded ROI and '
+        'New per-instance Scheme A masks, fresh TRELLIS geometry from pink hue0 conditioning '
+        'with unchanged SAM alpha, automatic eroded ROI and '
         'fresh SuperMat-derived targets replace historical reviewed Mailbox assets for this run. '
+        'Original photo anchors, Qwen inputs and C/M/T inputs retain the original photograph. '
         'Selected-v1 initialization preserves raw evidence and permits at most one token repair. '
         'SD2.1 token-local LoRA64 optimizer recipes are inherited; steps are explicit per branch. '
         'No background-preservation objective, extra checkpoint resume, or quality tuning.\n', encoding='utf8')

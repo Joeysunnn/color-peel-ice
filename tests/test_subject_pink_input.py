@@ -88,6 +88,36 @@ class SubjectPinkInputTests(unittest.TestCase):
                 prepare(self.parent, self.output, hue)
             self.assertFalse(self.output.exists())
 
+    def test_exact_white_is_preserved_without_removing_sam_foreground(self):
+        sources = self.root / 'white_sources'
+        sources.mkdir()
+        for all_white in (False, True):
+            with self.subTest(all_white=all_white):
+                rgb = self.rgb.copy()
+                rgb[self.mask > 0] = 255 if all_white else [180, 100, 40]
+                rgb[400:410, 150:160] = 255
+                image_path, mask_path = sources / f'{all_white}.png', sources / f'{all_white}_mask.png'
+                Image.fromarray(rgb).save(image_path)
+                Image.fromarray(self.mask).save(mask_path)
+                folder = self.root / f'white_{all_white}'
+                subject.prepare_inputs(image_path, mask_path, folder / 'input')
+                receipt = prepare(folder / 'input/source_receipt.json', folder / 'pink')
+                with Image.open(receipt['cutout_path']) as image:
+                    actual = np.asarray(image)
+                white = (self.mask > 0) & np.all(rgb == 255, axis=-1)
+                np.testing.assert_array_equal(actual[..., 3], self.mask)
+                np.testing.assert_array_equal(actual[white, :3], rgb[white])
+                self.assertTrue((actual[self.mask == 0, :3] == 0).all())
+                metrics = receipt['conditioning_recolor']['recolor_metrics']
+                self.assertEqual(metrics['pure_white_support_pixels_preserved'], int(white.sum()))
+                if all_white:
+                    self.assertEqual(metrics['status'], 'unchanged_all_foreground_exact_white')
+                else:
+                    self.assertEqual(metrics['status'], 'recolored')
+                    editable = (self.mask > 0) & ~white
+                    self.assertTrue(np.any(actual[editable, :3] != rgb[editable]))
+                check_source_receipt(folder / 'pink/source_receipt.json')
+
     def test_missing_current_mask_has_no_historical_fallback(self):
         Path(self.original['mask_path']).unlink()
         with self.assertRaises(FileNotFoundError):

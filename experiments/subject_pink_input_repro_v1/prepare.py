@@ -33,7 +33,19 @@ def prepare(source_receipt, output, hue_degrees=0.0):
         raise ValueError('require an unchanged nonempty binary mask')
     # This helper derives alpha only. Never call the historical mask-repair function.
     soft_alpha, alpha_parameters = derive_repaired_alpha(mask > 0)
-    colored, metrics, _ = recolor(rgb, mask, soft_alpha, hue_degrees)
+    # Exact white is neutral; Lab matrix roundoff otherwise puts its L above100.
+    # Exclude it from RGB editing only, never from the binary segmentation alpha.
+    editable = (mask > 0) & np.any(rgb != 255, axis=-1)
+    if editable.any():
+        colored, metrics, _ = recolor(rgb, editable.astype(np.uint8) * 255,
+            np.where(editable, soft_alpha, 0).astype(np.uint16), hue_degrees)
+        metrics['status'] = 'recolored'
+    else:
+        colored = rgb.copy()
+        metrics = {'status': 'unchanged_all_foreground_exact_white', 'object_pixel_count': 0,
+            'outside_mask_changed_pixel_count': 0, 'rgb_clipping_pixel_count': 0, 'soft_edge_pixel_count': 0}
+    metrics.update(source_mask_pixel_count=int((mask > 0).sum()),
+                   pure_white_support_pixels_preserved=int(((mask > 0) & ~editable).sum()))
     output = fresh(output)
     cutout = output / 'cutout512.png'
     Image.fromarray(np.dstack([np.where(mask[..., None] > 0, colored, 0), mask])).save(cutout)

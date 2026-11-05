@@ -195,6 +195,82 @@ class SingleImagePipelineTests(unittest.TestCase):
         self.assertFalse(any('trellis' in ' '.join(command).lower() for command in calls))
         self.assertFalse(any('run_supermat_batch' in ' '.join(command) for command in calls))
 
+    def test_subject_uses_pink_receipt_while_color_keeps_original_input(self):
+        from PIL import Image, ImageDraw
+        from experiments.subject_pink_input_repro_v1.prepare import prepare as prepare_pink
+        sources = self.root / 'sources'
+        sources.mkdir()
+        image, mask = sources / 'source.png', sources / 'sam.png'
+        Image.new('RGB', (512, 512), (180, 100, 40)).save(image)
+        alpha = Image.new('L', (512, 512))
+        ImageDraw.Draw(alpha).rectangle((120, 80, 300, 450), fill=255)
+        alpha.save(mask)
+        original_bytes = {path: path.read_bytes() for path in (image, mask)}
+        source_hash = pipeline.sha256(image)
+        output = self.root / 'prepare'
+        folder = output / 'objects/object_001'
+        original_receipt = folder / 'input/source_receipt.json'
+        pink_receipt = folder / 'trellis_input/source_receipt.json'
+        stages = []
+
+        def execute(command, log, gpu):
+            command = [str(value) for value in command]
+            target = Path(command[command.index('--output') + 1])
+            if 'experiments.subject_pink_input_repro_v1.prepare' in command:
+                self.assertEqual(Path(command[command.index('--source-receipt') + 1]), original_receipt)
+                self.assertEqual(command[command.index('--hue-degrees') + 1], '0')
+                prepare_pink(original_receipt, target, 0)
+                stages.append('pink')
+                return
+            target.mkdir(parents=True)
+            if '--worker' in command:
+                worker = command[command.index('--worker') + 1]
+                if worker == 'discover':
+                    self.write(target / 'categories.json', {'status': 'verified'})
+                elif worker == 'segment':
+                    self.write(target / 'objects.json', {'status': 'succeeded', 'failures': [],
+                        'source': {'image_sha256': source_hash, 'canonical_image_sha256': source_hash},
+                        'objects': [{'id': 'object_001', 'source_image': str(image),
+                                     'object_mask': str(mask), 'vlm_input': str(image)}]})
+                elif worker == 'initialize':
+                    self.assertEqual(command[command.index('--image') + 1], str(image))
+                    self.write(target / 'initializers.json', {'selected_branches': ['subject', 'color'],
+                        'subject_category': 'spoon', 'unavailable_branches': []})
+                else:
+                    self.fail('unexpected training worker')
+            elif 'experiments.subject_trellis_counterfactual_v1.run' in command:
+                self.assertEqual(Path(command[command.index('--source-receipt') + 1]), pink_receipt)
+                stages.append('trellis')
+            elif 'src.methods.colorpeel_ice.single_image_subject' in command:
+                self.assertEqual(Path(command[command.index('--inputs') + 1]), pink_receipt.parent)
+                self.assertEqual(Path(command[command.index('--trellis-run') + 1]), folder / 'trellis')
+                self.write(target / 'subject.json', {'rows': []})
+                stages.append('subject')
+            else:
+                self.assertIn('single_image_cmt', ' '.join(command))
+                stage = command[command.index('--stage') + 1]
+                if stage == 'inputs':
+                    self.assertEqual(Path(command[command.index('--prepared') + 1]), original_receipt.parent)
+                    stages.append('color_original')
+                elif stage == 'finalize':
+                    self.write(target / 'datasets.json', {'branches': {'color': {'rows': []}}, 'failures': {}})
+
+        with patch.object(pipeline, 'execute', side_effect=execute):
+            result = pipeline.prepare(image, output, ['subject', 'color'], 0, pipeline.RUNTIME)
+        state = pipeline.read(result)
+        self.assertEqual(state['status'], 'prepared', state['objects'][0]['failures'])
+        self.assertEqual(stages, ['pink', 'trellis', 'subject', 'color_original'])
+        self.assertFalse(state['training_started'])
+        self.assertEqual(state['subject_conditioning_policy'], 'pink_hue0_for_trellis/v1')
+        conditioning = state['objects'][0]['trellis_conditioning']
+        self.assertEqual(conditioning['source_receipt_sha256'], pipeline.sha256(pink_receipt))
+        self.assertEqual(conditioning['source_receipt'], str(pink_receipt))
+        original, pink = pipeline.read(original_receipt), pipeline.read(pink_receipt)
+        self.assertNotEqual(original['cutout_sha256'], pink['cutout_sha256'])
+        for key in ('image512_path', 'image512_sha256', 'mask_path', 'mask_sha256'):
+            self.assertEqual(original[key], pink[key])
+        self.assertEqual({path: path.read_bytes() for path in original_bytes}, original_bytes)
+
 
 if __name__ == '__main__':
     unittest.main()
