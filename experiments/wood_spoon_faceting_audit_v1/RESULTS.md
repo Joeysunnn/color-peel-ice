@@ -1,5 +1,10 @@
 # Wood spoon faceting diagnosis, 2026-11-05
 
+Follow-up: the later [input-cause diagnostic](../wood_spoon_input_cause_v1/RESULTS.md)
+exactly reproduced the historical native asset, then reproduced facets by
+hardening only its alpha while preserving RGB and crop. The initial audit below
+records the evidence and unresolved questions before that controlled test.
+
 The current bowl has geometry-derived patches of face normals; the official
 flat-normal renderer makes those patches visible. Pink is **not necessary or
 the exclusive cause**: one original-color reconstruction using exactly the

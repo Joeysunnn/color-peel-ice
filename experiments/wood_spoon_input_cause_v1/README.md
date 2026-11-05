@@ -36,3 +36,5 @@ Code must be reviewed/tested locally, committed/pushed, then run from a new
 clean GitHub checkout with full SHA and GPU ownership checks. No source-copy
 deployment, model download, FP32 comparison, asset deletion, training or
 automatic quality acceptance is included.
+
+Completed exact replay and single-factor result: [RESULTS.md](RESULTS.md).
