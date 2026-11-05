@@ -64,8 +64,9 @@ def parse_response(raw):
         if not isinstance(entity, dict) or set(entity) != {"category", "kind", "evidence"}:
             raise ValueError("Each entity requires exactly category, kind and evidence")
         if (not isinstance(entity["category"], str)
-                or re.fullmatch(r"[A-Za-z]+(?: [A-Za-z]+)*", entity["category"]) is None):
-            raise ValueError("Categories must be ordinary English noun phrases using letters and spaces")
+                or re.fullmatch(r"[A-Za-z0-9]+(?:[- ][A-Za-z0-9]+)*", entity["category"]) is None
+                or re.search(r"[A-Za-z]", entity["category"]) is None):
+            raise ValueError("Categories require a noun phrase; digits and internal hyphens in names are allowed")
         if not isinstance(entity["kind"], str) or entity["kind"] not in KINDS:
             raise ValueError("Entity kind must be object, background, part or text")
         if not isinstance(entity["evidence"], str) or not entity["evidence"].strip():

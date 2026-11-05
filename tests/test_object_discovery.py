@@ -32,7 +32,7 @@ class ResponseTests(unittest.TestCase):
                    '{"entities":[],"boxes":[]}', '{"entities":[],"entities":[]}',
                    '{"categories":["chair"]}', '{"entities":[NaN]}',
                    'Found ' + raw_objects("chair"), '```json\n' + raw_objects("chair")]
-        for value in ("<S*>", "coffee-mug", "", " chair", "chair  leg"):
+        for value in ("<S*>", "coffee--mug", "123", "", " chair", "chair  leg"):
             invalid.append(raw_objects(value))
         for change in ({"kind": "unknown"}, {"kind": []}, {"evidence": " "},
                        {"evidence": 1}, {"bbox": [1, 2, 3, 4]}):
@@ -41,6 +41,12 @@ class ResponseTests(unittest.TestCase):
         for raw in invalid:
             with self.subTest(raw=raw), self.assertRaises(ValueError):
                 discovery.parse_response(raw)
+
+    def test_alphanumeric_object_names_are_preserved_for_grounding(self):
+        raw = raw_objects("C-3PO bobblehead", "Darth Vader bobblehead", "coffee-mug")
+        response = discovery.parse_response(raw)
+        self.assertEqual(discovery.select_categories(response)["categories"],
+                         ["c-3po bobblehead", "darth vader bobblehead", "coffee-mug"])
 
     def test_selection_excludes_background_parts_text_and_keeps_complete_objects(self):
         response = {"entities": [entity("Chair"), entity("brick wall", "background", "Continuous enclosing scene surface"),
