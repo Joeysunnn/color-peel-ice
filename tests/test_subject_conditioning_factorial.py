@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 
 from experiments.subject_conditioning_factorial_v1 import prepare as experiment
-from experiments.subject_trellis_counterfactual_v1.run import check_source_receipt, fixed_crop_condition
+from experiments.subject_trellis_counterfactual_v1.run import check_source_receipt
 
 
 def feather_fixture(support):
@@ -29,16 +29,19 @@ class SubjectConditioningFactorialTests(unittest.TestCase):
 
     def build(self):
         with patch.object(experiment, 'derive_repaired_alpha', side_effect=feather_fixture):
-            rows, crop = experiment.build_variants(*self.inputs())
-        return {row['name']: row for row in rows}, crop
+            rows = experiment.build_variants(*self.inputs())
+        return {row['name']: row for row in rows}
 
     def test_eight_cells_keep_independent_factors_and_scope_exterior(self):
         rgb, sam, soft = self.inputs()
-        rows, crop = self.build()
+        rows = self.build()
         self.assertEqual(len(rows), 8)
-        self.assertEqual(crop, [144, 253, 440, 549])
         for row in rows.values():
             geometry = sam if row['geometry_alpha'] == 'sam' else soft
+            expected_crop = [145, 254, 439, 548] if row['geometry_alpha'] == 'sam' else [144, 253, 440, 549]
+            self.assertEqual(row['auto_crop_xyxy'], expected_crop)
+            self.assertEqual(experiment.expected_auto_condition(row['rgba']).size,
+                             (expected_crop[2] - expected_crop[0], expected_crop[3] - expected_crop[1]))
             np.testing.assert_array_equal(row['rgba'][..., 3], geometry)
             self.assertFalse(row['rgba'][geometry == 0, :3].any())
             if row['color'] == 'original':
@@ -53,12 +56,22 @@ class SubjectConditioningFactorialTests(unittest.TestCase):
                                               rows[f'{color}__{scope}__biref']['pre_alpha_rgb'])
 
     def test_original_pairs_are_identical_conditions_but_pink_scopes_can_differ(self):
-        rows, crop = self.build()
+        rows = self.build()
         for alpha in ('sam', 'biref'):
-            images = [fixed_crop_condition(Image.fromarray(rows[f'original__{scope}__{alpha}']['rgba']), crop)
+            images = [experiment.expected_auto_condition(rows[f'original__{scope}__{alpha}']['rgba'])
                       for scope in ('sam', 'biref')]
             self.assertEqual(images[0].tobytes(), images[1].tobytes())
         self.assertFalse(np.array_equal(rows['pink__sam__biref']['rgba'], rows['pink__biref__biref']['rgba']))
+
+    def test_fractional_auto_crop_preserves_official_pillow_rounding_and_threshold(self):
+        rgba = np.zeros((512, 512, 4), dtype=np.uint8)
+        rgba[21:26, 11:17] = [100, 150, 200, 255]
+        rgba[0, 0] = [100, 150, 200, 204]  # Must not expand the crop.
+        self.assertEqual(experiment.official_crop_box(rgba[..., 3]), [11.5, 21., 15.5, 25.])
+        expected = Image.fromarray(rgba).crop([11.5, 21., 15.5, 25.]).convert('RGB')
+        actual = experiment.expected_auto_condition(rgba)
+        self.assertEqual(actual.size, expected.size)
+        self.assertEqual(actual.tobytes(), expected.tobytes())
 
     def test_reject_missing_sam_coverage_in_frozen_rgb(self):
         rgb, sam, soft = self.inputs()

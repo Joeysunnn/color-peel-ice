@@ -31,13 +31,17 @@ pre-alpha RGB separately; serialize RGBA with RGB zero only at geometry A=0,
 as required by the existing transparent-pixel contract. The final model input
 is the official float32 RGB*alpha composite, without further resizing here.
 
-Every cell uses one crop derived once from the frozen soft alpha:
+The current rerun uses the official automatic crop from each cell's selected
+geometry alpha (`A > 204`), with no `--fixed-crop` override. Fractional box
+coordinates and out-of-canvas padding are preserved:
 
-- Mailbox: `[144,253,440,549]`,296x296 including original out-of-canvas padding.
-- Wood spoon: `[23,19,487,483]`,464x464.
+- Mailbox SAM: `[145,254,439,548]`,294x294; BiRef: `[144,253,440,549]`,296x296.
+- Wood spoon SAM: `[24,20.5,486,482.5]`,462x462; BiRef: `[23,19,487,483]`,464x464.
 
-Consequently the Mailbox SAM cells do not use the previous294 crop. Also,
-pink/SAM-support with soft alpha retains original-colored RGB in the extra
+The first completed run instead fixed all cells to the BiRef crop; its
+unchanged evidence is documented in [RESULTS.md](RESULTS.md). Only cropping
+changes in this rerun; the frozen RGB and factor semantics stay unchanged.
+In particular, pink/SAM-support with soft alpha retains original-colored RGB in the extra
 soft support; it is not the previous diagnostic that forced this region black.
 These differences must remain explicit when comparing with earlier studies.
 

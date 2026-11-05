@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from experiments.subject_trellis_counterfactual_v1.run import check_source_receipt, fixed_crop_condition
+from experiments.subject_trellis_counterfactual_v1.run import check_source_receipt
 from experiments.wood_spoon_input_cause_v1.prepare import official_crop_box
 from scripts.launch.colorpeel_run import git_info
 from src.methods.colorpeel_ice.natural_subject_recolor_border_repair import derive_repaired_alpha
@@ -23,9 +23,6 @@ def build_variants(rgb, sam, soft):
         raise ValueError('require RGB512, binary SAM and genuinely soft L512 alpha')
     if ((sam > 0) & (soft == 0)).any() or (rgb[soft == 0] != 0).any():
         raise ValueError('frozen matte RGB must cover all SAM pixels with transparent RGB zero')
-    crop = [int(value) for value in official_crop_box(soft)]
-    if crop != official_crop_box(soft):
-        raise ValueError('require integer frozen soft-alpha crop for these two audited objects')
     supports = {'sam': sam > 0, 'biref': soft > 0}
     colors, metrics = {}, {}
     for scope, support in supports.items():
@@ -48,8 +45,16 @@ def build_variants(rgb, sam, soft):
         rgba = np.dstack([np.where(geometry[..., None] > 0, pre_alpha, 0), geometry])
         variants.append({'name': '__'.join((color, scope, alpha)), 'color': color,
             'recolor_support': scope, 'geometry_alpha': alpha, 'pre_alpha_rgb': pre_alpha.copy(),
+            'auto_crop_xyxy': official_crop_box(geometry),
             'rgba': rgba, 'recolor_metrics': metrics[scope] if color == 'pink' else {'status': 'unrecolored'}})
-    return variants, crop
+    return variants
+
+
+def expected_auto_condition(rgba):
+    """Mirror pinned official RGBA512 preprocessing, including fractional crop boxes."""
+    crop = official_crop_box(rgba[..., 3])
+    pixels = np.asarray(Image.fromarray(rgba).crop(crop)).astype(np.float32) / 255
+    return Image.fromarray((pixels[..., :3] * pixels[..., 3:4] * 255).astype(np.uint8))
 
 
 def prepare(matte_receipt, output):
@@ -65,13 +70,14 @@ def prepare(matte_receipt, output):
     with Image.open(parent['cutout_path']) as image, Image.open(parent['mask_path']) as mask:
         rgba, sam = np.array(image), np.array(mask)
     revision = git_info()
-    variants, crop = build_variants(rgba[..., :3], sam, rgba[..., 3])
+    variants = build_variants(rgba[..., :3], sam, rgba[..., 3])
     output = fresh(output)
     rgb_path = output / 'frozen_base_rgb512.png'
     Image.fromarray(rgba[..., :3]).save(rgb_path)
     locks = {**locks, str(rgb_path): sha256(rgb_path)}
     manifest = {'git': revision, 'source_locks': locks, 'matte_receipt': str(matte_receipt),
-        'seed': 42, 'fixed_crop_xyxy': crop, 'variants': [], 'expected_meshes': 8,
+        'seed': 42, 'crop_policy': 'official automatic crop from each geometry alpha > 204',
+        'variants': [], 'expected_meshes': 8,
         'scope_semantics': 'Recolor only. Original and all pixels outside pink support retain frozen base RGB.',
         'rgb_preprocessing': 'Frozen uncolored BiRefNet joint-RGBA-resize RGB512, identical for every factor cell; no new resizing.',
         'alpha_serialization': 'Pre-alpha RGB is saved separately; final RGBA zeros RGB only where selected geometry alpha is zero.',
@@ -85,10 +91,10 @@ def prepare(matte_receipt, output):
         Image.fromarray(variant['pre_alpha_rgb']).save(files['pre_alpha_rgb'])
         Image.fromarray(variant['rgba']).save(files['cutout'])
         Image.fromarray(variant['rgba'][..., 3]).save(files['conditioning_alpha'])
-        fixed_crop_condition(Image.fromarray(variant['rgba']), crop).save(files['expected_condition'])
+        expected_auto_condition(variant['rgba']).save(files['expected_condition'])
         generated_locks = {str(path): sha256(path) for path in files.values()}
         diagnostic = {key: value for key, value in variant.items() if key not in ('rgba', 'pre_alpha_rgb')}
-        diagnostic.update(fixed_crop_xyxy=crop, pre_alpha_rgb_path=str(files['pre_alpha_rgb']),
+        diagnostic.update(pre_alpha_rgb_path=str(files['pre_alpha_rgb']),
                           pre_alpha_rgb_sha256=generated_locks[str(files['pre_alpha_rgb'])],
                           scope_semantics=manifest['scope_semantics'])
         receipt = {**parent, 'source_locks': {**locks, **generated_locks},

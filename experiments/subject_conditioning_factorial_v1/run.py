@@ -53,7 +53,7 @@ def run(output, gpus):
             state['source_locks'].update(manifest['source_locks'])
             state['source_locks'].update({str(path): sha256(path) for path in (*sources.values(), manifest_path)})
             state['objects'][name] = {'manifest': str(manifest_path), 'manifest_sha256': sha256(manifest_path),
-                'fixed_crop_xyxy': manifest['fixed_crop_xyxy'], 'reference_review': str(sources['reference_review'])}
+                'crop_policy': manifest['crop_policy'], 'reference_review': str(sources['reference_review'])}
             for variant in manifest['variants']:
                 run_path = output / name / 'variants' / variant['name'] / 'trellis'
                 run_path.parent.mkdir(parents=True)
@@ -61,12 +61,12 @@ def run(output, gpus):
                     'gpu': gpus[len(state['jobs']) % len(gpus)], 'trellis_run': str(run_path),
                     'source_receipt': variant['source_receipt'], 'source_receipt_sha256': sha256(variant['source_receipt']),
                     'expected_condition': variant['expected_condition'], 'expected_condition_sha256': sha256(variant['expected_condition']),
+                    'auto_crop_xyxy': variant['auto_crop_xyxy'],
                     'log': str(run_path.parent / 'generation.log')}
                 job['argv'] = [str(value) for value in [RUNTIME['trellis_python'], '-B', '-m',
                     'experiments.subject_trellis_counterfactual_v1.run', '--output', run_path,
                     '--source-receipt', job['source_receipt'], '--encoder', RUNTIME['trellis_encoder'],
-                    '--model-revisions', MODEL_REVISIONS, '--seed', '42', '--skip-glb',
-                    '--fixed-crop', *manifest['fixed_crop_xyxy']]]
+                    '--model-revisions', MODEL_REVISIONS, '--seed', '42', '--skip-glb']]
                 state['jobs'].append(job)
         check_locks(state['source_locks'])
         if git_info() != revision:
@@ -86,7 +86,7 @@ def run(output, gpus):
                             or generated['git'] != revision or generated['official_commit'] != OFFICIAL
                             or generated['seed'] != 42 or generated['models']['revisions'] != pinned
                             or generated['source_receipt']['sha256'] != job['source_receipt_sha256']
-                            or generated['diagnostic_fixed_crop_xyxy'] != state['objects'][job['object']]['fixed_crop_xyxy']
+                            or 'diagnostic_fixed_crop_xyxy' in generated
                             or not (directory / 'native_asset.pt').is_file()):
                         raise ValueError('generation status/configuration/input differs from the fixed experiment')
                     actual = directory / 'actual_condition.png'
