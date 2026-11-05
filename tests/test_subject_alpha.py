@@ -103,6 +103,55 @@ class ComponentAssociationTests(unittest.TestCase):
             alpha_module.associate_components(alpha, {'first': first, 'second': second}, 'first')
         self.assertTrue((alpha == 254).all())
 
+    def test_43_pixel_contact_with_large_other_instance_keeps_complete_halo(self):
+        alpha = np.zeros((300, 300), dtype=np.uint8)
+        alpha.flat[:44831] = 1
+        alpha.flat[:42397] = 254
+        alpha.flat[44788:44831] = 28
+        mailbox, door = np.zeros_like(alpha, bool), np.zeros_like(alpha, bool)
+        mailbox.flat[:42397] = True
+        door.flat[44788:44831 + 34695] = True  #43 component pixels out of34,738 SAM pixels.
+        before = alpha.copy()
+        selected, report = alpha_module.associate_components(alpha, {'mailbox': mailbox, 'door': door}, 'mailbox')
+        np.testing.assert_array_equal(selected, before)
+        np.testing.assert_array_equal(alpha, before)
+        self.assertEqual(report['sam_coverage'], 1)
+        self.assertEqual(report['minimum_ownership_overlap'], .01)
+        component = report['selected_components'][0]
+        self.assertEqual(report['component_owners'][component], ['mailbox'])
+        contact = next(row for row in report['ownership_overlaps'][component] if row['object_id'] == 'door')
+        self.assertEqual(contact['intersection_pixels'], 43)
+        self.assertEqual(contact['component_support_pixels'], 44831)
+        self.assertEqual(contact['sam_pixels'], 34738)
+        self.assertAlmostEqual(contact['overlap_ratio'], 43 / 34738)
+        self.assertTrue(contact['ignored_contact'])
+        self.assertFalse(contact['is_owner'])
+        self.assertTrue((selected.flat[44788:44831] == 28).all())
+
+    def test_small_instance_uses_its_own_area_and_still_causes_ambiguity(self):
+        alpha = np.full((100, 100), 254, dtype=np.uint8)
+        large, tiny = np.zeros_like(alpha, bool), np.zeros_like(alpha, bool)
+        large[:50, :50] = True
+        tiny[80, 80] = True  #1/10,000 component pixels, but100% of this tiny SAM object.
+        with self.assertRaisesRegex(ValueError, 'multiple SAM instances'):
+            alpha_module.associate_components(alpha, {'large': large, 'tiny': tiny}, 'large')
+        self.assertTrue((alpha == 254).all())
+
+    def test_exact_one_percent_contact_is_an_owner_but_smaller_contact_is_ignored(self):
+        alpha = np.zeros((150, 150), dtype=np.uint8)
+        alpha[:100, :100] = 254
+        large, other = np.zeros_like(alpha, bool), np.zeros_like(alpha, bool)
+        large[:50, :50] = True
+        other[99, 99], other[120, :99] = True, True  #1/100 of the smaller SAM support.
+        with self.assertRaisesRegex(ValueError, 'multiple SAM instances'):
+            alpha_module.associate_components(alpha, {'large': large, 'other': other}, 'large')
+        other[120, 99] = True  #The same1-pixel contact now has ratio1/101 <.01.
+        selected, report = alpha_module.associate_components(alpha, {'large': large, 'other': other}, 'large')
+        np.testing.assert_array_equal(selected, alpha)
+        contact = next(row for row in report['ownership_overlaps'][1] if row['object_id'] == 'other')
+        self.assertAlmostEqual(contact['overlap_ratio'], 1 / 101)
+        self.assertTrue(contact['ignored_contact'])
+
     def test_absent_or_low_coverage_is_rejected(self):
         sam = np.zeros((10, 10), bool)
         sam[2:8, 2:8] = True

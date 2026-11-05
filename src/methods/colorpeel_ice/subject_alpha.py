@@ -16,6 +16,7 @@ from experiments.subject_trellis_spoons_v1.prepare import ASSETS, SPEC, square_c
 from .single_image_subject import ROOT, check_locks, fresh, sha256, write_json
 
 MIN_SAM_COVERAGE = 0.80  # Engineering association guard, not a geometry-quality score.
+MIN_OWNER_OVERLAP = 0.01  # Intersection divided by the smaller component/SAM support.
 
 
 def cached_bundle():
@@ -72,15 +73,29 @@ def associate_components(alpha, masks, object_id):
         raise ValueError('require nonempty native aligned SAM masks')
     from scipy.ndimage import label
     labels, count = label(alpha > 0, structure=np.ones((3, 3), dtype=np.uint8))
+    component_sizes = np.bincount(labels.ravel())
     owners = {component: [] for component in range(1, count + 1)}
+    overlaps = {component: [] for component in range(1, count + 1)}
     for name, mask in masks.items():
-        for component in np.unique(labels[mask]):
+        sam_size = int(mask.sum())
+        components, intersections = np.unique(labels[mask], return_counts=True)
+        for component, intersection in zip(components, intersections):
             if component:
-                owners[int(component)].append(name)
+                component, intersection = int(component), int(intersection)
+                support_size = int(component_sizes[component])
+                ratio = intersection / min(support_size, sam_size)
+                is_owner = ratio >= MIN_OWNER_OVERLAP
+                overlaps[component].append({'object_id': name, 'intersection_pixels': intersection,
+                    'component_support_pixels': support_size, 'sam_pixels': sam_size,
+                    'overlap_ratio': ratio, 'is_owner': is_owner, 'ignored_contact': not is_owner})
+                if is_owner:
+                    owners[component].append(name)
     ambiguous = {component: names for component, names in owners.items()
                  if object_id in names and len(names) > 1}
     if ambiguous:
-        raise ValueError(f'BiRefNet components overlap multiple SAM instances for {object_id}: {ambiguous}')
+        contacts = {component: overlaps[component] for component in ambiguous}
+        raise ValueError(f'BiRefNet components overlap multiple SAM instances for {object_id}: {ambiguous}; '
+                         f'minimum ownership overlap {MIN_OWNER_OVERLAP}; contacts: {contacts}')
     selected = [component for component, names in owners.items() if names == [object_id]]
     kept = np.isin(labels, selected)
     coverage = float((kept & masks[object_id]).sum() / masks[object_id].sum())
@@ -90,9 +105,12 @@ def associate_components(alpha, masks, object_id):
     result = np.where(kept, alpha, 0).astype(np.uint8)
     return result, {'object_id': object_id, 'connectivity': 8, 'support': 'alpha > 0',
         'component_count': int(count), 'component_owners': owners, 'selected_components': selected,
+        'ownership_overlaps': overlaps, 'minimum_ownership_overlap': MIN_OWNER_OVERLAP,
+        'ownership_overlap_definition': 'intersection / min(component alpha>0 pixels, SAM pixels)',
         'sam_coverage': coverage, 'minimum_sam_coverage': MIN_SAM_COVERAGE,
         'selected_native_alpha_values_unchanged': bool(np.array_equal(result[kept], alpha[kept])),
-        'policy': 'Keep complete uniquely owned components; remove other/unassigned components whole; '
+        'policy': 'Ignore sub-threshold contacts for ownership only; keep complete uniquely owned components; '
+                  'remove other/unassigned components whole; '
                   'no hard-mask clipping, opacity normalization, hole filling or morphology.'}
 
 
