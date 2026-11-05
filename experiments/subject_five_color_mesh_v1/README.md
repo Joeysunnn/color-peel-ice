@@ -1,5 +1,7 @@
 # Five photographic hues with the current SAM mask
 
+Completed metrics and review artifacts are recorded in [RESULTS.md](RESULTS.md).
+
 User-authorized on 2026-11-05: compare one new TRELLIS mesh per historical
 photographic recolor, using the current Mailbox Scheme A object_003 SAM mask.
 This experiment generates five seed42 native assets and diagnostic images only.
