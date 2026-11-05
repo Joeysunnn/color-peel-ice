@@ -63,6 +63,31 @@ class SubjectPinkInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'source lock hash mismatch'):
             check_source_receipt(self.output / 'source_receipt.json')
 
+    def test_historical_five_hues_preserve_alpha_and_change_rgb_as_declared(self):
+        hashes = set()
+        for hue in (0.0, 120.0, 180.0, 240.0, 300.0):
+            with self.subTest(hue=hue):
+                receipt = prepare(self.parent, self.root / f'hue{hue:g}', hue)
+                with Image.open(receipt['cutout_path']) as image:
+                    actual = np.asarray(image)
+                np.testing.assert_array_equal(actual[..., 3], self.mask)
+                self.assertTrue((actual[self.mask == 0, :3] == 0).all())
+                core = actual[400:450, 150:200, :3].reshape(-1, 3)
+                lab = gamut.linear_rgb_to_lab(gamut._srgb_to_linear(core))
+                measured = np.degrees(np.arctan2(lab[:, 2], lab[:, 1]))
+                error = np.abs((measured - hue + 180.0) % 360.0 - 180.0)
+                self.assertLess(float(error.max()), 1.0)
+                self.assertEqual(receipt['conditioning_recolor']['hue_degrees'], hue)
+                self.assertEqual(receipt['image512_sha256'], self.original['image512_sha256'])
+                hashes.add(receipt['cutout_sha256'])
+        self.assertEqual(len(hashes), 5)
+
+    def test_nonhistorical_hue_rejected_before_output_creation(self):
+        for hue in (60.0, float('nan'), float('inf')):
+            with self.assertRaisesRegex(ValueError, 'five historical'):
+                prepare(self.parent, self.output, hue)
+            self.assertFalse(self.output.exists())
+
     def test_missing_current_mask_has_no_historical_fallback(self):
         Path(self.original['mask_path']).unlink()
         with self.assertRaises(FileNotFoundError):

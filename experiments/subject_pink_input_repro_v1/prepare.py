@@ -13,7 +13,9 @@ from src.methods.colorpeel_ice.natural_subject_recolor_pilot import recolor
 from src.methods.colorpeel_ice.single_image_subject import check_locks, fresh, sha256, write_json
 
 
-def prepare(source_receipt, output):
+def prepare(source_receipt, output, hue_degrees=0.0):
+    if hue_degrees not in (0.0, 120.0, 180.0, 240.0, 300.0):
+        raise ValueError('require one of the five historical Mailbox hue targets')
     source_receipt, output = Path(source_receipt).resolve(), Path(output).resolve()
     parent_sha = sha256(source_receipt)
     original = json.loads(source_receipt.read_text())
@@ -31,16 +33,16 @@ def prepare(source_receipt, output):
         raise ValueError('require an unchanged nonempty binary mask')
     # This helper derives alpha only. Never call the historical mask-repair function.
     soft_alpha, alpha_parameters = derive_repaired_alpha(mask > 0)
-    pink, metrics, _ = recolor(rgb, mask, soft_alpha, 0.0)
+    colored, metrics, _ = recolor(rgb, mask, soft_alpha, hue_degrees)
     output = fresh(output)
     cutout = output / 'cutout512.png'
-    Image.fromarray(np.dstack([np.where(mask[..., None] > 0, pink, 0), mask])).save(cutout)
+    Image.fromarray(np.dstack([np.where(mask[..., None] > 0, colored, 0), mask])).save(cutout)
     locks[str(cutout)] = sha256(cutout)
     receipt = {**original, 'cutout_path': str(cutout), 'cutout_sha256': locks[str(cutout)],
         'source_locks': locks, 'conditioning_recolor': {
             'scope': 'TRELLIS conditioning only; original photo anchors and C/M/T inputs unchanged',
-            'method': 'historical deterministic Lab/LCh hue=0 with soft-alpha RGB blending',
-            'hue_degrees': 0.0, 'mask_policy': 'unchanged supplied binary SAM mask; no mask repair',
+            'method': f'historical deterministic Lab/LCh hue={hue_degrees:g} with soft-alpha RGB blending',
+            'hue_degrees': float(hue_degrees), 'mask_policy': 'unchanged supplied binary SAM mask; no mask repair',
             'parent_receipt_path': str(source_receipt), 'parent_receipt_sha256': parent_sha,
             'original_cutout_path': original['cutout_path'],
             'original_cutout_sha256': original['cutout_sha256'],
@@ -55,5 +57,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-receipt', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--hue-degrees', type=float, choices=(0, 120, 180, 240, 300), default=0.0)
     args = parser.parse_args()
-    prepare(args.source_receipt, args.output)
+    prepare(args.source_receipt, args.output, args.hue_degrees)
