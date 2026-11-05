@@ -39,3 +39,11 @@ checks, with both output-root variables pointing to the current run root:
 
 Only diagnostic files are added. No mesh smoothing, remeshing, production
 rendering patch, S11 expansion, initializer inference or training is performed.
+
+The initial diagnostic at `d0b33ec` exposed an invalid vertex-normal comparison:
+the shared face-to-camera flip can leave an averaged vertex normal in the
+opposite hemisphere. Its original files are retained but its vertex images and
+statistics must not be interpreted as mesh quality. The corrected diagnostic
+aligns each interpolated vertex normal to the visible face's hemisphere before
+shading, records alignment/zero/orthogonal counts, and preserves raw normals.
+This changes only the diagnostic shader, not geometry or the official renderer.

@@ -42,6 +42,23 @@ def normal_jumps(normal, mask, roi):
             'over_15_degrees': int((angles > 15).sum()), 'units': 'degrees between adjacent visible pixels'}
 
 
+def align_vertex_hemisphere(flat, vertex, mask):
+    """Orient interpolated normals consistently with each visible geometric face."""
+    if not np.isfinite(flat[mask]).all() or not np.isfinite(vertex[mask]).all():
+        raise ValueError('nonfinite visible normals')
+    flat_length, vertex_length = [np.linalg.norm(normal, axis=-1) for normal in (flat, vertex)]
+    valid = mask & (flat_length > 1e-6) & (vertex_length > 1e-6)
+    cosine = (flat * vertex).sum(-1) / np.maximum(flat_length * vertex_length, 1e-12)
+    flipped = valid & (cosine < 0)
+    qc = {'visible_pixels': int(mask.sum()), 'aligned_pixels': int(flipped.sum()),
+          'aligned_fraction': float(flipped.sum() / max(int(mask.sum()), 1)),
+          'zero_flat_normal_pixels': int((mask & (flat_length <= 1e-6)).sum()),
+          'zero_vertex_normal_pixels': int((mask & (vertex_length <= 1e-6)).sum()),
+          'near_orthogonal_pixels': int((valid & (np.abs(cosine) < .001)).sum()),
+          'zero_norm_threshold': 1e-6, 'orthogonal_cosine_threshold': .001}
+    return np.where(flipped[..., None], -vertex, vertex), qc
+
+
 def save_image(path, values, mask):
     if values.ndim == 2:
         values = np.repeat(values[..., None], 3, axis=-1)
@@ -73,7 +90,7 @@ def run(assets, reviews, output, gpu=0):
     state = {'status': 'running', 'git': revision, 'source_locks': locks, 'official_commit': OFFICIAL,
         'resolution': RESOLUTION, 'source512_bowl_roi_xyxy_exclusive': ROI512, 'render_roi_xyxy_exclusive': roi,
         'roi_policy': 'Fixed diagnostic rectangle, not a segmentation or training mask.',
-        'normal_policy': 'Per-face cross products versus area-weighted incident-face vertex normals; vertices/faces unchanged.',
+        'normal_policy': 'Per-face cross products versus area-weighted incident-face vertex normals aligned to the visible face hemisphere; vertices/faces unchanged.',
         'shading': 'Identical camera-space Lambert: .22 + .78*max(dot(n,normalize([.3,-.4,-1])),0); no PBR, SSAO or tone mapping.',
         'normal_encoding': '-camera_space_normal*.5+.5; flip both modes using the same visible-face orientation',
         'coordinate_policy': 'Official projection and raster orientation; no vertical image flip.',
@@ -127,6 +144,9 @@ def run(assets, reviews, output, gpu=0):
             position = dr.interpolate(camera_xyz[None].contiguous(), raster, faces)[0][0]
             sign = torch.where((flat * position).sum(-1, keepdim=True) > 0, -1., 1.)
             flat, smooth = [(normal * sign).cpu().numpy() for normal in (flat, smooth)]
+            raw_smooth = smooth
+            # Hemisphere alignment commutes with the shared face-to-camera sign.
+            smooth, orientation_qc = align_vertex_hemisphere(flat, smooth, mask)
             depth = position[..., 2].cpu().numpy()
             for mode, normal in (('flat', flat), ('vertex', smooth)):
                 save_image(folder / (mode + '_normal.png'), -normal * .5 + .5, mask)
@@ -134,7 +154,8 @@ def run(assets, reviews, output, gpu=0):
             low, high = float(depth[mask].min()), float(depth[mask].max())
             save_image(folder / 'depth.png', (depth - low) / max(high - low, 1e-12), mask)
             Image.fromarray(mask.astype(np.uint8) * 255).save(folder / 'mask.png')
-            np.savez_compressed(folder / 'buffers.npz', flat_normal=flat, vertex_normal=smooth, depth=depth, mask=mask)
+            np.savez_compressed(folder / 'buffers.npz', flat_normal=flat, vertex_normal=smooth,
+                                raw_vertex_normal=raw_smooth, depth=depth, mask=mask)
             x0, y0, x1, y1 = roi
             visible = torch.unique(triangle_ids[y0:y1, x0:x1])
             visible = visible[visible >= 0]
@@ -144,6 +165,7 @@ def run(assets, reviews, output, gpu=0):
             areas = (.5 * (ab[:, 0] * ac[:, 1] - ab[:, 1] * ac[:, 0]).abs()).cpu().numpy()
             state['meshes'].append({'id': label, 'asset': str(asset), 'camera': camera, 'vertices': len(vertices),
                 'faces': len(faces), 'geometry_sha256': hashes, 'depth_range': [low, high],
+                'normal_orientation_qc': orientation_qc,
                 'roi_foreground_pixels': int(mask[y0:y1, x0:x1].sum()),
                 'roi_flat_normal_jumps': normal_jumps(flat, mask, roi),
                 'roi_vertex_normal_jumps': normal_jumps(smooth, mask, roi),
