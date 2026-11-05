@@ -62,4 +62,5 @@ as different fitted cameras. A silhouette score or completed run is not user
 acceptance of identity, surface quality, hidden geometry or downstream learning.
 
 Completed16-run results, exact duplicate/baseline checks and gallery locations:
-[RESULTS.md](RESULTS.md).
+[automatic-crop rerun](AUTOCROP_RESULTS.md) and
+[previous fixed-crop run](RESULTS.md).
