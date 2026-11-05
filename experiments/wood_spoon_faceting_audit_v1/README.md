@@ -47,3 +47,5 @@ statistics must not be interpreted as mesh quality. The corrected diagnostic
 aligns each interpolated vertex normal to the visible face's hemisphere before
 shading, records alignment/zero/orthogonal counts, and preserves raw normals.
 This changes only the diagnostic shader, not geometry or the official renderer.
+
+Completed evidence, comparison limits and remaining questions: [RESULTS.md](RESULTS.md).
