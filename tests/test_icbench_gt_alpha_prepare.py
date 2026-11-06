@@ -96,6 +96,51 @@ class GTAlphaPrepareTests(unittest.TestCase):
         mask[1:102, 410:512] = 255
         self.assertEqual(prep.padded_gt_crop(mask), ([399, 0, 512, 113], 11))
 
+    def test_sam_provenance_changes_only_labels_for_identical_mask_pixels(self):
+        prepare_inputs(self.parent['source_path'], self.parent['original_mask_path'], self.root / 'sam_semantic',
+            segmentation='supplied per-instance binary SAM mask')
+        sam_source = self.root / 'sam_semantic/source_receipt.json'
+        results = {}
+        for kind, source in [('GT', self.receipt), ('SAM', sam_source)]:
+            for soft in (False, True):
+                suffix = 'soft' if soft else 'hard'
+                options = {'mask_kind': kind} if kind == 'SAM' else {}
+                result = prep.prepare(source, self.root / f'{kind}_{suffix}', soft=soft,
+                    segmenter=self.segmenter, **options)
+                results[kind, suffix] = result
+                self.assertEqual(result['mask_kind'], kind)
+                self.assertEqual(result['schema'], f'icbench_{kind.lower()}_alpha_four_prepare/v1')
+                self.assertIn(kind, result['conditioning_alpha']['method'])
+                if soft:
+                    self.assertTrue(result['conditioning_alpha'][f'{kind.lower()}_clipped'])
+                    self.assertTrue((self.root / f'{kind}_{suffix}' / f'{kind.lower()}_clipped_alpha512.png').is_file())
+                for variant in result['variants']:
+                    record = json.loads(Path(variant['source_receipt']).read_text())
+                    if kind == 'SAM':
+                        self.assertEqual(record['segmentation'], 'supplied per-instance binary SAM mask')
+                        self.assertNotIn('GT', json.dumps(record['conditioning_alpha']))
+                    if variant['color'] == 'pink':
+                        self.assertEqual(record['conditioning_recolor']['rgb_edit_support'],
+                            f'{kind} excluding exact-white pixels')
+        for suffix in ('hard', 'soft'):
+            for gt, sam in zip(results['GT', suffix]['variants'], results['SAM', suffix]['variants']):
+                np.testing.assert_array_equal(self.read(gt['pre_alpha_rgb_path']), self.read(sam['pre_alpha_rgb_path']))
+                gt_record, sam_record = [json.loads(Path(v['source_receipt']).read_text()) for v in (gt, sam)]
+                np.testing.assert_array_equal(self.read(gt_record['cutout_path']), self.read(sam_record['cutout_path']))
+        for hard, soft in zip(results['SAM', 'hard']['variants'], results['SAM', 'soft']['variants']):
+            np.testing.assert_array_equal(self.read(hard['pre_alpha_rgb_path']), self.read(soft['pre_alpha_rgb_path']))
+
+        out = self.root / 'SAM_empty'
+        def empty(image):
+            return Image.fromarray(np.dstack([np.asarray(image), np.zeros((image.height, image.width), dtype=np.uint8)]))
+        with self.assertRaisesRegex(ValueError, 'SAM-clipped BiRef alpha is empty'):
+            prep.prepare(sam_source, out, soft=True, segmenter=empty, mask_kind='SAM')
+        self.assertTrue((out / 'sam_clipped_alpha512.png').is_file())
+        self.assertFalse((out / 'gt_clipped_alpha512.png').exists())
+        state = json.loads((out / 'status.json').read_text())
+        self.assertEqual(state['mask_kind'], 'SAM')
+        self.assertIn('SAM-clipped', state['error'])
+
     def test_invalid_predictions_keep_raw_failure_evidence_and_no_variant_receipts(self):
         cases = [(0, 'is empty'), (128, 'no values > 204'), (255, 'no soft values')]
         for value, message in cases:
