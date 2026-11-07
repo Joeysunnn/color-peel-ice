@@ -30,15 +30,16 @@ class SelectedInitializerTests(unittest.TestCase):
         self.output = self.root / 'output'
         self.calls = []
 
-    def run_fixture(self, responses, selected, allow_partial=False):
+    def run_fixture(self, responses, selected, allow_partial=False, tokenizer=None):
         calls = self.calls
         class Predictor:
             runtime = {'dtype': 'float16', 'do_sample': False}
             def __call__(self, image):
                 calls.append(self.prompt)
                 return json.dumps(responses[len(calls) - 1])
+        tokenizer = tokenizer or Tokenizer()
         transformers = SimpleNamespace(CLIPTokenizer=SimpleNamespace(
-            from_pretrained=lambda *a, **k: Tokenizer()))
+            from_pretrained=lambda *a, **k: tokenizer))
         with patch.object(vlm, 'model_receipt', return_value={'metadata_files': {}, 'weights': []}), \
                 patch.object(vlm, 'QwenPredictor', return_value=Predictor()), \
                 patch.dict(sys.modules, {'transformers': transformers}):
@@ -58,6 +59,59 @@ class SelectedInitializerTests(unittest.TestCase):
         self.assertEqual(set(manifest['branches']), {'subject', 'color', 'material', 'texture'})
         self.assertIsNone(manifest['branches']['texture']['initializer'])
         self.assertEqual(manifest['branches']['color']['initializer'], 'orange')
+
+    def test_texture_surface_response_allows_empty_unrequested_subject_and_roundtrips(self):
+        class SurfaceTokenizer(Tokenizer):
+            def get_vocab(self):
+                return {**super().get_vocab(), 'uniform': 18}
+
+            def encode(self, word, add_special_tokens=False):
+                return [18] if word == 'uniform' else super().encode(word, add_special_tokens)
+
+        value = response()
+        value['subject'].update(category='abstract pattern', confidence='medium', candidates=[])
+        value['texture'].update(description='visible spatial pattern of irregular speckles and blotches',
+                                confidence='high', candidates=['speckled', 'blotchy', 'mottled', 'uniform'])
+        raw = json.dumps(value)
+        self.assertEqual(vlm.parse_response(raw, selected_branches=['texture']), value)
+        with self.assertRaisesRegex(ValueError, 'Invalid subject candidates'):
+            vlm.parse_response(raw)
+        tokenizer = SurfaceTokenizer()
+        path = self.run_fixture([value], ['texture'], tokenizer=tokenizer)
+        manifest = load_initializer_manifest(path, tokenizer, self.sd)
+        self.assertEqual(manifest['response'], value)
+        self.assertEqual(json.loads((self.output / 'raw_response.txt').read_text()), value)
+        self.assertEqual(manifest['branches']['subject']['candidates'], [])
+        self.assertIsNone(manifest['branches']['subject']['initializer'])
+        self.assertEqual(manifest['branches']['texture']['candidates'], value['texture']['candidates'])
+        self.assertEqual(manifest['branches']['texture']['initializer'], 'uniform')
+        self.assertEqual(manifest['selected_branches'], ['texture'])
+        self.assertEqual(manifest['selection_attempts'], 1)
+        self.assertEqual(len(self.calls), 1)
+        for change in ({'selected_branches': ['subject', 'texture']},
+                       {'schema': 'colorpeel_vlm_initializers/v2'}):
+            path.write_text(json.dumps({**manifest, **change}), encoding='utf8')
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'Invalid subject candidates'):
+                load_initializer_manifest(path, tokenizer, self.sd)
+
+    def test_selected_texture_and_other_response_validation_remain_strict(self):
+        for branch, field, invalid in (
+                ('texture', 'candidates', []), ('texture', 'candidates', 'plain'),
+                ('texture', 'candidates', [7]), ('texture', 'candidates', ['plain'] * 5),
+                ('texture', 'candidates', ['rough']), ('texture', 'confidence', 0.9),
+                ('subject', 'candidates', [7]), ('subject', 'candidates', None),
+                ('subject', 'category', '<S*>'), ('subject', 'description', ''),
+                ('subject', 'confidence', 'invalid'), ('material', 'roughness', {})):
+            value = response()
+            value['subject'].update(confidence='medium', candidates=[])
+            value[branch][field] = invalid
+            with self.subTest(branch=branch, field=field, invalid=invalid), self.assertRaises(ValueError):
+                vlm.parse_response(json.dumps(value), selected_branches=['texture'])
+        value = response()
+        value['subject'].update(confidence='medium', candidates=[])
+        with self.assertRaisesRegex(ValueError, 'Invalid subject candidates'):
+            self.run_fixture([value], None)
+        self.assertFalse((self.output / 'initializers.json').exists())
 
     def test_all_four_unknown_texture_fails_without_second_query(self):
         value = response()

@@ -144,7 +144,8 @@ def load_initializer_manifest(path, tokenizer, model_root):
         raise ValueError("raw VLM response, parsed response and manifest response must agree")
     if manifest['schema'] in ('colorpeel_vlm_initializers/v2', SELECTED_SCHEMA):
         from src.methods.colorpeel_ice.vlm_initialization import build_branches, parse_response
-        parsed = parse_response(response_paths[0].read_text(encoding='utf8'))
+        parsed = parse_response(response_paths[0].read_text(encoding='utf8'),
+                                selected_branches=selected if manifest['schema'] == SELECTED_SCHEMA else None)
         expected, failures = build_branches(parsed, tokenizer)
         active_failures = [reason for reason in failures if reason.split(':', 1)[0] in selected]
         if active_failures or branches != expected:

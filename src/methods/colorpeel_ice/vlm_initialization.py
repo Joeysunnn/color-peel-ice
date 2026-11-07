@@ -92,7 +92,7 @@ def _unique_object(pairs):
     return result
 
 
-def parse_response(raw):
+def parse_response(raw, selected_branches=None):
     response = json.loads(raw, object_pairs_hook=_unique_object)
     if not isinstance(response, dict) or set(response) != set(TOKENS):
         raise ValueError("Require exactly subject, color, material and texture")
@@ -114,7 +114,8 @@ def parse_response(raw):
         candidates = value["candidates"]
         if (not isinstance(candidates, list) or len(candidates) > 4
                 or any(not isinstance(word, str) for word in candidates)
-                or (not candidates and value["confidence"] != "unknown")):
+                or (not candidates and value["confidence"] != "unknown"
+                    and (selected_branches is None or branch in selected_branches))):
             raise ValueError(f"Invalid {branch} candidates")
         lowered = {word.strip().lower() for word in candidates}
         if branch == "texture" and lowered & REFLECTION_WORDS:
@@ -287,7 +288,7 @@ def run(image_path, model_dir, sd_model_dir, output, device="cuda:0", selected_b
                     attempt_files.append(folder / name)
             if predictor.runtime.get('reached_token_limit'):
                 raise ValueError('Qwen response reached its token limit; raw output preserved')
-            response = parse_response(raw)
+            response = parse_response(raw, selected_branches=selected_branches)
             write_json(output / 'response.json', response)
             branches, all_failures = build_branches(response, tokenizer)
             failures = [reason for reason in all_failures if reason.split(':', 1)[0] in selected]
