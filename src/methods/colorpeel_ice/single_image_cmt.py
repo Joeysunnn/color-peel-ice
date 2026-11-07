@@ -165,13 +165,48 @@ def extract_gray(albedo, region):
     return extract_texture(albedo, region)
 
 
-def build_plan(prepared, maps, output, branches=('color', 'material', 'texture')):
+def extract_surface_patch(albedo, region, box):
+    """Keep weak surface variation at unit gain within an explicit planar ROI."""
+    from PIL import Image
+    if (len(box) != 4 or any(type(value) is not int for value in box)
+            or not 0 <= box[0] < box[2] <= albedo.width
+            or not 0 <= box[1] < box[3] <= albedo.height
+            or (box[2] - box[0]) * (box[3] - box[1]) < 2):
+        raise ValueError('require a nonempty integer texture ROI inside the source image')
+    valid = np.asarray(region) >= 128
+    if valid.shape != (albedo.height, albedo.width) or not valid[box[1]:box[3], box[0]:box[2]].all():
+        raise ValueError('texture ROI must lie entirely inside the eroded object region')
+    rgb = np.asarray(albedo.crop(box).convert('RGB'), dtype=np.float64) / 255
+    linear = np.where(rgb <= .04045, rgb / 12.92, ((rgb + .055) / 1.055) ** 2.4)
+    luminance = linear @ np.array([.2126, .7152, .0722])
+    median = float(np.median(luminance))
+    centered = .5 + luminance - median
+    if np.any((centered < 0) | (centered > 1)):
+        raise ValueError('unit-gain texture would clip; select a consistent surface ROI')
+    pixels = np.rint(centered * 255).astype(np.uint8)
+    return Image.fromarray(pixels), {
+        'method': 'explicit_surface_roi_linear_luminance_unit_gain',
+        'normalization': 'median_center_only', 'contrast_gain': 1.0,
+        'input_median_luminance': median,
+        'input_luminance_range': [float(luminance.min()), float(luminance.max())],
+        'input_luminance_q02_q98': np.quantile(luminance, [.02, .98]).tolist(),
+        'output_uint8_range': [int(pixels.min()), int(pixels.max())],
+        'valid_pixels': int(pixels.size), 'clipped_pixels': 0,
+        'spatial_pattern_invented': False, 'filtering': False,
+        'color_space': 'linear luminance encoded directly as Non-Color grayscale',
+        'interpretation': 'absolute linear differences retained before quantization; '
+                          'median shifted to 0.5, relative contrast is not preserved'}
+
+
+def build_plan(prepared, maps, output, branches=('color', 'material', 'texture'), texture_roi=None):
     from PIL import Image, ImageDraw
     from scripts.launch.colorpeel_run import git_info
     from experiments.natural_material_supermat_v1.material_pipeline import map_values
     branches = list(dict.fromkeys(branches))
     if not branches or not set(branches) <= set(BRANCH_COUNTS):
         raise ValueError('require selected Color/Material/Texture branches')
+    if texture_roi is not None and 'texture' not in branches:
+        raise ValueError('explicit texture ROI requires the Texture branch')
     prepared, output = Path(prepared).resolve(), fresh(output)
     receipt = read(prepared / 'input_receipt.json')
     locks = dict(receipt['source_locks'])
@@ -220,16 +255,34 @@ def build_plan(prepared, maps, output, branches=('color', 'material', 'texture')
                     protocol['materials']['target'] = target
                 else:
                     with Image.open(maps / 'albedo.png') as opened:
-                        gray, statistics = extract_gray(opened, region)
-                    box = largest_rectangle(valid)
-                    gray.crop(box).save(output / 'texture.png')
-                    with Image.open(receipt['roi_overlay']) as opened:
+                        if texture_roi is None:
+                            gray, statistics = extract_gray(opened, region)
+                            box = largest_rectangle(valid)
+                            patch = gray.crop(box)
+                        else:
+                            box = tuple(texture_roi)
+                            patch, statistics = extract_surface_patch(opened, region, box)
+                            opened.crop(box).save(output / 'texture_albedo_crop.png')
+                            protocol['texture_extraction'] = {
+                                'method': statistics['method'], 'normalization': 'median_center_only',
+                                'contrast_gain': 1.0, 'output_size': list(patch.size),
+                                'encoding': '8bit Non-Color linear grayscale',
+                                'uv_repeats': old['texture_extraction']['uv_repeats'],
+                                'normal_bump_displacement': False}
+                    patch.save(output / 'texture.png')
+                    preview_path = receipt['roi_overlay'] if texture_roi is None else receipt['source']['image512_path']
+                    with Image.open(preview_path) as opened:
                         preview = opened.convert('RGB')
+                    if texture_roi is not None:
+                        preview.crop(box).save(output / 'texture_source_crop.png')
+                        for name in ('texture_albedo_crop.png', 'texture_source_crop.png'):
+                            locks[str(output / name)] = sha(output / name)
                     ImageDraw.Draw(preview).rectangle((box[0], box[1], box[2]-1, box[3]-1), outline='blue', width=3)
                     preview.save(output / 'texture_roi_overlay.png')
                     locks[str(output / 'texture_roi_overlay.png')] = sha(output / 'texture_roi_overlay.png')
                     locks[str(output / 'texture.png')] = sha(output / 'texture.png')
                     result['texture_extraction'] = {'statistics': statistics, 'crop_xyxy': list(box),
+                        'roi_policy': 'automatic_maximum_rectangle' if texture_roi is None else 'explicit_surface_rectangle',
                         'retained_region_fraction': (box[2]-box[0])*(box[3]-box[1])/int(valid.sum()),
                         'no_inpainting': True, 'physical_scale_known': False}
                 rows = []
@@ -400,12 +453,14 @@ def main():
     parser.add_argument('--renders', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--branches', nargs='+', default=list(BRANCH_COUNTS), choices=list(BRANCH_COUNTS))
+    parser.add_argument('--texture-roi', type=int, nargs=4, metavar=('X0', 'Y0', 'X1', 'Y1'),
+                        help='Explicit flat-surface ROI; preserve weak texture with median centering and gain1')
     parser.add_argument('--gpu', default='0')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else None)
     if args.stage == 'inputs':
         prepare_inputs(args.prepared, args.output)
     elif args.stage == 'plan':
-        build_plan(args.prepared, args.maps, args.output, args.branches)
+        build_plan(args.prepared, args.maps, args.output, args.branches, texture_roi=args.texture_roi)
     elif args.stage == 'render':
         render(args.plan, args.output, args.gpu)
     else:

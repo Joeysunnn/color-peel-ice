@@ -164,3 +164,21 @@ identities is a later inference decision, not an implicit checkpoint merge.
 Only final-step checkpoints are saved by default. The standard training evidence
 bundle is under `train_outputs/`. No automatic quality tuning, transfer-image
 sweep or background monitor is scheduled.
+
+## Explicit weak-texture surface region
+
+For a known weakly textured surface, the CMT planning stage accepts
+`--branches texture --texture-roi X0 Y0 X1 Y1`. Coordinates refer to the shared512
+original-photo canvas, with exclusive right/bottom bounds. Select a single surface
+away from object edges, relief, seams and shadows; the rectangle must be wholly
+inside the eroded SAM region. This path crops the matched SuperMat albedo first,
+converts it to linear luminance, then uses `0.5 + L - median(L)` with fixed gain1.
+It does not stretch quantiles, add grain, filter or invent a pattern. It preserves
+absolute linear differences before8-bit quantization; moving the median to0.5
+does change relative contrast. Out-of-range results fail instead of clipping.
+
+The plan retains the original photo crop, albedo crop, weak grayscale texture,
+ROI overlay and numeric extraction statistics. Use the existing render/finalize
+stages to make the16-image Texture dataset for review in a new object-local run.
+An explicit ROI records a selection, not automatic user approval or proof that
+all residual shading is absent. Old automatic-crop experiments remain reproducible.
