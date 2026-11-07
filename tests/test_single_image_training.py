@@ -77,6 +77,20 @@ class SingleImageTrainingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'changed'):
             training.verify_dataset(output, 'color')
 
+    def test_checkpoint_schedule_requires_ordered_distinct_steps_and_final_step(self):
+        plan = {'material': 200, 'texture': 500}
+        self.assertEqual(training.checkpoint_plan(plan), {'material': [200], 'texture': [500]})
+        self.assertEqual(training.checkpoint_plan(plan, {'material': [150, 200]}),
+                         {'material': [150, 200], 'texture': [500]})
+        invalid = [[], [0, 200], [-1, 200], [True, 200], [1.5, 200], [150, 150, 200],
+                   [200, 150], [150, 201], [150], '150,200', None]
+        for values in invalid:
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                training.checkpoint_plan(plan, {'material': values})
+        for branch in ('subject', 'unknown'):
+            with self.subTest(branch=branch), self.assertRaisesRegex(ValueError, 'selected'):
+                training.checkpoint_plan(plan, {branch: [200]})
+
     def test_wrong_source_mask_hash_and_wrong_count_are_rejected(self):
         for index, mutate in enumerate((
             lambda data: data['subject'].update(source_mask_sha256='0' * 64),
@@ -168,6 +182,55 @@ class SingleImageTrainingTests(unittest.TestCase):
             training._write(self.root / 'source_audit.json', audit)
             with self.assertRaisesRegex(ValueError, 'recipe changed'):
                 training.verify_prepared(self.root)
+
+    def test_material_texture_schedules_match_config_export_and_smoke(self):
+        audit = self.audit()
+        audit['steps']['texture'] = 500
+        audit['checkpoint_steps'] = {'material': [150, 200], 'texture': [300, 500]}
+        training._write(self.root / 'source_audit.json', audit)
+        for branch, expected in audit['checkpoint_steps'].items():
+            with self.subTest(branch=branch):
+                config = training.build_config(self.root, branch)
+                recipe = training.recipe(self.root, branch)
+                self.assertEqual(config['args']['checkpoint_steps'], expected)
+                self.assertEqual(config['args']['max_train_steps'], expected[-1])
+                self.assertEqual(recipe.STEPS, tuple(expected))
+                self.assertEqual(recipe.build_config(branch, 'lora_r64'), config)
+                smoke = recipe.build_config(branch, 'lora_r64', smoke=True)
+                self.assertEqual(smoke['args']['checkpoint_steps'], [2])
+                self.assertEqual(smoke['args']['max_train_steps'], 2)
+
+    def test_export_retains_initializer_provenance_at_every_requested_step(self):
+        audit = self.audit()
+        audit['checkpoint_steps'] = {'material': [150, 200]}
+        training._write(self.root / 'source_audit.json', audit)
+        manifest = Path(audit['initializer_manifest'])
+        training._write(manifest, {'selected_branches': ['material']})
+        selected = audit['initializers']['branches']['material']
+        initial = {'initializer_manifest': str(manifest), 'initializer_manifest_sha256': training.sha256(manifest),
+                   'initializer': selected['initializer'], 'initializer_token_id': selected['initializer_token_id'],
+                   'modifier_token': '<M*>', 'initialized_equal_base': True, 'initializer_unchanged': True,
+                   'base_initializer_sha256': 'abc', 'modifier_after_copy_sha256': 'abc'}
+        (self.root / 'run/checkpoints').mkdir(parents=True)
+        for name in ('initializer_audit.json', 'adaptation_config.json'):
+            training._write(self.root / 'run/checkpoints' / name, initial)
+
+        def export(*args, experiment_contract):
+            self.assertEqual(experiment_contract.STEPS, (150, 200))
+            self.assertEqual(experiment_contract.build_config('material', 'lora_r64')['args']['checkpoint_steps'],
+                             [150, 200])
+            for step in (150, 200):
+                (args[3] / f'step{step}').mkdir(parents=True)
+            return {'source_locks': {}, 'steps': {150: {'hashes': {}}, 200: {'hashes': {}}}}
+
+        with patch.object(training, 'verify_prepared', return_value=audit), \
+                patch.object(training.snapshots, 'audit_export', side_effect=export):
+            result = training.export(self.root, 'material', self.root / 'run', self.root / 'exports')
+        for step in (150, 200):
+            receipt = training.read_json(self.root / f'exports/step{step}/receipt.json')
+            self.assertEqual(receipt, result['steps'][step])
+            self.assertEqual(receipt['initializer_provenance']['initializer'], selected['initializer'])
+            self.assertEqual(receipt['hashes'][str(manifest)], training.sha256(manifest))
 
 
 if __name__ == '__main__':

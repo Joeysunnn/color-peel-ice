@@ -4,7 +4,7 @@ Default intake is **Scheme A**: Qwen whole-object category discovery, all Ground
 DINO detections, separate SAM masks and existing duplicate suppression. Each
 retained instance has its own input/mask receipt, semantic initialization, fresh
 derived datasets and independent SD2.1 token-local LoRA64 branches. Scheme B and
-historical Mailbox assets are not selected by this entry.
+historical Mailbox assets are not selected automatically by this entry.
 
 | Branch | Training images per object | Default updates |
 | --- | --- | ---: |
@@ -61,6 +61,31 @@ from the same base and frozen data; it is not checkpoint resume. Preparation and
 training require the same full Git revision and clean checkout. Use the retained
 producer checkout when reusing its data. A branch absent from preparation must
 be prepared before training it.
+
+For an already identified object, C/M/T preparation can explicitly reuse its
+Scheme A SAM instance with `--objects-json /absolute/path/segmentation/objects.json
+--object-id object_003`. The input photograph must match the recorded original
+SHA-256; canonical RGB, SAM mask and isolated crop are verified before any GPU
+stage. Only that instance is prepared. Qwen initialization, SuperMat and derived
+datasets run afresh under the current Git revision. The original segmentation
+manifest and its source files remain hash-locked through the new input receipt.
+This option supports C/M/T; an already accepted Subject is retained separately.
+
+Explicit intermediate paired snapshots are supported, for example:
+
+```bash
+$PY -u -B scripts/methods/colorpeel_ice/learn_from_image.py \
+  --image /absolute/path/input.jpg \
+  --objects-json /absolute/path/segmentation/objects.json --object-id object_003 \
+  --output "$COLORPEEL_RUN_ROOT/paper_experiments_v1/OBJECT/training/NEW_MT_RUN" \
+  --branches material texture --steps material=200 texture=500 \
+  --checkpoint-steps material=150,200 texture=300,500 --gpus 0 1
+```
+
+Checkpoint lists must be strictly increasing positive integers, include the final
+step, and stay within the selected branch's maximum. Each saved step exports a
+matched adapter/embedding pair and receipt. Use a new run directory inside the
+same paper object root as its retained Subject checkpoints and inference results.
 
 ## Source and scientific contracts
 
@@ -130,7 +155,7 @@ conditioning policy and receipt hash.
 All artifacts have source hashes; arbitrary images cannot attach old Mailbox data.
 
 Training: each `object_###/{branch}/` contains its immutable prepared recipe,
-configuration, training log, actual initializer-copy audit and paired final-step
+configuration, training log, actual initializer-copy audit and paired requested-step
 adapter/embedding export under `ckpts/`. Root `checkpoints.json` indexes outcomes
 and exact checkpoint paths. Every branch retains its own token `<S*>`, `<C*>`,
 `<M*>` or `<T*>`; names are scoped by object directory. Combining different object

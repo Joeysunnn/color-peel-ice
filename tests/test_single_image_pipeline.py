@@ -50,6 +50,57 @@ class SingleImagePipelineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             pipeline.training_plan(['color'], pipeline.parse_steps(['color=-3']))
 
+    def test_checkpoint_cli_parser_rejects_malformed_and_duplicate_overrides(self):
+        self.assertEqual(pipeline.parse_checkpoint_steps(['material=150,200', 'texture=300,500']),
+                         {'material': [150, 200], 'texture': [300, 500]})
+        for values in (['material=150,200', 'material=200'], ['material'], ['material='],
+                       ['material=150,'], ['material=abc']):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                pipeline.parse_checkpoint_steps(values)
+
+    def test_checkpoint_cli_schedule_reaches_training_and_worker(self):
+        prepared = self.write(self.root / 'prepared.json', {'status': 'prepared'})
+        checkpoints = self.write(self.root / 'checkpoints.json', {'status': 'succeeded'})
+        options = ['--prepared', str(prepared), '--output', str(self.root / 'training'),
+                   '--branches', 'material', 'texture', '--steps', 'material=200', 'texture=500',
+                   '--checkpoint-steps', 'material=150,200', 'texture=300,500', '--gpus', '1', '3']
+        with patch.object(pipeline, 'train', return_value=checkpoints) as train:
+            self.assertEqual(pipeline.main(['--stage', 'train', *options]), 0)
+        self.assertEqual(train.call_args.args[-1], {'material': [150, 200], 'texture': [300, 500]})
+        with patch.object(pipeline, 'train_object') as worker:
+            self.assertEqual(pipeline.main(['--worker', 'train-object', '--prepared', str(prepared),
+                '--output', str(self.root / 'worker'), '--branches', 'texture', '--steps', 'texture=500',
+                '--checkpoint-steps', 'texture=300,500', '--gpus', '3']), 0)
+        self.assertEqual(worker.call_args.args[-4:], ('texture', 500, 3, [300, 500]))
+
+    def test_train_queue_passes_each_branch_checkpoint_schedule_to_worker(self):
+        prepared = self.prepared()
+        manifest = pipeline.read(prepared)
+        manifest['reused_segmentation'] = {'manifest': 'prior/objects.json'}
+        pipeline.write_json(prepared, manifest)
+        calls = []
+
+        def execute(command, log, gpu):
+            command = [str(value) for value in command]
+            branch = command[command.index('--branches') + 1]
+            self.assertEqual(command[command.index('--checkpoint-steps') + 1],
+                             {'color': 'color=40,70', 'texture': 'texture=300,500'}[branch])
+            calls.append(branch)
+            output = Path(command[command.index('--output') + 1])
+            self.write(output / 'status.json', {'status': 'trained'})
+
+        with patch.object(pipeline, 'execute', side_effect=execute):
+            result = pipeline.train(prepared, self.root / 'training', {'color': 70, 'texture': 500},
+                                    [0], pipeline.RUNTIME, {'color': [40, 70], 'texture': [300, 500]})
+        self.assertCountEqual(calls, ['color', 'texture', 'color'])
+        jobs = pipeline.read(result)['objects']
+        self.assertTrue(all(job['checkpoint_steps'] ==
+                            {'color': [40, 70], 'texture': [300, 500]}[job['branch']] for job in jobs))
+        changelog = (result.parent / 'train_outputs/SCIENTIFIC_CHANGELOG.md').read_text()
+        self.assertIn('Existing hash-locked SAM segmentation is reused', changelog)
+        self.assertIn('Subject is not trained or replaced', changelog)
+        self.assertNotIn('fresh TRELLIS', changelog)
+
     def test_train_queue_isolates_failed_and_missing_branches_and_continues(self):
         prepared = self.prepared()
         calls = []
@@ -135,6 +186,22 @@ class SingleImagePipelineTests(unittest.TestCase):
         self.assertEqual(prepare.call_args.kwargs['branches'], ['texture'])
         self.assertEqual(prepare.call_args.kwargs['steps'], {'texture': 630})
         self.assertEqual(export.call_args.kwargs['gpu'], 2)
+
+    def test_train_worker_prepares_schedule_and_records_all_exports(self):
+        source = self.write(self.root / 'object.json', {'id': 'object_004', 'record': {},
+                             'initializer_manifest': 'initializer.json', 'datasets': {'texture': {}}})
+        config = {'schema_version': 1, 'stage': 'train',
+                  'run': {'study': training.STUDY, 'variant': 'object_004_texture_steps500', 'seed': 42},
+                  'args': {'max_train_steps': 500, 'checkpoint_steps': [300, 500]}}
+        exports = {'steps': {300: {'steps': 300, 'paired': True}, 500: {'steps': 500, 'paired': True}}}
+        with patch.object(training, 'prepare') as prepare, patch.object(training, 'verify_prepared'), \
+                patch.object(training, 'build_config', return_value=config), \
+                patch.object(training, 'export', return_value=exports), patch.object(pipeline.subprocess, 'run'):
+            state = pipeline.train_object(source, self.root / 'worker', 'texture', 500, 2, [300, 500])
+        self.assertEqual(prepare.call_args.kwargs['checkpoint_steps'], {'texture': [300, 500]})
+        self.assertEqual(state['checkpoint_steps'], [300, 500])
+        self.assertEqual(state['checkpoints'], exports['steps'])
+        self.assertEqual(state['checkpoint'], exports['steps'][500])
 
     def test_all_stage_passes_selected_plan_and_distinct_output_roots(self):
         image = self.root / 'image.jpg'

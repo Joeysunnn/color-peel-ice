@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 from .object_segmentation import sha256, write_json
-from .single_image_training import BRANCHES, DEFAULT_STEPS, training_plan
+from .single_image_training import BRANCHES, DEFAULT_STEPS, checkpoint_plan, training_plan
 from scripts.launch.colorpeel_run import git_info, read_config, resolve_run_dir
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -121,8 +121,36 @@ def prepare_subject_geometry(folder, objects_json, object_id, runtime, stage):
         'conditioning_alpha_sha256': condition['conditioning_alpha_sha256']}
 
 
-def prepare(image, output, branches, gpu, runtime):
+def select_segmented_object(image, objects_json, object_id):
+    """Reuse one explicit SAM instance, retaining its original source provenance."""
+    from .single_image_training import source_locks
+    image, objects_json = Path(image).resolve(), Path(objects_json).resolve()
+    segmented = read(objects_json)
+    if (segmented.get('schema') != 'colorpeel_object_segmentation/v1'
+            or segmented.get('status') not in ('succeeded', 'partial')
+            or segmented['source']['image_sha256'] != sha256(image)):
+        raise ValueError('segmentation does not describe this source photograph')
+    matches = [row for row in segmented['objects'] if row['id'] == object_id]
+    if len(matches) != 1:
+        raise ValueError('require exactly one matching segmented object')
+    record = {**matches[0], 'source_image_sha256': segmented['source']['canonical_image_sha256']}
+    if Path(record['source_image']).resolve() != Path(segmented['source']['canonical_image']).resolve():
+        raise ValueError('object does not use the segmentation canonical image')
+    locks = {**source_locks(record), str(image): sha256(image), str(objects_json): sha256(objects_json)}
+    provenance = {'objects_json': str(objects_json), 'objects_json_sha256': locks[str(objects_json)],
+                  'object_id': object_id, 'policy': 'reuse semantic SAM mask; rerun VLM and CMT',
+                  'original_status': segmented['status'], 'selection_status': 'succeeded',
+                  'source_locks': locks}
+    return {**segmented, 'objects': [record], 'status': 'succeeded', 'failures': []}, provenance
+
+
+def prepare(image, output, branches, gpu, runtime, objects_json=None, object_id=None):
     from .single_image_subject import check_locks, prepare_inputs
+    if bool(objects_json) != bool(object_id):
+        raise ValueError('objects_json and object_id must be supplied together')
+    if objects_json and 'subject' in branches:
+        raise ValueError('existing instance reuse currently supports C/M/T only')
+    reused = select_segmented_object(image, objects_json, object_id) if objects_json else None
     revision = git_info()
     image, output = Path(image).resolve(), fresh(output)
     state = {'schema': 'colorpeel_single_image_prepared/v1', 'status': 'preparing',
@@ -141,11 +169,17 @@ def prepare(image, output, branches, gpu, runtime):
         return [runtime[python], '-B', ENTRY, '--worker', action, *args]
 
     try:
-        stage(worker('vlm_python', 'discover', '--image', image, '--output', output / 'discovery',
-                     '--runtime-json', write_runtime(output, runtime)), 'discovery')
-        stage(worker('python', 'segment', '--image', image, '--output', output / 'segmentation',
-                     '--prepared', output / 'discovery/categories.json'), 'segmentation')
-        segmented = read(output / 'segmentation/objects.json')
+        if reused:
+            segmented, provenance = reused
+            state['reused_segmentation'] = provenance
+            state['source_locks'] = provenance['source_locks']
+            write_runtime(output, runtime)
+        else:
+            stage(worker('vlm_python', 'discover', '--image', image, '--output', output / 'discovery',
+                         '--runtime-json', write_runtime(output, runtime)), 'discovery')
+            stage(worker('python', 'segment', '--image', image, '--output', output / 'segmentation',
+                         '--prepared', output / 'discovery/categories.json'), 'segmentation')
+            segmented = read(output / 'segmentation/objects.json')
         if segmented['source']['image_sha256'] != state['source_sha256']:
             raise ValueError('segmentation source differs from input image')
         state['segmentation_status'] = segmented['status']
@@ -158,6 +192,13 @@ def prepare(image, output, branches, gpu, runtime):
             state['objects'].append(item)
             try:
                 prepare_inputs(record['source_image'], record['object_mask'], folder / 'input')
+                if reused:
+                    receipt_path = folder / 'input/source_receipt.json'
+                    receipt = read(receipt_path)
+                    receipt['source_locks'].update(provenance['source_locks'])
+                    receipt['reused_segmentation'] = provenance
+                    write_json(receipt_path, receipt)
+                    item['reused_segmentation'] = provenance
                 stage(worker('vlm_python', 'initialize', '--image', record['vlm_input'],
                     '--output', folder / 'initializers', '--branches', *branches,
                     '--runtime-json', output / 'runtime.json'), record['id'] + '_initializers')
@@ -242,6 +283,7 @@ def prepare(image, output, branches, gpu, runtime):
             item['object_manifest'] = str(folder / 'object.json')
             item['object_manifest_sha256'] = sha256(folder / 'object.json')
             write_json(output / 'status.json', state)
+        check_locks(state.get('source_locks', {}))
         if sha256(image) != state['source_sha256'] or git_info() != revision:
             raise ValueError('source or Git changed during preparation')
         state['status'] = ('prepared' if state['objects'] and segmented['status'] == 'succeeded'
@@ -261,16 +303,18 @@ def write_runtime(output, runtime):
     return path
 
 
-def train_object(object_manifest, output, branch, steps, gpu):
+def train_object(object_manifest, output, branch, steps, gpu, checkpoint_steps=None):
     from . import single_image_training as training
+    checkpoints = checkpoint_plan({branch: steps},
+                                  None if checkpoint_steps is None else {branch: checkpoint_steps})
     item = read(object_manifest)
     output = fresh(output)
     state = {'status': 'preparing', 'object_id': item['id'], 'branch': branch,
              'max_steps': steps, 'completed_steps': None, 'gpu': gpu, 'best_metric': None,
-             'best_checkpoint': None, 'quality_accepted_by_user': False}
+             'best_checkpoint': None, 'checkpoint_steps': checkpoints[branch], 'quality_accepted_by_user': False}
     try:
         training.prepare(output / 'prepared', item['record'], item['initializer_manifest'],
-                         item['datasets'], branches=[branch], steps={branch: steps})
+                         item['datasets'], branches=[branch], steps={branch: steps}, checkpoint_steps=checkpoints)
         training.verify_prepared(output / 'prepared')
         config = training.build_config(output / 'prepared', branch, gpu=gpu)
         training._write(output / 'config.json', config)
@@ -291,6 +335,7 @@ def train_object(object_manifest, output, branch, steps, gpu):
         write_json(output / 'status.json', state)
         exported = training.export(output / 'prepared', branch, run_dir, output / 'ckpts', gpu=gpu)
         state.update(status='trained', completed_steps=steps, checkpoint=exported['steps'][steps],
+                     checkpoints=exported['steps'],
                      checkpoint_index=str(output / 'ckpts/index.json'), stop_reason='max_steps_reached')
     except Exception as error:
         state.update(status='failed', error=f'{type(error).__name__}: {error}', stop_reason='error')
@@ -300,7 +345,8 @@ def train_object(object_manifest, output, branch, steps, gpu):
     return state
 
 
-def train(prepared_path, output, plan, gpus, runtime):
+def train(prepared_path, output, plan, gpus, runtime, checkpoint_steps=None):
+    checkpoints = checkpoint_plan(plan, checkpoint_steps)
     prepared_path, output = Path(prepared_path).resolve(), fresh(output)
     prepared = read(prepared_path)
     if prepared['status'] not in ('prepared', 'partial') or prepared['git'] != git_info():
@@ -308,13 +354,15 @@ def train(prepared_path, output, plan, gpus, runtime):
     if set(plan) - set(prepared['branches']):
         raise ValueError('selected training branch was not requested during data preparation')
     state = {'status': 'training', 'prepared': str(prepared_path), 'prepared_sha256': sha256(prepared_path),
-             'git': git_info(), 'steps': plan, 'jobs': [], 'quality_accepted_by_user': False}
+             'git': git_info(), 'steps': plan, 'checkpoint_steps': checkpoints,
+             'jobs': [], 'quality_accepted_by_user': False}
     queue = Queue()
     for item in prepared['objects']:
         if sha256(item['object_manifest']) != item['object_manifest_sha256']:
             raise ValueError('prepared object manifest changed')
         for branch, steps in plan.items():
             job = {'object_id': item['id'], 'branch': branch, 'max_steps': steps,
+                   'checkpoint_steps': checkpoints[branch],
                    'object_manifest': item['object_manifest'], 'status': 'pending'}
             state['jobs'].append(job)
             if branch in item['datasets']:
@@ -335,7 +383,9 @@ def train(prepared_path, output, plan, gpus, runtime):
             folder.parent.mkdir(parents=True, exist_ok=True)
             command = [runtime['train_python'], '-u', '-B', ENTRY, '--worker', 'train-object',
                 '--prepared', job['object_manifest'], '--output', folder, '--branches', job['branch'],
-                '--steps', f"{job['branch']}={job['max_steps']}", '--gpus', str(gpu)]
+                '--steps', f"{job['branch']}={job['max_steps']}",
+                '--checkpoint-steps', job['branch'] + '=' + ','.join(map(str, job['checkpoint_steps'])),
+                '--gpus', str(gpu)]
             job.update(status='running', gpu=gpu, command=[str(x) for x in command], output=str(folder))
             try:
                 execute(command, folder.parent / (job['branch'] + '.log'), gpu)
@@ -360,23 +410,29 @@ def train(prepared_path, output, plan, gpus, runtime):
         '```json\n' + json.dumps(job.get('command', [])) + '\n```' for job in state['jobs']), encoding='utf8')
     (output / 'train_outputs/SUMMARY.md').write_text(
         f"Status: {state['status']}. Completed {sum(job['status'] == 'trained' for job in state['jobs'])}"
-        f" / {len(state['jobs'])} selected object/branch jobs. Final paired snapshots only; no quality acceptance.\n", encoding='utf8')
+        f" / {len(state['jobs'])} selected object/branch jobs. Paired snapshots at declared steps; no quality acceptance.\n", encoding='utf8')
     (output / 'train_outputs/LOG.md').write_text('\n'.join(
         f"- {job['object_id']}/{job['branch']}: {job['status']}; "
         f"log: {job.get('output', 'not started')}/training.log" for job in state['jobs']) + '\n', encoding='utf8')
+    segmentation_note = ('Existing hash-locked SAM segmentation is reused. ' if prepared.get('reused_segmentation')
+                         else 'New per-instance Scheme A masks are used. ')
+    subject_note = ('Subject uses fresh TRELLIS geometry selected from original/pink hue0 candidates '
+                    'sharing BiRefNet soft alpha; SAM semantic masks are unchanged. ' if 'subject' in plan
+                    else 'Subject is not trained or replaced in this run. ')
+    cmt_note = ('C/M/T datasets use automatic eroded ROI and, for Material/Texture, fresh SuperMat-derived targets. '
+                if set(plan) & {'color', 'material', 'texture'} else '')
     (output / 'train_outputs/SCIENTIFIC_CHANGELOG.md').write_text(
-        'New per-instance Scheme A masks, fresh TRELLIS geometry selected from original/pink hue0 '
-        'candidates sharing BiRefNet soft alpha, unchanged SAM semantic masks, automatic eroded ROI and '
-        'fresh SuperMat-derived targets replace historical reviewed Mailbox assets for this run. '
+        segmentation_note + subject_note + cmt_note +
         'Original photo anchors, Qwen inputs and C/M/T inputs retain the original photograph. '
         'Selected-v1 initialization preserves raw evidence and permits at most one token repair. '
         'SD2.1 token-local LoRA64 optimizer recipes are inherited; steps are explicit per branch. '
         'No background-preservation objective, extra checkpoint resume, or quality tuning.\n', encoding='utf8')
     (output / 'train_outputs/COMPARABILITY_REPORT.md').write_text(
-        'This is an engineering integration run, not an initializer-only ablation. Instance masks, '
-        'geometry, ROI and derived data differ from historical center11/Material8/Texture16. '
+        'This run trains only the selected branches: ' + ', '.join(plan) + '. '
+        'This is not an initializer-only ablation; compare the recorded input hashes, ROI and derived data '
+        'with each historical run before attributing differences to initialization. ' + subject_note +
         'Technical checkpoint validation does not establish disentanglement or background binding. '
-        'No best checkpoint is selected: each completed job exports its requested final step.\n', encoding='utf8')
+        'No best checkpoint is selected: each completed job exports all requested steps, including its final step.\n', encoding='utf8')
     return output / 'checkpoints.json'
 
 
@@ -390,19 +446,34 @@ def parse_steps(values):
     return result
 
 
+def parse_checkpoint_steps(values):
+    result = {}
+    for value in values or []:
+        name, counts = value.split('=', 1)
+        if name in result:
+            raise ValueError('duplicate branch checkpoint override')
+        result[name] = [int(count) for count in counts.split(',')]
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--stage', choices=('all', 'prepare', 'train'), default='all')
     parser.add_argument('--worker', choices=('discover', 'segment', 'initialize', 'train-object'))
     parser.add_argument('--image', type=Path)
+    parser.add_argument('--objects-json', type=Path, help='Existing Scheme A segmentation for C/M/T reuse')
+    parser.add_argument('--object-id', help='Exactly one instance from --objects-json')
     parser.add_argument('--prepared', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--branches', nargs='+', choices=BRANCHES, default=list(BRANCHES))
     parser.add_argument('--steps', nargs='+', help='Overrides such as subject=1000 material=200')
+    parser.add_argument('--checkpoint-steps', nargs='+',
+                        help='Paired snapshots, e.g. material=150,200 texture=300,500; defaults to final step')
     parser.add_argument('--gpus', type=int, nargs='+', default=[0, 1, 2, 3])
     parser.add_argument('--runtime-json', type=Path, help='Optional explicit environment/path mapping')
     args = parser.parse_args(argv)
     plan = training_plan(args.branches, parse_steps(args.steps))
+    checkpoints = checkpoint_plan(plan, parse_checkpoint_steps(args.checkpoint_steps))
     if not args.gpus or len(set(args.gpus)) != len(args.gpus) or any(gpu < 0 for gpu in args.gpus):
         parser.error('GPUs must be distinct nonnegative indices')
     runtime = {**RUNTIME, **(read(args.runtime_json) if args.runtime_json else {})}
@@ -428,22 +499,26 @@ def main(argv=None):
             if len(plan) != 1:
                 parser.error('training worker requires one branch')
             branch = next(iter(plan))
-            train_object(args.prepared, args.output, branch, plan[branch], args.gpus[0])
+            train_object(args.prepared, args.output, branch, plan[branch], args.gpus[0], checkpoints[branch])
         return 0
     if args.stage != 'train' and args.image is None:
         parser.error('image is required for preparation')
     if args.stage == 'train' and args.prepared is None:
         parser.error('prepared manifest is required for training')
+    reuse = {'objects_json': args.objects_json, 'object_id': args.object_id} if args.objects_json or args.object_id else {}
+    if reuse and args.stage == 'train':
+        parser.error('instance selection applies to preparation, not training')
     if args.stage == 'prepare':
-        path = prepare(args.image, args.output, args.branches, args.gpus[0], runtime)
+        path = prepare(args.image, args.output, args.branches, args.gpus[0], runtime, **reuse)
     elif args.stage == 'train':
-        path = train(args.prepared, args.output, plan, args.gpus, runtime)
+        path = train(args.prepared, args.output, plan, args.gpus, runtime, checkpoints)
     else:
         output = fresh(args.output)
         write_json(output / 'request.json', {'image': str(args.image.resolve()), 'steps': plan,
+                   'checkpoint_steps': checkpoints,
                    'gpus': args.gpus, 'git': git_info(), 'runtime': runtime})
-        prepared = prepare(args.image, output / 'prepared', args.branches, args.gpus[0], runtime)
-        path = train(prepared, output / 'training', plan, args.gpus, runtime)
+        prepared = prepare(args.image, output / 'prepared', args.branches, args.gpus[0], runtime, **reuse)
+        path = train(prepared, output / 'training', plan, args.gpus, runtime, checkpoints)
     print(path)
     return int(read(path)['status'] not in ('prepared', 'succeeded'))
 

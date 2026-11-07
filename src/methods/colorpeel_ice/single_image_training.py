@@ -14,6 +14,7 @@ from experiments.sd21_wood_branches_v1 import snapshots
 from experiments.sd21_wood_branches_v1.contract import MODEL_DIR
 from experiments.subject_multicolor_multimaterial_b.training import _write
 from scripts.launch.colorpeel_run import git_info, resolve_run_dir
+from src.train.checkpoint_utils import validate_checkpoint_plan
 
 ROOT = Path(__file__).resolve().parents[3]
 BRANCHES = ('subject', 'color', 'material', 'texture')
@@ -31,6 +32,24 @@ def training_plan(branches=None, steps=None):
     if set(overrides) - set(BRANCHES) or any(type(value) is not int or value < 1 for value in overrides.values()):
         raise ValueError('training steps must be positive integers for supported branches')
     return {branch: overrides.get(branch, DEFAULT_STEPS[branch]) for branch in selected}
+
+
+def checkpoint_plan(plan, checkpoint_steps=None):
+    plan = training_plan(list(plan), plan)
+    overrides = {} if checkpoint_steps is None else dict(checkpoint_steps)
+    if set(overrides) - set(plan):
+        raise ValueError('checkpoint steps require selected training branches')
+    result = {}
+    for branch, maximum in plan.items():
+        values = overrides.get(branch, [maximum])
+        if not isinstance(values, (list, tuple)):
+            raise ValueError('checkpoint steps must be an ordered sequence')
+        values = list(values)
+        validate_checkpoint_plan(values, maximum, maximum)
+        if values[-1] != maximum:
+            raise ValueError('checkpoint steps must include the final training step')
+        result[branch] = values
+    return result
 
 
 def source_locks(record):
@@ -186,7 +205,8 @@ def audit_material_rows(data):
     return target
 
 
-def prepare(output, object_record, initializer_manifest, datasets, branches=None, steps=None):
+def prepare(output, object_record, initializer_manifest, datasets, branches=None, steps=None,
+            checkpoint_steps=None):
     from transformers import CLIPTokenizer
     from src.train.initializer_token_utils import load_initializer_manifest
     from experiments.sd21_wood_branches_v1.prepare_model import verify_model
@@ -197,6 +217,7 @@ def prepare(output, object_record, initializer_manifest, datasets, branches=None
     if output.exists() or output.is_relative_to(ROOT):
         raise ValueError('require a fresh external prepared experiment')
     plan = training_plan(branches, steps)
+    checkpoints = checkpoint_plan(plan, checkpoint_steps)
     revision = git_info()
     locks = source_locks(object_record)
     model = verify_model(MODEL_DIR)
@@ -223,11 +244,11 @@ def prepare(output, object_record, initializer_manifest, datasets, branches=None
                   str(initializer_manifest): sha256(initializer_manifest),
                   str(output / 'dataset/receipt.json'): sha256(output / 'dataset/receipt.json')})
     audit = {'schema': 'colorpeel_single_object_training/v1', 'new_training_git': revision,
-             'object': object_record, 'branches': list(plan), 'steps': plan,
+             'object': object_record, 'branches': list(plan), 'steps': plan, 'checkpoint_steps': checkpoints,
              'initializer_manifest': str(initializer_manifest), 'initializers': initializers,
              'source_locks': locks, 'base_model': model['model'],
              'material_target_consistency': material_target, 'fresh_training': True,
-             'checkpoint_policy': 'final paired snapshot only; new plan for changed steps'}
+             'checkpoint_policy': 'paired snapshots at declared steps; final step required'}
     _write(output / 'source_audit.json', audit)
     _write(output / 'prepared.json', {'status': 'prepared', 'git': revision,
             'source_audit_sha256': sha256(output / 'source_audit.json')})
@@ -267,6 +288,7 @@ def build_config(experiment, branch, method='lora_r64', model_dir=MODEL_DIR, smo
         config = natural_config(template, experiment / 'dataset', 'pilot')
         config.pop('texture_material')
     maximum = 2 if smoke else audit['steps'][branch]
+    checkpoints = [2] if smoke else checkpoint_plan(audit['steps'], audit.get('checkpoint_steps'))[branch]
     config['status'] = 'single_image_object_training'
     config['run'] = {'study': STUDY, 'variant': audit['object']['id'] + '_' + branch +
                      ('_smoke2' if smoke else f'_steps{maximum}'), 'seed': 42}
@@ -276,7 +298,7 @@ def build_config(experiment, branch, method='lora_r64', model_dir=MODEL_DIR, smo
         concepts_list=str(dataset / 'concepts.json'), modifier_token=TOKENS[branch],
         initializer_token=audit['initializers']['branches'][branch]['initializer'],
         initializer_manifest=audit['initializer_manifest'], max_train_steps=maximum,
-        checkpoint_steps=[maximum], checkpointing_steps=maximum, gradient_checkpointing=True,
+        checkpoint_steps=checkpoints, checkpointing_steps=maximum, gradient_checkpointing=True,
         concept_isolation_weight=0.0, adam_weight_decay=0.0, freeze_model='crossattn_kv')
     config['data_lineage'] = {'object_id': audit['object']['id'],
         'source_image_sha256': audit['object']['source_image_sha256'],
@@ -289,7 +311,8 @@ def build_config(experiment, branch, method='lora_r64', model_dir=MODEL_DIR, smo
 def recipe(experiment, branch, gpu=0):
     audit = read_json(Path(experiment) / 'source_audit.json')
     return SimpleNamespace(BRANCHES=(branch,), METHODS=('lora_r64',),
-        STEPS=(audit['steps'][branch],), MODEL_DIR=MODEL_DIR, TOKENS=TOKENS,
+        STEPS=tuple(checkpoint_plan(audit['steps'], audit.get('checkpoint_steps'))[branch]),
+        MODEL_DIR=MODEL_DIR, TOKENS=TOKENS,
         CONCEPT_IDS={branch: audit['object']['id'] + '_' + branch},
         verify_dataset=lambda selected: verify_dataset(Path(experiment) / 'dataset', selected),
         build_config=lambda selected, method, model_dir=MODEL_DIR, smoke=False:
