@@ -35,3 +35,12 @@ raw PNGs under `images/{object}/seed{seed}.png`, a gallery, generation manifest,
 per-image ledger, status and source provenance. Existing Subject results and
 training exports stay in place. Training Git and inference Git remain distinct.
 Check startup only; no ongoing monitoring or automatic visual-quality judgment.
+
+The Python `run()` and `prepare()` APIs also accept explicit keyword arguments
+`training_run`, `source_git`, and `source_image_sha` for another audited Mailbox
+training run. Defaults retain the original M/T run above. The run name must be a
+single directory name, and its resolved source must remain under this object's
+`training/` directory. Producer Git, source-image identity, completion, paired
+snapshots, initializer provenance, base model and all source hashes are still
+verified. This only selects another trained source; prompts and sampling stay
+unchanged. The command-line interface retains its original default selection.

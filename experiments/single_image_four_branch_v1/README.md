@@ -1,5 +1,11 @@
 # Single photograph to independent object checkpoints
 
+Paper Texture workflow decision (2026-11-07): use the early reviewed surface ROI,
+robust grayscale extraction and established T16 data pipeline. The automatic
+whole-object ROI and later gain1 option below are historical implementations,
+not the selected paper protocol. For the existing Mailbox, reuse its accepted
+early T16 bytes through [the dedicated queue](../paper_mailbox_legacy_texture_v1/README.md).
+
 Default intake is **Scheme A**: Qwen whole-object category discovery, all Grounding
 DINO detections, separate SAM masks and existing duplicate suppression. Each
 retained instance has its own input/mask receipt, semantic initialization, fresh

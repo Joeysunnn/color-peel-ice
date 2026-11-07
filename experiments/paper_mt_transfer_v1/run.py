@@ -5,6 +5,7 @@ import html
 import json
 import os
 from pathlib import Path
+import re
 
 from experiments.sd15_token_local_kv_v1.contract import read_json, sha256
 from experiments.sd21_qwen_initializers_v1 import contract
@@ -57,7 +58,19 @@ def validate_selection(item, branch, step, source, source_audit, manifest, model
         raise ValueError('initializer provenance differs from the actual training export')
 
 
-def prepare(object_root, branch, step, gpu):
+def training_source(object_root, branch, training_run):
+    if (branch not in STEPS or not isinstance(training_run, str)
+            or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', training_run) is None):
+        raise ValueError('training run must be one safe directory name')
+    root = Path(object_root).resolve() / 'training'
+    source = (root / training_run / 'object_003' / branch).resolve()
+    if not source.is_relative_to(root):
+        raise ValueError('training source escapes the object training directory')
+    return source
+
+
+def prepare(object_root, branch, step, gpu, *, training_run=TRAINING_RUN,
+            source_git=SOURCE_GIT, source_image_sha=CANONICAL_SHA):
     import torch
     from transformers import CLIPTokenizer
     from experiments.sd21_wood_branches_v1.prepare_model import verify_model
@@ -69,7 +82,7 @@ def prepare(object_root, branch, step, gpu):
             or identity['source_image_sha256'] != contract.SOURCE_SHA
             or Path(identity['inference']).resolve().parent != object_root / 'infer'):
         raise ValueError('require the existing Mailbox object and Subject inference parent')
-    source = object_root / 'training' / TRAINING_RUN / 'object_003' / branch
+    source = training_source(object_root, branch, training_run)
     revision = git_info()
     output = validate_output(object_root / 'infer' /
         f'20261107__{branch}{step}_transfer__{revision["commit"][:7]}__seeds20-60', source)
@@ -78,11 +91,11 @@ def prepare(object_root, branch, step, gpu):
     status, prepared, prior, exports = [read_json(path) for path in paths.values()]
     if (status['status'] != 'trained' or status['completed_steps'] != STEPS[branch][-1]
             or status['checkpoint_steps'] != list(STEPS[branch])
-            or prepared['git'] != SOURCE_GIT or prior['new_training_git'] != SOURCE_GIT
-            or exports['git'] != SOURCE_GIT or exports['smoke']
+            or prepared['git'] != source_git or prior['new_training_git'] != source_git
+            or exports['git'] != source_git or exports['smoke']
             or prepared['source_audit_sha256'] != sha256(paths['prepared/source_audit.json'])
             or prior['object']['id'] != 'object_003'
-            or prior['object']['source_image_sha256'] != CANONICAL_SHA
+            or prior['object']['source_image_sha256'] != source_image_sha
             or prior['branches'] != [branch] or prior['steps'] != {branch: STEPS[branch][-1]}
             or prior['checkpoint_steps'] != {branch: list(STEPS[branch])}):
         raise ValueError('source completion, producer Git, object or checkpoint schedule differs')
@@ -120,7 +133,7 @@ def prepare(object_root, branch, step, gpu):
     if git_info() != revision:
         raise ValueError('checkout changed during preparation')
     output.mkdir(parents=True)
-    audit = {'object_key': OBJECT, 'source_training_git': SOURCE_GIT, 'source_experiment': str(source),
+    audit = {'object_key': OBJECT, 'source_training_git': source_git, 'source_experiment': str(source),
              'inference_git': revision, 'selected_exports': {branch: item}, 'source_locks': locks,
              'sampling': SAMPLING, 'physical_gpu': gpu, 'fresh_training': False}
     _write(output / 'source_audit.json', audit)
@@ -155,12 +168,14 @@ def gallery(output, rows, generated, state, group=None):
         'small{display:block}</style>' + ''.join(body), encoding='utf8')
 
 
-def run(object_root, branch, step, gpu):
+def run(object_root, branch, step, gpu, *, training_run=TRAINING_RUN,
+        source_git=SOURCE_GIT, source_image_sha=CANONICAL_SHA):
     if type(gpu) is not int or gpu < 0:
         raise ValueError('require a nonnegative physical GPU')
     os.environ.update(ENVIRONMENT, CUDA_VISIBLE_DEVICES=str(gpu))
     require_idle([gpu])
-    output, rows, audit = prepare(object_root, branch, step, gpu)
+    output, rows, audit = prepare(object_root, branch, step, gpu, training_run=training_run,
+                                  source_git=source_git, source_image_sha=source_image_sha)
     state = {'status': 'running', 'expected_images': len(rows), 'generated_images': 0,
              'inference_git': audit['inference_git'], 'branch': branch, 'step': step, 'gpu': gpu,
              'fresh_training': False, 'quality_verified': False}

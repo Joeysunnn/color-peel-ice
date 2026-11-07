@@ -51,6 +51,47 @@ class MaterialTextureTransferTests(unittest.TestCase):
             with self.subTest(branch=branch, step=step), self.assertRaises(ValueError):
                 run.plan(branch, step)
 
+    def test_training_source_accepts_only_a_contained_single_directory_name(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve() / 'object'
+            self.assertEqual(run.training_source(root, 'texture', run.TRAINING_RUN),
+                             root / 'training' / run.TRAINING_RUN / 'object_003' / 'texture')
+            self.assertEqual(run.training_source(root, 'texture', 'legacy_T16-v1'),
+                             root / 'training' / 'legacy_T16-v1' / 'object_003' / 'texture')
+            for name in ('', '.', '..', '../outside', 'run/../../outside', 'run/sub',
+                         r'run\sub', '/absolute', r'C:\absolute', 'bad name', None):
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    run.training_source(root, 'texture', name)
+
+    def test_training_source_rejects_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            training = root / 'object' / 'training'
+            training.mkdir(parents=True)
+            outside = root / 'outside'
+            outside.mkdir()
+            try:
+                (training / 'legacy').symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                self.skipTest('symlink creation unavailable: ' + str(error))
+            with self.assertRaisesRegex(ValueError, 'escapes'):
+                run.training_source(root / 'object', 'texture', 'legacy')
+
+    def test_run_forwards_default_and_explicit_training_provenance(self):
+        explicit = {'training_run': 'legacy_T16',
+                    'source_git': {'branch': 'codex/legacy-test', 'commit': 'a' * 40},
+                    'source_image_sha': 'b' * 64}
+        for overrides in ({}, explicit):
+            expected = overrides or {'training_run': run.TRAINING_RUN,
+                                     'source_git': run.SOURCE_GIT,
+                                     'source_image_sha': run.CANONICAL_SHA}
+            with self.subTest(overrides=overrides), patch.dict(os.environ), \
+                    patch.object(run, 'require_idle'), \
+                    patch.object(run, 'prepare', side_effect=RuntimeError('stop before loading')) as prepare:
+                with self.assertRaisesRegex(RuntimeError, '^stop before loading$'):
+                    run.run(Path('object'), 'texture', 300, 0, **overrides)
+                prepare.assert_called_once_with(Path('object'), 'texture', 300, 0, **expected)
+
     def fixture(self, root, branch='material', step=150):
         source = root / branch
         checkpoint = source / 'ckpts' / f'step{step}'
