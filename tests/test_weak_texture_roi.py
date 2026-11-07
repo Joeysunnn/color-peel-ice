@@ -39,7 +39,7 @@ class WeakTextureRoiTests(unittest.TestCase):
         rgb = pixels.astype(np.float64) / 255
         linear = np.where(rgb <= .04045, rgb / 12.92, ((rgb + .055) / 1.055) ** 2.4)
         luminance = linear @ np.array([.2126, .7152, .0722])
-        expected = np.rint((.5 + luminance - np.median(luminance)) * 255).astype(np.uint8)
+        expected = np.rint((.5 + (luminance - np.median(luminance))) * 255).astype(np.uint8)
         np.testing.assert_array_equal(np.asarray(result), expected)
         self.assertGreater(int(expected.max()) - int(expected.min()), 0)
         self.assertLessEqual(int(expected.max()) - int(expected.min()), 5)

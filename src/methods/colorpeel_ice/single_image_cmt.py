@@ -180,7 +180,7 @@ def extract_surface_patch(albedo, region, box):
     linear = np.where(rgb <= .04045, rgb / 12.92, ((rgb + .055) / 1.055) ** 2.4)
     luminance = linear @ np.array([.2126, .7152, .0722])
     median = float(np.median(luminance))
-    centered = .5 + luminance - median
+    centered = .5 + (luminance - median)
     if np.any((centered < 0) | (centered > 1)):
         raise ValueError('unit-gain texture would clip; select a consistent surface ROI')
     pixels = np.rint(centered * 255).astype(np.uint8)
